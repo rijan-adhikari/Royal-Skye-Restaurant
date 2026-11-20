@@ -16,7 +16,7 @@ const money = (v: any) => "Rs. " + Number(v || 0).toLocaleString("en-IN", { mini
 
 export default function AdminControl({ visibleTabs, embedded = false, managerView = false, initialTab }: AdminControlProps) {
   // Managers can use day-to-day operations and loyalty controls, but destructive backup/restore and audit access remain admin-only.
-  const roleTabs = managerView ? tabs.filter((item) => ["cash", "service", "loyalty"].includes(item.id)) : tabs.filter((item) => !["cash", "suppliers"].includes(item.id));
+  const roleTabs = managerView ? tabs.filter((item) => ["cash", "service", "loyalty"].includes(item.id)) : tabs;
   const availableTabs = visibleTabs ?? roleTabs.map((item) => item.id);
   const [tab, setTab] = useState<Tab>(initialTab && availableTabs.includes(initialTab as Tab) ? initialTab as Tab : (availableTabs[0] ?? "cash"));
   const [data, setData] = useState<any>({ shifts: [], refunds: [], bills: [], suppliers: [], inventory: [], ledger: [], supplierBalances: [], loyalty: [], serviceOrders: [], audit: [] });

@@ -52,7 +52,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     { to: "/operations?tab=inventory", label: t("Inventory"), icon: "inventory", tab: "inventory" },
     { to: "/operations?tab=expenses", label: t("Expenses"), icon: "expenses", tab: "expenses" },
     { to: "/operations?tab=controls", label: t("Control Center"), icon: "controls", tab: "controls" },
-    { to: "/operations?tab=cash", label: t("Cash Drawer"), icon: "cash", tab: "cash" },
+    { to: "/operations?tab=controls&control=cash", label: t("Cash Drawer"), icon: "cash", tab: "controls" },
   ] : [];
   const groups = [
     { label: t("Workspace"), items: workspace },

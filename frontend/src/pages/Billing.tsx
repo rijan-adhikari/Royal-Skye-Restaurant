@@ -224,7 +224,7 @@ export default function Billing() {
   const printBill = () => window.print();
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 pb-8">
+    <div className="billing-page mx-auto max-w-6xl space-y-5 pb-8">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div><p className="text-[10px] font-extrabold uppercase tracking-[.2em] text-[#9b7957]">Front of house / Checkout</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight">Billing</h1><p className="mt-1 text-sm text-neutral-500">Select an order, take payment and issue a clean receipt.</p></div>
         <span className="rounded-full border border-[#e7ded4] bg-white px-3 py-2 text-xs font-bold text-[#75665a]">{orders.length} open orders</span>
