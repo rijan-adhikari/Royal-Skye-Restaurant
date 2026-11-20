@@ -73,10 +73,11 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     finally { setBusy(false); }
   };
 
-  const openShift = () => run(() => api.post("/api/admin/cash-shifts/open", { opening_float: Number(openFloat) }), "Cash drawer shift opened.");
+  const openShift = async () => { await run(() => api.post("/api/admin/cash-shifts/open", { opening_float: Number(openFloat) }), "Cash drawer shift opened."); setCountedCash(""); };
   const closeShift = () => {
     if (!shift || !countedCash.trim()) return;
     run(() => api.post(`/api/admin/cash-shifts/${shift.id}/close`, { counted_cash: Number(countedCash) }), "Shift closed and variance recorded.");
+    setCountedCash("");
   };
   const addCashEntry = (e: React.FormEvent) => {
     e.preventDefault();
@@ -261,7 +262,9 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     </header>
     {message && <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p>}
     {error && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-    <nav className="flex gap-2 overflow-x-auto border-b pb-2">{tabs.filter((item) => availableTabs.includes(item.id)).map(t => <button key={t.id} onClick={() => setTab(t.id)} className={"shrink-0 rounded-lg px-3 py-2 text-sm font-medium " + (tab === t.id ? "bg-brand text-white" : "bg-white text-neutral-600")}>{t.label}</button>)}</nav>
+    <nav className="grid gap-3 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm md:grid-cols-3">
+      {([{label:"Cash & transactions",ids:["cash","sales","suppliers"]},{label:"Customers & service",ids:["service","loyalty"]},{label:"Reports & administration",ids:["reports","backup","audit","settings"]}] as const).map(group=>{const items=tabs.filter(item=>group.ids.includes(item.id)&&availableTabs.includes(item.id));return items.length?<section key={group.label}><p className="mb-2 text-[10px] font-extrabold uppercase tracking-[.15em] text-[#9b8065]">{group.label}</p><div className="flex flex-wrap gap-1.5">{items.map(item=><button key={item.id} type="button" onClick={()=>setTab(item.id)} className={"rounded-lg px-3 py-2 text-xs font-bold transition "+(tab===item.id?"bg-[#7b2926] text-white shadow-sm":"bg-[#f7f3ee] text-[#6d5a4a] hover:bg-[#eee5db]")}>{item.label}</button>)}</div></section>:null})}
+    </nav>
 
     {tab === "cash" && <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
       <section className={panel}>
