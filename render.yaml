@@ -18,7 +18,7 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGINS
-        value: http://localhost:5173
+        value: https://royal-skye-pos-frontend.onrender.com
       - key: INITIAL_ADMIN_USERNAME
         value: admin
       - key: INITIAL_ADMIN_PASSWORD
@@ -36,11 +36,8 @@ services:
     dockerfilePath: ./frontend/Dockerfile
     autoDeployTrigger: checksPass
     envVars:
-      - key: API_PROXY_HOSTPORT
-        fromService:
-          type: web
-          name: royal-skye-pos-api
-          property: hostport
+      - key: API_PROXY_URL
+        value: https://royal-skye-pos-api.onrender.com
 databases:
   - name: royal-skye-pos-db
     databaseName: royal_skye_pos_db
