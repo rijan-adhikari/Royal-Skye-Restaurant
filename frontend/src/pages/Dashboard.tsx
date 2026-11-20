@@ -45,6 +45,9 @@ export default function Dashboard() {
   const [monthlySales, setMonthlySales] = useState<any[]>([]);
   const [showMonthlySales, setShowMonthlySales] = useState(false);
   const [monthlySalesLoading, setMonthlySalesLoading] = useState(false);
+  const [yearlySales, setYearlySales] = useState<any[]>([]);
+  const [showYearlySales, setShowYearlySales] = useState(false);
+  const [yearlySalesLoading, setYearlySalesLoading] = useState(false);
 
   const load = () => api.get(`/api/dashboard/summary?report_date=${reportDate}`).then((response) => setSummary(response.data));
 
@@ -76,6 +79,19 @@ export default function Dashboard() {
       setError(e?.response?.data?.detail || "Could not load monthly sales details.");
     } finally {
       setMonthlySalesLoading(false);
+    }
+  };
+
+  const openYearlySales = async () => {
+    setShowYearlySales(true);
+    setYearlySalesLoading(true);
+    try {
+      const response = await api.get(`/api/dashboard/yearly-sales?report_date=${reportDate}`);
+      setYearlySales(response.data);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Could not load yearly sales details.");
+    } finally {
+      setYearlySalesLoading(false);
     }
   };
 
@@ -142,6 +158,8 @@ export default function Dashboard() {
             <div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">{t("Today's sales")}</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#f5eee5] text-[#8d6542]">↗</span></div>
             <p className="mt-4 text-[25px] font-extrabold tracking-[-.045em] text-[#30251f]">{money(summary.daily_sales)}</p><p className="mt-2 text-[10px] font-bold text-[#9a7652] group-hover:text-[#7d1e1e]">{t("View today's bills")} <span className="ml-1">→</span></p>
           </button>
+          {role === "admin" && <button type="button" onClick={openMonthlySales} className="group rounded-2xl border border-[#e9dfd5] bg-white p-5 text-left shadow-[0_5px_18px_rgba(45,30,22,.035)] transition hover:-translate-y-1 hover:border-[#c6a77f] hover:shadow-[0_14px_28px_rgba(45,30,22,.08)]"><div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">Monthly sales</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#f5eee5] text-[#8d6542]">↗</span></div><p className="mt-4 text-[25px] font-extrabold tracking-[-.045em] text-[#30251f]">{money(summary.monthly_sales)}</p><p className="mt-2 text-[10px] font-bold text-[#9a7652]">View this month's bills →</p></button>}
+          {role === "admin" && <button type="button" onClick={openYearlySales} className="group rounded-2xl border border-[#e9dfd5] bg-white p-5 text-left shadow-[0_5px_18px_rgba(45,30,22,.035)] transition hover:-translate-y-1 hover:border-[#c6a77f] hover:shadow-[0_14px_28px_rgba(45,30,22,.08)]"><div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">Yearly sales</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#edf2ee] text-[#52765b]">↗</span></div><p className="mt-4 text-[25px] font-extrabold tracking-[-.045em] text-[#30251f]">{money(summary.yearly_sales)}</p><p className="mt-2 text-[10px] font-bold text-[#9a7652]">View this year's bills →</p></button>}
           <Link to="/operations?tab=expenses" className="group rounded-2xl border border-[#e9dfd5] bg-white p-5 shadow-[0_5px_18px_rgba(45,30,22,.035)] transition hover:-translate-y-1 hover:border-[#c6a77f] hover:shadow-[0_14px_28px_rgba(45,30,22,.08)]">
             <div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">{t("Today's expenses")}</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#faeeee] text-[#9a3434]">↘</span></div>
             <p className="mt-4 text-[25px] font-extrabold tracking-[-.045em] text-[#a43d3d]">{money(summary.daily_expenses)}</p><p className="mt-2 text-[10px] font-semibold text-[#a18d7c]">{t("Recorded operating costs")}</p>
@@ -191,6 +209,12 @@ export default function Dashboard() {
         <section className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold">{t("Monthly sales details")}</h2><p className="text-sm text-neutral-500">{reportDate.slice(0, 7)}</p></div><button type="button" onClick={() => setShowMonthlySales(false)} className="rounded-lg border px-3 py-2">{t("Close")}</button></div>
           {monthlySalesLoading ? <p className="py-8 text-center">{t("Loading...")}</p> : monthlySales.length === 0 ? <p className="py-8 text-center text-sm text-neutral-500">{t("No sales recorded for this month.")}</p> : <div className="mt-4 space-y-4">{monthlySales.map((bill) => <article key={bill.id} className="rounded-xl border p-4"><div className="flex flex-wrap justify-between gap-2"><div><p className="font-semibold">{bill.bill_number} · {bill.customer_name}</p><p className="text-xs text-neutral-500">{bill.customer_phone || t("No phone")} · {bill.table_name} · {new Date(bill.created_at).toLocaleString()}</p></div><div className="text-right text-sm"><p className="font-semibold">Rs. {bill.grand_total}</p><p className="text-neutral-500">{t("Paid")}: Rs. {bill.amount_paid} · {t("Outstanding")}: Rs. {bill.outstanding_amount}</p></div></div><div className="mt-3 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">{t("Food")}</th><th>{t("Quantity")}</th><th>{t("Price")}</th><th>{t("Total")}</th></tr></thead><tbody>{bill.items.map((item: any, index: number) => <tr key={index} className="border-b last:border-0"><td className="py-2">{item.name}</td><td>{item.quantity}</td><td>Rs. {item.unit_price}</td><td>Rs. {item.total}</td></tr>)}</tbody></table></div></article>)}</div>}
+        </section>
+      </div>}
+      {showYearlySales && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" onClick={() => setShowYearlySales(false)}>
+        <section className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold">Yearly sales details</h2><p className="text-sm text-neutral-500">{reportDate.slice(0, 4)}</p></div><button type="button" onClick={() => setShowYearlySales(false)} className="rounded-lg border px-3 py-2">Close</button></div>
+          {yearlySalesLoading ? <p className="py-8 text-center">Loading...</p> : yearlySales.length === 0 ? <p className="py-8 text-center text-sm text-neutral-500">No sales recorded for this year.</p> : <div className="mt-4 space-y-4">{yearlySales.map((bill) => <article key={bill.id} className="rounded-xl border p-4"><div className="flex flex-wrap justify-between gap-2"><div><p className="font-semibold">{bill.bill_number} · {bill.customer_name}</p><p className="text-xs text-neutral-500">{bill.customer_phone || "No phone"} · {bill.table_name} · {new Date(bill.created_at).toLocaleString()}</p></div><div className="text-right text-sm"><p className="font-semibold">Rs. {bill.grand_total}</p><p className="text-neutral-500">Paid: Rs. {bill.amount_paid} · Outstanding: Rs. {bill.outstanding_amount}</p></div></div><div className="mt-3 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">Item</th><th>Quantity</th><th>Price</th><th>Total</th></tr></thead><tbody>{(bill.items || []).map((item: any, index: number) => <tr key={index} className="border-b last:border-0"><td className="py-2">{item.name}</td><td>{item.quantity}</td><td>Rs. {item.unit_price}</td><td>Rs. {item.total}</td></tr>)}</tbody></table></div></article>)}</div>}
         </section>
       </div>}
       {showDailySales && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" onClick={() => setShowDailySales(false)}>
