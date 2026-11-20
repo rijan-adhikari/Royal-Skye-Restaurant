@@ -34,7 +34,11 @@ async def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_d
     if service_type == "dine_in":
         if not payload.table_id:
             raise HTTPException(status_code=422, detail="Choose a table for dine-in orders")
-        table = db.query(models.DiningTable).filter(models.DiningTable.id == payload.table_id).first()
+        # Serialize table-session creation so two waiters cannot open duplicate
+        # orders for the same table at the same time.
+        table = db.query(models.DiningTable).filter(
+            models.DiningTable.id == payload.table_id
+        ).with_for_update().first()
         if not table:
             raise HTTPException(status_code=404, detail="Table not found")
     else:
@@ -73,6 +77,11 @@ async def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_d
                 {"order": order.id, "type": service_type, "name": payload.customer_name,
                  "phone": payload.phone, "address": payload.delivery_address,
                  "fee": payload.delivery_fee if service_type == "delivery" else Decimal("0")})
+
+    # Newly-created dine-in orders must occupy their table as well. Previously
+    # this status was only set when appending items to an existing open order.
+    if service_type == "dine_in":
+        table.status = models.TableStatus.occupied
 
     is_cabin_order = service_type == "dine_in" and "cabin" in (table.name or "").lower()
     kitchen_items = []
