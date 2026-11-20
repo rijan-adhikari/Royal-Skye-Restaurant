@@ -90,16 +90,13 @@ export default function Dashboard() {
     }
   };
 
-  const allCards = [
-    [t("Daily sales"), summary.daily_sales], [t("Monthly sales"), summary.monthly_sales], [t("Yearly sales"), summary.yearly_sales],
-    [t("Daily expenses"), summary.daily_expenses], [t("Monthly expenses"), summary.monthly_expenses], [t("Yearly expenses"), summary.yearly_expenses],
-    [t("Estimated daily profit / loss"), summary.daily_profit], [t("Estimated monthly profit / loss"), summary.monthly_profit], [t("Estimated yearly profit / loss"), summary.yearly_profit],
-    [t("Daily estimated COGS"), summary.daily_estimated_cogs], [t("Monthly estimated COGS"), summary.monthly_estimated_cogs], [t("Yearly estimated COGS"), summary.yearly_estimated_cogs],
-    [t("Outstanding credit"), summary.outstanding], [t("Occupied tables"), String(summary.occupied_tables)],
+  const cards = [
+    [t("Today's sales"), summary.daily_sales, "sales"],
+    [t("Today's expenses"), summary.daily_expenses, "expenses"],
+    [t("Estimated profit / loss"), summary.daily_profit, "profit"],
+    [t("Occupied tables"), String(summary.occupied_tables), "tables"],
+    [t("Outstanding credit"), summary.outstanding, "credit"],
   ];
-  const cards = role === "manager"
-    ? [[t("Daily sales"), summary.daily_sales], [t("Daily expenses"), summary.daily_expenses], [t("Occupied tables"), String(summary.occupied_tables)], [t("Outstanding credit"), summary.outstanding]]
-    : allCards;
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-7">
@@ -107,8 +104,15 @@ export default function Dashboard() {
         <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">{t("Royal Skye · Overview")}</p><h1 className="mt-2 text-3xl font-extrabold tracking-tight text-[#30251f] md:text-[34px]">{t("Good to see you,")} {fullName}</h1><p className="mt-2 text-sm text-[#88796e] capitalize">{role} · {t("Sales and operations snapshot")}</p></div>
         <div className="flex flex-wrap items-end gap-2"><label className="text-sm">{t("Report date")}<input type="date" className="block border rounded-lg px-3 py-2 mt-1" value={reportDate} onChange={(e) => setReportDate(e.target.value)} /></label>{role !== "manager" && <button type="button" onClick={downloadDashboardPdf} className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">{t("Download dashboard PDF")}</button>}</div>
       </div>
-      <div><div className="mb-3 flex items-center justify-between"><h2 className="text-xs font-extrabold uppercase tracking-[.18em] text-[#988679]">{t("Performance snapshot")}</h2><span className="text-[10px] font-semibold uppercase tracking-wider text-[#b09b88]">{reportDate}</span></div><div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {cards.map(([label, value]) => label === t("Daily sales") ? <button type="button" key={label} onClick={openDailySales} className="rounded-2xl border border-[#e9dfd6] bg-white p-5 text-left shadow-[0_8px_24px_rgba(43,31,24,.045)] transition hover:-translate-y-0.5 hover:border-[#b78a54] md:p-6"><p className="text-sm text-neutral-500">{label} · {t("View details")}</p><p className="text-2xl font-semibold mt-1">{label === t("Occupied tables") ? value : `Rs. ${value}`}</p></button> : label === t("Monthly sales") ? <button type="button" key={label} onClick={openMonthlySales} className="rounded-2xl border border-[#e9dfd6] bg-white p-5 text-left shadow-[0_8px_24px_rgba(43,31,24,.045)] transition hover:-translate-y-0.5 hover:border-[#b78a54] md:p-6"><p className="text-sm text-neutral-500">{label} · {t("View details")}</p><p className="text-2xl font-semibold mt-1">Rs. {value}</p></button> : label === t("Daily expenses") ? <Link key={label} to="/operations?tab=expenses" className="rounded-2xl border border-[#e9dfd6] bg-white p-5 shadow-[0_8px_24px_rgba(43,31,24,.045)] transition hover:-translate-y-0.5 hover:border-[#b78a54] md:p-6"><p className="text-sm text-neutral-500">{label} · {t("View details")}</p><p className="text-2xl font-semibold mt-1 text-red-700">Rs. {value}</p></Link> : <div key={label} className="rounded-2xl border border-[#e9dfd6] bg-white p-5 shadow-[0_8px_24px_rgba(43,31,24,.045)] md:p-6"><p className="text-sm text-neutral-500">{label}</p><p className={`text-2xl font-semibold mt-1 ${label.toLowerCase().includes("expense") || (label.toLowerCase().includes("profit") && Number(value) < 0) ? "text-red-700" : ""}`}>{label === t("Occupied tables") ? value : `Rs. ${value}`}</p></div>)}
+      <div><div className="mb-3 flex items-center justify-between"><h2 className="text-xs font-extrabold uppercase tracking-[.18em] text-[#988679]">{t("Performance snapshot")}</h2><span className="text-[10px] font-semibold uppercase tracking-wider text-[#b09b88]">{reportDate}</span></div><div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {cards.map(([label, value, kind]) => {
+          const numeric = Number(value);
+          const isMoney = kind !== "tables";
+          const content = <><p className="text-xs font-semibold text-[#95877c]">{label}</p><p className={`mt-2 text-2xl font-bold tracking-tight ${kind === "expenses" || (kind === "profit" && numeric < 0) ? "text-red-700" : "text-[#302722]"}`}>{isMoney ? `Rs. ${numeric.toLocaleString("en-IN", { maximumFractionDigits: 2 })}` : value}</p></>;
+          if (kind === "sales") return <button type="button" key={kind} onClick={openDailySales} className="rounded-2xl border border-[#e9dfd6] bg-white p-5 text-left shadow-sm transition hover:border-[#c6a77f]">{content}<p className="mt-3 text-[11px] font-semibold text-[#9b7651]">{t("View today's bills")} →</p></button>;
+          if (kind === "expenses") return <Link key={kind} to="/operations?tab=expenses" className="rounded-2xl border border-[#e9dfd6] bg-white p-5 shadow-sm transition hover:border-[#c6a77f]">{content}</Link>;
+          return <div key={kind} className="rounded-2xl border border-[#e9dfd6] bg-white p-5 shadow-sm">{content}</div>;
+        })}
       </div>
       </div>
       {role === "admin" && <section><h2 className="mb-3 text-xs font-extrabold uppercase tracking-[.18em] text-[#988679]">{t("Quick access")}</h2><div className="grid gap-4 sm:grid-cols-2">
