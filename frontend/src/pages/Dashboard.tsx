@@ -172,10 +172,10 @@ export default function Dashboard() {
             <div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">{t("Occupied tables")}</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#edf2ee] text-[#52765b]">▦</span></div>
             <p className="mt-4 text-[30px] font-extrabold tracking-[-.045em] text-[#30251f]">{summary.occupied_tables}</p><p className="mt-2 text-[10px] font-semibold text-[#a18d7c]">{t("Live table occupancy")} <span className="ml-1 text-[#9a7652]">→</span></p>
           </Link>
-          <div className="rounded-2xl border border-[#e9dfd5] bg-white p-5 shadow-[0_5px_18px_rgba(45,30,22,.035)]">
-            <div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">{t("Outstanding credit")}</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#f5eee5] text-[#8d6542]">◷</span></div>
-            <p className="mt-4 text-[25px] font-extrabold tracking-[-.045em] text-[#30251f]">{money(summary.outstanding)}</p><p className="mt-2 text-[10px] font-semibold text-[#a18d7c]">{t("Pending customer payments")}</p>
-          </div>
+          <Link to="/credit" className="group rounded-2xl border border-[#e9dfd5] bg-white p-5 shadow-[0_5px_18px_rgba(45,30,22,.035)] transition hover:-translate-y-1 hover:border-[#c6a77f] hover:shadow-[0_14px_28px_rgba(45,30,22,.08)]">
+            <div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">{t("Outstanding credit")}</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#f5eee5] text-[#8d6542]">↗</span></div>
+            <p className="mt-4 text-[25px] font-extrabold tracking-[-.045em] text-[#30251f]">{money(summary.outstanding)}</p><p className="mt-2 text-[10px] font-semibold text-[#9a7652]">{t("View customers, orders & record payments")} →</p>
+          </Link>
         </div>
       </section>
 
