@@ -98,34 +98,90 @@ export default function Dashboard() {
     [t("Outstanding credit"), summary.outstanding, "credit"],
   ];
 
+  const money = (value: string) => `Rs. ${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+  const periods = [
+    { label: t("Today"), sales: summary.daily_sales, expenses: summary.daily_expenses, profit: summary.daily_profit },
+    { label: t("This month"), sales: summary.monthly_sales, expenses: summary.monthly_expenses, profit: summary.monthly_profit },
+    { label: t("This year"), sales: summary.yearly_sales, expenses: summary.yearly_expenses, profit: summary.yearly_profit },
+  ];
+
   return (
-    <div className="mx-auto max-w-[1500px] space-y-7">
-      <div className="relative flex flex-wrap items-end justify-between gap-5 overflow-hidden rounded-[26px] border border-[#eadfd3] bg-gradient-to-br from-[#fffdfa] via-white to-[#f2e6d9] p-6 shadow-[0_12px_35px_rgba(63,42,29,.055)] md:p-8">
-        <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">{t("Royal Skye · Overview")}</p><h1 className="mt-2 text-3xl font-extrabold tracking-tight text-[#30251f] md:text-[34px]">{t("Good to see you,")} {fullName}</h1><p className="mt-2 text-sm text-[#88796e] capitalize">{role} · {t("Sales and operations snapshot")}</p></div>
-        <div className="flex flex-wrap items-end gap-2"><label className="text-sm">{t("Report date")}<input type="date" className="block border rounded-lg px-3 py-2 mt-1" value={reportDate} onChange={(e) => setReportDate(e.target.value)} /></label>{role !== "manager" && <button type="button" onClick={downloadDashboardPdf} className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">{t("Download dashboard PDF")}</button>}</div>
-      </div>
-      <div><div className="mb-3 flex items-center justify-between"><h2 className="text-xs font-extrabold uppercase tracking-[.18em] text-[#988679]">{t("Performance snapshot")}</h2><span className="text-[10px] font-semibold uppercase tracking-wider text-[#b09b88]">{reportDate}</span></div><div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {cards.map(([label, value, kind]) => {
-          const numeric = Number(value);
-          const isMoney = kind !== "tables";
-          const content = <><p className="text-xs font-semibold text-[#95877c]">{label}</p><p className={`mt-2 text-2xl font-bold tracking-tight ${kind === "expenses" || (kind === "profit" && numeric < 0) ? "text-red-700" : "text-[#302722]"}`}>{isMoney ? `Rs. ${numeric.toLocaleString("en-IN", { maximumFractionDigits: 2 })}` : value}</p></>;
-          if (kind === "sales") return <button type="button" key={kind} onClick={openDailySales} className="rounded-2xl border border-[#e9dfd6] bg-white p-5 text-left shadow-sm transition hover:border-[#c6a77f]">{content}<p className="mt-3 text-[11px] font-semibold text-[#9b7651]">{t("View today's bills")} →</p></button>;
-          if (kind === "expenses") return <Link key={kind} to="/operations?tab=expenses" className="rounded-2xl border border-[#e9dfd6] bg-white p-5 shadow-sm transition hover:border-[#c6a77f]">{content}</Link>;
-          return <div key={kind} className="rounded-2xl border border-[#e9dfd6] bg-white p-5 shadow-sm">{content}</div>;
-        })}
-      </div>
-      </div>
-      {role === "admin" && <section><h2 className="mb-3 text-xs font-extrabold uppercase tracking-[.18em] text-[#988679]">{t("Quick access")}</h2><div className="grid gap-4 sm:grid-cols-2">
-        <Link to="/operations?tab=inventory" className="rounded-2xl border border-[#e9dfd6] bg-white p-5 shadow-[0_8px_24px_rgba(43,31,24,.045)] transition hover:-translate-y-0.5 hover:border-[#b78a54]"><p className="font-semibold">{t("Inventory")}</p><p className="text-sm text-neutral-500">{t("Open stock register and manage stock levels")}</p></Link>
-        <Link to="/operations?tab=expenses" className="rounded-2xl border border-[#e9dfd6] bg-white p-5 shadow-[0_8px_24px_rgba(43,31,24,.045)] transition hover:-translate-y-0.5 hover:border-[#b78a54]"><p className="font-semibold">{t("Expenses")}</p><p className="text-sm text-neutral-500">{t("Open expense register and record expenses")}</p></Link>
-      </div></section>}
-      {role === "admin" && lowStockItems.length > 0 && <section className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-amber-900">{t("Low stock alert")}</h2><span className="rounded-full bg-amber-200 px-3 py-1 text-sm font-semibold text-amber-900">{lowStockItems.length}</span></div>
-        <p className="mt-1 text-sm text-amber-900">{t("These items are at or below their reorder level. This alert appears whenever you open the dashboard until stock is replenished.")}</p>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{lowStockItems.map((item) => <div key={item.id} className="rounded-lg border border-amber-200 bg-white p-3 text-sm"><p className="font-semibold">{item.name}</p><p>{t("On hand")}: {item.quantity} {item.unit}</p><p>{t("Reorder")}: {item.reorder_level} {item.unit}</p></div>)}</div>
-        <Link to="/operations?tab=inventory" className="mt-3 inline-block text-sm font-semibold text-amber-900 underline">{t("Open inventory")}</Link>
+    <div className="mx-auto max-w-[1500px] space-y-7 pb-8">
+      <section className="relative isolate overflow-hidden rounded-[28px] bg-[#2b211d] px-6 py-7 text-[#fffaf4] shadow-[0_22px_55px_rgba(45,30,22,.16)] md:px-9 md:py-9">
+        <div className="pointer-events-none absolute -right-16 -top-28 h-80 w-80 rounded-full border border-[#d9b98f]/15" />
+        <div className="pointer-events-none absolute -right-2 -top-16 h-64 w-64 rounded-full border border-[#d9b98f]/10" />
+        <div className="relative flex flex-col justify-between gap-7 lg:flex-row lg:items-end">
+          <div className="max-w-2xl">
+            <p className="flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[.24em] text-[#d7b17b]"><span className="h-px w-7 bg-[#d7b17b]" /> ROYAL SKYE <span className="text-[#8d7668]">/</span> {t("MANAGEMENT OVERVIEW")}</p>
+            <h1 className="mt-4 text-3xl font-extrabold leading-tight tracking-[-.045em] text-[#fffaf4] md:text-[42px]">{t("Good to see you,")} {fullName}</h1>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-[#c7b8ac]">{t("A clear view of today's restaurant performance and operations.")}</p>
+          </div>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="text-[10px] font-bold uppercase tracking-[.14em] text-[#c7b8ac]">{t("Report date")}<input aria-label={t("Report date")} type="date" className="mt-2 block rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white [color-scheme:dark]" value={reportDate} onChange={(e) => setReportDate(e.target.value)} /></label>
+            {role !== "manager" && <button type="button" onClick={downloadDashboardPdf} className="rounded-xl border border-[#d7b17b]/40 bg-[#d7b17b] px-4 py-[13px] text-xs font-extrabold text-[#2b211d] shadow-lg shadow-black/10 transition hover:bg-[#e5c493]">{t("Download dashboard PDF")} <span className="ml-1">↗</span></button>}
+          </div>
+        </div>
+        <div className="relative mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/10 pt-5 text-[10px] font-semibold uppercase tracking-[.13em] text-[#b8a89b]">
+          <span className="inline-flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-[#9ec6a2]" /> {t("Operations snapshot")}</span>
+          <span className="text-[#6e5b50]">•</span><span>{new Date(reportDate + "T12:00:00").toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span>
+          <span className="text-[#6e5b50]">•</span><span className="capitalize">{role}</span>
+        </div>
+      </section>
+
+      <section>
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+          <div><p className="text-[10px] font-extrabold uppercase tracking-[.2em] text-[#a18d7c]">{t("At a glance")}</p><h2 className="mt-1 text-xl font-extrabold tracking-tight text-[#30251f]">{t("Today's performance")}</h2></div>
+          <p className="text-[11px] font-medium text-[#9b8b7f]">{t("Select sales to inspect bills")}</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <button type="button" onClick={openDailySales} className="group rounded-2xl border border-[#e9dfd5] bg-white p-5 text-left shadow-[0_5px_18px_rgba(45,30,22,.035)] transition hover:-translate-y-1 hover:border-[#c6a77f] hover:shadow-[0_14px_28px_rgba(45,30,22,.08)]">
+            <div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">{t("Today's sales")}</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#f5eee5] text-[#8d6542]">↗</span></div>
+            <p className="mt-4 text-[25px] font-extrabold tracking-[-.045em] text-[#30251f]">{money(summary.daily_sales)}</p><p className="mt-2 text-[10px] font-bold text-[#9a7652] group-hover:text-[#7d1e1e]">{t("View today's bills")} <span className="ml-1">→</span></p>
+          </button>
+          <Link to="/operations?tab=expenses" className="group rounded-2xl border border-[#e9dfd5] bg-white p-5 shadow-[0_5px_18px_rgba(45,30,22,.035)] transition hover:-translate-y-1 hover:border-[#c6a77f] hover:shadow-[0_14px_28px_rgba(45,30,22,.08)]">
+            <div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">{t("Today's expenses")}</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#faeeee] text-[#9a3434]">↘</span></div>
+            <p className="mt-4 text-[25px] font-extrabold tracking-[-.045em] text-[#a43d3d]">{money(summary.daily_expenses)}</p><p className="mt-2 text-[10px] font-semibold text-[#a18d7c]">{t("Recorded operating costs")}</p>
+          </Link>
+          <div className="rounded-2xl border border-[#e9dfd5] bg-white p-5 shadow-[0_5px_18px_rgba(45,30,22,.035)]">
+            <div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">{t("Estimated profit / loss")}</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#f1eee8] text-[#80664c]">◒</span></div>
+            <p className={`mt-4 text-[25px] font-extrabold tracking-[-.045em] ${Number(summary.daily_profit) < 0 ? "text-[#a43d3d]" : "text-[#477453]"}`}>{money(summary.daily_profit)}</p><p className="mt-2 text-[10px] font-semibold text-[#a18d7c]">{t("Estimated for selected date")}</p>
+          </div>
+          <Link to="/tables" className="group rounded-2xl border border-[#e9dfd5] bg-white p-5 shadow-[0_5px_18px_rgba(45,30,22,.035)] transition hover:-translate-y-1 hover:border-[#c6a77f] hover:shadow-[0_14px_28px_rgba(45,30,22,.08)]">
+            <div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">{t("Occupied tables")}</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#edf2ee] text-[#52765b]">▦</span></div>
+            <p className="mt-4 text-[30px] font-extrabold tracking-[-.045em] text-[#30251f]">{summary.occupied_tables}</p><p className="mt-2 text-[10px] font-semibold text-[#a18d7c]">{t("Live table occupancy")} <span className="ml-1 text-[#9a7652]">→</span></p>
+          </Link>
+          <div className="rounded-2xl border border-[#e9dfd5] bg-white p-5 shadow-[0_5px_18px_rgba(45,30,22,.035)]">
+            <div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">{t("Outstanding credit")}</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#f5eee5] text-[#8d6542]">◷</span></div>
+            <p className="mt-4 text-[25px] font-extrabold tracking-[-.045em] text-[#30251f]">{money(summary.outstanding)}</p><p className="mt-2 text-[10px] font-semibold text-[#a18d7c]">{t("Pending customer payments")}</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,.85fr)]">
+        <div className="rounded-[24px] border border-[#e9dfd5] bg-white p-5 shadow-[0_8px_28px_rgba(45,30,22,.04)] md:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-extrabold uppercase tracking-[.19em] text-[#a18d7c]">{t("Financial overview")}</p><h2 className="mt-1 text-lg font-extrabold tracking-tight text-[#30251f]">{t("Sales, costs & estimated result")}</h2></div><span className="rounded-full bg-[#f7f2ec] px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[#92775e]">{t("Selected date range")}</span></div>
+          <div className="mt-5 overflow-x-auto"><div className="min-w-[460px]">
+            <div className="grid grid-cols-[100px_repeat(3,minmax(0,1fr))] border-b border-[#eee7df] pb-3 text-[9px] font-extrabold uppercase tracking-[.14em] text-[#a18d7c]"><span>{t("Period")}</span><span>{t("Sales")}</span><span>{t("Expenses")}</span><span>{t("Profit / loss")}</span></div>
+            {periods.map((period) => <div key={period.label} className="grid grid-cols-[100px_repeat(3,minmax(0,1fr))] items-center gap-2 border-b border-[#f1ece6] py-4 last:border-0"><span className="text-xs font-bold text-[#514238]">{period.label}</span><span className="text-xs font-bold tabular-nums text-[#3f5946]">{money(period.sales)}</span><span className="text-xs font-bold tabular-nums text-[#a14b47]">{money(period.expenses)}</span><span className={`text-xs font-extrabold tabular-nums ${Number(period.profit) < 0 ? "text-[#a43d3d]" : "text-[#477453]"}`}>{money(period.profit)}</span></div>)}
+          </div></div>
+          <div className="mt-4 flex flex-wrap gap-4 text-[10px] font-semibold text-[#9b8b7f]"><span className="inline-flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#64856c]"/> {t("Sales")}</span><span className="inline-flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#b96b64]"/> {t("Expenses")}</span><span className="inline-flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#b78a54]"/> {t("Estimated result")}</span></div>
+        </div>
+        <div className="rounded-[24px] border border-[#e9dfd5] bg-[#f8f4ef] p-5 md:p-6">
+          <p className="text-[10px] font-extrabold uppercase tracking-[.19em] text-[#a18d7c]">{t("Your workspace")}</p><h2 className="mt-1 text-lg font-extrabold tracking-tight text-[#30251f]">{t("Quick access")}</h2><p className="mt-1 text-xs leading-5 text-[#928276]">{t("The essentials for keeping service moving.")}</p>
+          <div className="mt-5 space-y-2">
+            <Link to="/tables" className="flex items-center gap-3 rounded-xl border border-[#e9dfd5] bg-white p-3.5 transition hover:border-[#c6a77f] hover:shadow-sm"><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#f5eee5] text-[#8d6542]">▦</span><span className="min-w-0 flex-1"><strong className="block text-xs font-extrabold text-[#43352c]">{t("Tables & POS")}</strong><small className="mt-0.5 block text-[10px] text-[#9b8b7f]">{t("Manage tables and start orders")}</small></span><span className="text-[#b59a7d]">→</span></Link>
+            <Link to="/billing" className="flex items-center gap-3 rounded-xl border border-[#e9dfd5] bg-white p-3.5 transition hover:border-[#c6a77f] hover:shadow-sm"><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#f7eeee] text-[#963f3f]">▤</span><span className="min-w-0 flex-1"><strong className="block text-xs font-extrabold text-[#43352c]">{t("Billing & Orders")}</strong><small className="mt-0.5 block text-[10px] text-[#9b8b7f]">{t("Review bills and payment status")}</small></span><span className="text-[#b59a7d]">→</span></Link>
+            {role === "admin" && <><Link to="/operations?tab=inventory" className="flex items-center gap-3 rounded-xl border border-[#e9dfd5] bg-white p-3.5 transition hover:border-[#c6a77f] hover:shadow-sm"><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#edf2ee] text-[#52765b]">▧</span><span className="min-w-0 flex-1"><strong className="block text-xs font-extrabold text-[#43352c]">{t("Inventory")}</strong><small className="mt-0.5 block text-[10px] text-[#9b8b7f]">{t("Monitor stock and reorder levels")}</small></span><span className="text-[#b59a7d]">→</span></Link><Link to="/operations?tab=expenses" className="flex items-center gap-3 rounded-xl border border-[#e9dfd5] bg-white p-3.5 transition hover:border-[#c6a77f] hover:shadow-sm"><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#f7eeee] text-[#963f3f]">↘</span><span className="min-w-0 flex-1"><strong className="block text-xs font-extrabold text-[#43352c]">{t("Expenses")}</strong><small className="mt-0.5 block text-[10px] text-[#9b8b7f]">{t("Track restaurant operating costs")}</small></span><span className="text-[#b59a7d]">→</span></Link></>}
+          </div>
+        </div>
+      </section>
+
+      {role === "admin" && lowStockItems.length > 0 && <section className="overflow-hidden rounded-[22px] border border-[#ead9c2] bg-[#fffaf2] shadow-[0_8px_25px_rgba(45,30,22,.035)]">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#f0e2ce] px-5 py-4 md:px-6"><div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#f5e8d3] text-[#9a6a32]">!</span><div><p className="text-[10px] font-extrabold uppercase tracking-[.16em] text-[#a17d54]">{t("Inventory attention")}</p><h2 className="mt-0.5 text-sm font-extrabold text-[#59432e]">{t("Low stock alert")}</h2></div></div><span className="rounded-full bg-[#f1dfc5] px-3 py-1 text-xs font-extrabold text-[#805b32]">{lowStockItems.length}</span></div>
+        <div className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3 md:p-5">{lowStockItems.map((item) => <div key={item.id} className="rounded-xl border border-[#efe3d3] bg-white p-3.5 text-xs"><p className="font-extrabold text-[#49392d]">{item.name}</p><div className="mt-2 flex justify-between gap-2 text-[#8c7b6b]"><span>{t("On hand")}: <b className="text-[#a14b47]">{item.quantity} {item.unit}</b></span><span>{t("Reorder")}: {item.reorder_level} {item.unit}</span></div></div>)}</div>
+        <div className="px-5 pb-5 md:px-6"><Link to="/operations?tab=inventory" className="text-xs font-extrabold text-[#8b1a1a] hover:underline">{t("Open inventory")} →</Link><p className="mt-1 text-[10px] text-[#a18d7c]">{t("This alert remains visible until stock is replenished.")}</p></div>
       </section>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</p>}
       {showMonthlySales && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" onClick={() => setShowMonthlySales(false)}>
         <section className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold">{t("Monthly sales details")}</h2><p className="text-sm text-neutral-500">{reportDate.slice(0, 7)}</p></div><button type="button" onClick={() => setShowMonthlySales(false)} className="rounded-lg border px-3 py-2">{t("Close")}</button></div>
