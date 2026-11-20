@@ -177,3 +177,16 @@ main button:disabled {
   background: #c9b9aa;
   background-clip: padding-box;
 }
+
+
+/* Workspace theme: the dashboard selection applies to every authenticated module. */
+html[data-theme="dark"] body { background:#171513 !important; color:#eee7df !important; }
+html[data-theme="dark"] main { background:#171513; color:#eee7df; }
+html[data-theme="dark"] main h1,html[data-theme="dark"] main h2,html[data-theme="dark"] main h3 { color:#f2ebe4 !important; }
+html[data-theme="dark"] main [class*="bg-white"],html[data-theme="dark"] main [class*="bg-neutral-50"],html[data-theme="dark"] main [class*="bg-[#f"],html[data-theme="dark"] main [class*="bg-[#e"],html[data-theme="dark"] main [class*="bg-[#fff"] { background-color:#25211e !important; border-color:#443a33 !important; }
+html[data-theme="dark"] main [class*="text-neutral-"],html[data-theme="dark"] main [class*="text-[#3"],html[data-theme="dark"] main [class*="text-[#4"],html[data-theme="dark"] main [class*="text-[#5"],html[data-theme="dark"] main [class*="text-[#8"],html[data-theme="dark"] main [class*="text-[#9"],html[data-theme="dark"] main [class*="text-[#a"],html[data-theme="dark"] main [class*="text-[#b"] { color:#c9bdb2 !important; }
+html[data-theme="dark"] main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),html[data-theme="dark"] main select,html[data-theme="dark"] main textarea { background:#1d1a18 !important; color:#f3ece5 !important; border-color:#51453c !important; }
+html[data-theme="dark"] main table thead th { background:#302923 !important; color:#d5c6b8 !important; }
+html[data-theme="dark"] main table tbody tr:hover { background:#302923 !important; }
+html[data-theme="dark"] main [class*="border-"] { border-color:#443a33 !important; }
+html[data-theme="dark"] main [class*="bg-red-50"],html[data-theme="dark"] main [class*="bg-amber-50"],html[data-theme="dark"] main [class*="bg-emerald-50"] { filter:brightness(.78); }

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api, apiErrorMessage } from "../api/client";
 
 type Tab = "cash" | "sales" | "suppliers" | "reports" | "service" | "backup" | "audit" | "settings" | "loyalty";
-type AdminControlProps = { visibleTabs?: Tab[]; embedded?: boolean; managerView?: boolean };
+type AdminControlProps = { visibleTabs?: Tab[]; embedded?: boolean; managerView?: boolean; initialTab?: string };
 const tabs: { id: Tab; label: string }[] = [
   { id: "cash", label: "Cash drawer" },
   { id: "sales", label: "Manage sales" }, { id: "suppliers", label: "Supplier ledger" },
@@ -14,11 +14,11 @@ const primary = "rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white 
 const panel = "rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm";
 const money = (v: any) => "Rs. " + Number(v || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function AdminControl({ visibleTabs, embedded = false, managerView = false }: AdminControlProps) {
+export default function AdminControl({ visibleTabs, embedded = false, managerView = false, initialTab }: AdminControlProps) {
   // Managers can use day-to-day operations and loyalty controls, but destructive backup/restore and audit access remain admin-only.
   const roleTabs = managerView ? tabs.filter((item) => ["cash", "service", "loyalty"].includes(item.id)) : tabs.filter((item) => !["cash", "suppliers"].includes(item.id));
   const availableTabs = visibleTabs ?? roleTabs.map((item) => item.id);
-  const [tab, setTab] = useState<Tab>(availableTabs[0] ?? "cash");
+  const [tab, setTab] = useState<Tab>(initialTab && availableTabs.includes(initialTab as Tab) ? initialTab as Tab : (availableTabs[0] ?? "cash"));
   const [data, setData] = useState<any>({ shifts: [], refunds: [], bills: [], suppliers: [], inventory: [], ledger: [], supplierBalances: [], loyalty: [], serviceOrders: [], audit: [] });
   const [shift, setShift] = useState<any>(null);
   const [tax, setTax] = useState<any>({ tax_enabled: true, tax_percent: "14", service_charge_enabled: false, service_charge_percent: "0" });
@@ -64,6 +64,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
 
   useEffect(() => { load().catch(() => setError("Could not load administration data.")); }, []);
   useEffect(() => { if (!availableTabs.includes(tab)) setTab(availableTabs[0] ?? "cash"); }, [availableTabs.join(","), tab]);
+  useEffect(() => { if (initialTab && availableTabs.includes(initialTab as Tab)) setTab(initialTab as Tab); }, [initialTab, availableTabs.join(",")]);
 
   const run = async (action: () => Promise<any>, success: string) => {
     setBusy(true); setError(""); setMessage("");
@@ -349,9 +350,9 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     </section>}
 
     {tab === "backup" && <div className="grid gap-4 lg:grid-cols-2">
-      <section className={panel}><h2 className="font-semibold text-lg">Create database backup</h2><p className="mt-2 text-sm text-neutral-500">Download a PostgreSQL custom-format backup containing restaurant data and configuration. Download the backup and store your own secure copy. Server-local temporary files are not guaranteed to persist across deployments.</p><button className={primary + " mt-4"} disabled={busy} onClick={downloadBackup}>Create & download backup</button></section>
+      <section className={panel}><h2 className="font-semibold text-lg">Create / download full backup</h2><p className="mt-2 text-sm text-neutral-500">Download a complete PostgreSQL database backup. It includes sales and bills, expenses, inventory, customers, staff and payroll, cash drawer records, settings and other restaurant data. Keep your own secure copy; server-local temporary files are not guaranteed to persist across deployments.</p><button className={primary + " mt-4"} disabled={busy} onClick={downloadBackup}>Create & download backup</button></section>
       <section className={panel}><h2 className="font-semibold text-lg">Restore from backup</h2><p className="mt-2 text-sm text-red-700">Restore replaces the current database. The system first creates a safety backup and blocks restore while orders or cash drawer shifts are open.</p><form onSubmit={restoreBackup} className="mt-4 space-y-3">
-        <label className="block text-xs">PostgreSQL backup file (.dump)<input required type="file" accept=".dump,application/octet-stream" className={field + " mt-1"} onChange={e => setBackupFile(e.target.files?.[0] || null)} /></label>
+        <label className="block text-xs">Upload backup file (.dump) — sales, expenses and all database records<input required type="file" accept=".dump,application/octet-stream" className={field + " mt-1"} onChange={e => setBackupFile(e.target.files?.[0] || null)} /></label>
         <label className="block text-xs">Type RESTORE ROYAL SKYE DATABASE to confirm<input required className={field + " mt-1"} value={restoreConfirmation} onChange={e => setRestoreConfirmation(e.target.value)} /></label>
         <button className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={busy || !backupFile || restoreConfirmation !== "RESTORE ROYAL SKYE DATABASE"}>Restore database</button>
       </form></section>

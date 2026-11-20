@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { api } from "../api/client";
 import { useLanguage } from "../context/LanguageContext";
 import DailySavings from "./DailySavings";
+import { useTheme } from "../context/ThemeContext";
 
 interface Summary {
   daily_sales: string;
@@ -33,6 +34,7 @@ const emptySummary: Summary = {
 export default function Dashboard() {
   const { fullName, role } = useAuth();
   const { t } = useLanguage();
+  const { theme, setTheme } = useTheme();
   const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
   const [summary, setSummary] = useState<Summary>(emptySummary);
   const [error, setError] = useState("");
@@ -120,6 +122,7 @@ export default function Dashboard() {
           <div className="flex flex-wrap items-end gap-3">
             <label className="text-[10px] font-bold uppercase tracking-[.14em] text-[#c7b8ac]">{t("Report date")}<input aria-label={t("Report date")} type="date" className="mt-2 block rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white [color-scheme:dark]" value={reportDate} onChange={(e) => setReportDate(e.target.value)} /></label>
             {role !== "manager" && <button type="button" onClick={downloadDashboardPdf} className="rounded-xl border border-[#d7b17b]/40 bg-[#d7b17b] px-4 py-[13px] text-xs font-extrabold text-[#2b211d] shadow-lg shadow-black/10 transition hover:bg-[#e5c493]">{t("Download dashboard PDF")} <span className="ml-1">↗</span></button>}
+<button type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} className="rounded-xl border border-white/20 bg-white/10 px-4 py-[13px] text-xs font-extrabold text-white hover:bg-white/15">{theme === "dark" ? "☀ White theme" : "☾ Dark theme"}</button>
           </div>
         </div>
         <div className="relative mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/10 pt-5 text-[10px] font-semibold uppercase tracking-[.13em] text-[#b8a89b]">
@@ -172,7 +175,7 @@ export default function Dashboard() {
           <div className="mt-5 space-y-2">
             <Link to="/tables" className="flex items-center gap-3 rounded-xl border border-[#e9dfd5] bg-white p-3.5 transition hover:border-[#c6a77f] hover:shadow-sm"><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#f5eee5] text-[#8d6542]">▦</span><span className="min-w-0 flex-1"><strong className="block text-xs font-extrabold text-[#43352c]">{t("Tables & POS")}</strong><small className="mt-0.5 block text-[10px] text-[#9b8b7f]">{t("Manage tables and start orders")}</small></span><span className="text-[#b59a7d]">→</span></Link>
             <Link to="/billing" className="flex items-center gap-3 rounded-xl border border-[#e9dfd5] bg-white p-3.5 transition hover:border-[#c6a77f] hover:shadow-sm"><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#f7eeee] text-[#963f3f]">▤</span><span className="min-w-0 flex-1"><strong className="block text-xs font-extrabold text-[#43352c]">{t("Billing & Orders")}</strong><small className="mt-0.5 block text-[10px] text-[#9b8b7f]">{t("Review bills and payment status")}</small></span><span className="text-[#b59a7d]">→</span></Link>
-            {role === "admin" && <><Link to="/operations?tab=inventory" className="flex items-center gap-3 rounded-xl border border-[#e9dfd5] bg-white p-3.5 transition hover:border-[#c6a77f] hover:shadow-sm"><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#edf2ee] text-[#52765b]">▧</span><span className="min-w-0 flex-1"><strong className="block text-xs font-extrabold text-[#43352c]">{t("Inventory")}</strong><small className="mt-0.5 block text-[10px] text-[#9b8b7f]">{t("Monitor stock and reorder levels")}</small></span><span className="text-[#b59a7d]">→</span></Link><Link to="/operations?tab=expenses" className="flex items-center gap-3 rounded-xl border border-[#e9dfd5] bg-white p-3.5 transition hover:border-[#c6a77f] hover:shadow-sm"><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#f7eeee] text-[#963f3f]">↘</span><span className="min-w-0 flex-1"><strong className="block text-xs font-extrabold text-[#43352c]">{t("Expenses")}</strong><small className="mt-0.5 block text-[10px] text-[#9b8b7f]">{t("Track restaurant operating costs")}</small></span><span className="text-[#b59a7d]">→</span></Link></>}
+            {role === "admin" && <><Link to="/operations?tab=inventory" className="flex items-center gap-3 rounded-xl border border-[#e9dfd5] bg-white p-3.5 transition hover:border-[#c6a77f] hover:shadow-sm"><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#edf2ee] text-[#52765b]">▧</span><span className="min-w-0 flex-1"><strong className="block text-xs font-extrabold text-[#43352c]">{t("Inventory")}</strong><small className="mt-0.5 block text-[10px] text-[#9b8b7f]">{t("Monitor stock and reorder levels")}</small></span><span className="text-[#b59a7d]">→</span></Link><Link to="/operations?tab=expenses" className="flex items-center gap-3 rounded-xl border border-[#e9dfd5] bg-white p-3.5 transition hover:border-[#c6a77f] hover:shadow-sm"><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#f7eeee] text-[#963f3f]">↘</span><span className="min-w-0 flex-1"><strong className="block text-xs font-extrabold text-[#43352c]">{t("Expenses")}</strong><small className="mt-0.5 block text-[10px] text-[#9b8b7f]">{t("Track restaurant operating costs")}</small></span><span className="text-[#b59a7d]">→</span></Link><Link to="/operations?tab=controls&control=backup" className="flex items-center gap-3 rounded-xl border border-[#e9dfd5] bg-white p-3.5 transition hover:border-[#c6a77f] hover:shadow-sm"><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#f5eee5] text-[#8d6542]">⇩</span><span className="min-w-0 flex-1"><strong className="block text-xs font-extrabold text-[#43352c]">Backup & restore</strong><small className="mt-0.5 block text-[10px] text-[#9b8b7f]">Create or download a full sales and expenses backup</small></span><span className="text-[#b59a7d]">→</span></Link></>}
           </div>
         </div>
       </section>

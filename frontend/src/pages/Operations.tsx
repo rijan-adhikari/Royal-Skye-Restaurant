@@ -149,7 +149,7 @@ export default function Operations() {
 
     {tab === "cash" && <AdminControl visibleTabs={["cash"]} embedded />}
     {tab === "menu" && <Admin embedded />}
-    {tab === "controls" && <AdminControl embedded managerView={role !== "admin"} />}
+    {tab === "controls" && <AdminControl embedded managerView={role !== "admin"} initialTab={searchParams.get("control") || undefined} />}
     {tab === "payroll" && <div className="grid gap-4 lg:grid-cols-2">
       <section className={panel}>{heading("Payroll register", "Record salary periods, partial cash-outs and remaining balances.")}<form className="grid gap-2 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); run(() => api.post("/api/operations/staff/payroll", { ...payrollForm, gross_pay: Number(payrollForm.gross_pay), deductions: Number(payrollForm.deductions) }), "Payroll entry created."); }}>
         <label className="block text-xs">{t("Staff member")}<select className={field} required value={payrollForm.user_id} onChange={(e) => setPayrollForm({ ...payrollForm, user_id: e.target.value })}><option value="">{t("Select staff")}</option>{data.payrollStaff.map((member: any) => <option key={member.id} value={member.id}>{member.full_name} · {member.role}</option>)}</select></label>
