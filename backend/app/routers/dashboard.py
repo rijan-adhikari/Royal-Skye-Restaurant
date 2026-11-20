@@ -94,7 +94,7 @@ def _sum_amount(db: Session, model, column, start: datetime, end: datetime, date
 def dashboard_summary(report_date: date | None = None, db: Session = Depends(get_db), user=Depends(require_roles(
     models.RoleName.admin, models.RoleName.manager, models.RoleName.cashier,
 ))):
-    target = report_date or datetime.utcnow().date()
+    target = report_date or datetime.now(BUSINESS_TIMEZONE).date()
     month_date_start = target.replace(day=1)
     month_date_end = (month_date_start.replace(day=28) + timedelta(days=4)).replace(day=1)
     year_date_start, year_date_end = date(target.year, 1, 1), date(target.year + 1, 1, 1)
@@ -116,7 +116,8 @@ def dashboard_summary(report_date: date | None = None, db: Session = Depends(get
             JOIN inventory_items i ON i.id=ri.item_id
             WHERE b.business_date >= CAST(:start AS DATE) AND b.business_date < CAST(:end AS DATE)
               AND b.sale_status='active'"""),
-            {"start": start, "end": end}).scalar_one()
+            {"start": start.replace(tzinfo=timezone.utc).astimezone(BUSINESS_TIMEZONE).date(),
+             "end": end.replace(tzinfo=timezone.utc).astimezone(BUSINESS_TIMEZONE).date()}).scalar_one()
         return value or 0
 
     daily_sales = net_sales(daily_start, daily_end)
@@ -131,7 +132,8 @@ def dashboard_summary(report_date: date | None = None, db: Session = Depends(get
     def payroll_cost(start: datetime, end: datetime):
         return db.execute(text("""SELECT COALESCE(SUM(gross_pay),0) FROM payroll_entries
             WHERE period_end >= :start_date AND period_end < :end_date"""),
-            {"start_date": start.date(), "end_date": end.date()}).scalar_one()
+            {"start_date": start.replace(tzinfo=timezone.utc).astimezone(BUSINESS_TIMEZONE).date(),
+             "end_date": end.replace(tzinfo=timezone.utc).astimezone(BUSINESS_TIMEZONE).date()}).scalar_one()
 
     daily_payroll = payroll_cost(daily_start, daily_end)
     monthly_payroll = payroll_cost(month_start, month_end)
