@@ -442,8 +442,8 @@ img, video, canvas, svg {
     background: linear-gradient(180deg, #0b1418 0%, #080d10 100%) !important;
     border-right: 1px solid #1c3434;
   }
-  html[data-theme="dark"] aside .bg-white\\/\\[.045\\],
-  html[data-theme="dark"] aside .bg-white\\/\\[.055\\] {
+  html[data-theme="dark"] aside [class*="bg-white/"][class*="[.045]"],
+  html[data-theme="dark"] aside [class*="bg-white/"][class*="[.055]"] {
     background: rgba(101,230,194,.045) !important;
     border-color: rgba(101,230,194,.13) !important;
   }
