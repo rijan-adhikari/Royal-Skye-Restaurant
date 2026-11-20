@@ -1,4 +1,3 @@
-projects: []
 services:
   - type: web
     name: royal-skye-pos-api
