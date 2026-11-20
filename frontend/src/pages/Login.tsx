@@ -71,8 +71,9 @@ export default function Login() {
           .rs-login-visual { display: none; }
           .rs-login-layout > section { width: 100%; min-width: 0; }
           .rs-login-card { padding: 1.35rem; border-radius: 18px; }
-          .rs-login-credit { margin-top: 1.35rem; font-size: .75rem; line-height: 1.5; letter-spacing: .1em; }
-          .rs-login-credit a { display: block; margin-top: .2rem; font-size: 1.05rem; letter-spacing: .08em; }
+          .rs-login-credit { margin-top: 1.35rem; }
+          .rs-login-credit > p:nth-child(2) { font-size: 1.1rem; }
+          .rs-login-credit a { min-height: 38px; }
           .rs-login-bottom-label { display: none; }
         }
         @media (max-width: 360px) {
@@ -198,12 +199,15 @@ export default function Login() {
               </div>
             </div>
           </form>
-          <p className="rs-login-credit mt-7 text-center text-base font-extrabold tracking-[.12em] text-[#d5eee6]">
-            DEVELOPED BY{" "}
-            <a href="https://adhikari-rijan.onrender.com/" target="_blank" rel="noopener noreferrer" className="text-lg font-black tracking-[.1em] text-[#65e6c2] transition hover:text-[#f2b86b] hover:underline">
-              RIJAN ADHIKARI
-            </a>
-          </p>
+          <div className="rs-login-credit mt-7 text-center">
+            <p className="text-xs font-extrabold tracking-[.2em] text-[#d5eee6]">DEVELOPED BY</p>
+            <p className="mt-1 text-xl font-black tracking-[.1em] text-[#65e6c2]">RIJAN ADHIKARI</p>
+            <p className="mt-2 text-[10px] tracking-[.12em] text-[#829b94]">VISIT THE DEVELOPER</p>
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+              <a href="https://adhikari-rijan.onrender.com/" target="_blank" rel="noopener noreferrer" aria-label="Visit Rijan Adhikari's website" className="rounded-full border border-[#65e6c2]/45 bg-[#65e6c2]/10 px-4 py-2 text-[10px] font-bold tracking-[.1em] text-[#65e6c2] transition hover:bg-[#65e6c2]/20 hover:text-white">WEBSITE ↗</a>
+              <a href="https://github.com/rijan-adhikari" target="_blank" rel="noopener noreferrer" aria-label="Visit Rijan Adhikari's GitHub" className="rounded-full border border-white/15 bg-white/[.04] px-4 py-2 text-[10px] font-bold tracking-[.1em] text-[#d5eee6] transition hover:border-[#65e6c2]/50 hover:text-[#65e6c2]">GITHUB ↗</a>
+            </div>
+          </div>
         </section>
       </div>
       <div className="rs-login-bottom-label pointer-events-none absolute bottom-4 left-0 right-0 text-center text-[8px] font-medium tracking-[.24em] text-[#465c58]">ROYAL SKYE SYSTEMS <span className="mx-2 text-[#f2b86b]/70">/</span> AUTHORIZED PERSONNEL ONLY</div>
