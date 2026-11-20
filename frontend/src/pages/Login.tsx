@@ -61,10 +61,24 @@ export default function Login() {
         @keyframes rs-scan { 0%,100% { transform: translateY(-95px); opacity: 0; } 18%,78% { opacity: .7; } 50% { transform: translateY(95px); opacity: .25; } }
         @keyframes rs-pulse { 0%,100% { opacity: .45; transform: scale(.92); } 50% { opacity: 1; transform: scale(1.08); } }
         @media (max-width: 760px) {
-          .rs-login { padding-top: 2.5rem; padding-bottom: 5.5rem; }
-          .rs-login-layout { grid-template-columns: minmax(0, 1fr); max-width: 430px; }
+          .rs-login { padding: 1.5rem 1rem 2rem; }
+          .rs-login-layout {
+            min-height: auto;
+            grid-template-columns: minmax(0, 1fr);
+            max-width: 430px;
+            gap: 0;
+          }
           .rs-login-visual { display: none; }
-          .rs-login-card { padding: 1.7rem; }
+          .rs-login-layout > section { width: 100%; min-width: 0; }
+          .rs-login-card { padding: 1.35rem; border-radius: 18px; }
+          .rs-login-credit { margin-top: 1.35rem; font-size: .75rem; line-height: 1.5; letter-spacing: .1em; }
+          .rs-login-credit a { display: block; margin-top: .2rem; font-size: 1.05rem; letter-spacing: .08em; }
+          .rs-login-bottom-label { display: none; }
+        }
+        @media (max-width: 360px) {
+          .rs-login { padding-right: .75rem; padding-left: .75rem; }
+          .rs-login-card { padding: 1.1rem; }
+          .rs-login-credit a { font-size: .98rem; }
         }
         @media (prefers-reduced-motion: reduce) {
           .rs-login-art, .rs-login-orbit, .rs-login-orbit-reverse, .rs-login-scan, .rs-login-pulse { animation: none !important; }
@@ -184,7 +198,7 @@ export default function Login() {
               </div>
             </div>
           </form>
-          <p className="mt-7 text-center text-base font-extrabold tracking-[.12em] text-[#d5eee6]">
+          <p className="rs-login-credit mt-7 text-center text-base font-extrabold tracking-[.12em] text-[#d5eee6]">
             DEVELOPED BY{" "}
             <a href="https://adhikari-rijan.onrender.com/" target="_blank" rel="noopener noreferrer" className="text-lg font-black tracking-[.1em] text-[#65e6c2] transition hover:text-[#f2b86b] hover:underline">
               RIJAN ADHIKARI
@@ -192,7 +206,7 @@ export default function Login() {
           </p>
         </section>
       </div>
-      <div className="pointer-events-none absolute bottom-4 left-0 right-0 text-center text-[8px] font-medium tracking-[.24em] text-[#465c58]">ROYAL SKYE SYSTEMS <span className="mx-2 text-[#f2b86b]/70">/</span> AUTHORIZED PERSONNEL ONLY</div>
+      <div className="rs-login-bottom-label pointer-events-none absolute bottom-4 left-0 right-0 text-center text-[8px] font-medium tracking-[.24em] text-[#465c58]">ROYAL SKYE SYSTEMS <span className="mx-2 text-[#f2b86b]/70">/</span> AUTHORIZED PERSONNEL ONLY</div>
     </main>
   );
 }
