@@ -27,15 +27,20 @@ export default function Billing() {
   const [result, setResult] = useState<any>(null);
   const [preview, setPreview] = useState<{ order: OpenOrder; discountPercentAmount: string; fixedDiscountAmount: string; loyaltyDiscount: string; loyaltyPoints: string; totalDiscountAmount: string; taxAmount: string; serviceAmount: string; grandTotal: string; amountReceived: string; remainingCredit: string; changeDue: string } | null>(null);
   const [error, setError] = useState("");
+  const [paymentQr, setPaymentQr] = useState("");
+  const [showPaymentQr, setShowPaymentQr] = useState(false);
 
   const loadData = async () => {
-    const [orderResponse, customerResponse, loyaltyResponse] = await Promise.all([
+    const [orderResponse, customerResponse, loyaltyResponse, qrResponse] = await Promise.all([
       api.get("/api/orders/open"),
       api.get("/api/customers"),
       api.get("/api/admin/loyalty/settings"),
+      api.get("/api/settings/payment-qr"),
     ]);
     setOrders(orderResponse.data);
     setCustomers(customerResponse.data);
+    setPaymentQr(qrResponse.data.qr_image_path || "");
+    setShowPaymentQr(false);
     setLoyaltyEnabled(!!loyaltyResponse.data.enabled);
     setPointValue(Number(loyaltyResponse.data.point_value || 0));
     return orderResponse.data as OpenOrder[];
