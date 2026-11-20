@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api, apiErrorMessage } from "../api/client";
+import { useAuth } from "../context/AuthContext";
 
 type Tab = "cash" | "sales" | "suppliers" | "reports" | "service" | "backup" | "audit" | "settings" | "loyalty";
 type AdminControlProps = { visibleTabs?: Tab[]; embedded?: boolean; managerView?: boolean; initialTab?: string };
@@ -15,6 +16,8 @@ const panel = "rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm";
 const money = (v: any) => "Rs. " + Number(v || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function AdminControl({ visibleTabs, embedded = false, managerView = false, initialTab }: AdminControlProps) {
+  const { role } = useAuth();
+  const canAdminEditCash = role === "admin";
   // Managers can use day-to-day operations and loyalty controls, but destructive backup/restore and audit access remain admin-only.
   const roleTabs = managerView ? tabs.filter((item) => ["cash", "service", "loyalty"].includes(item.id)) : tabs;
   const availableTabs = visibleTabs ?? roleTabs.map((item) => item.id);
@@ -56,6 +59,10 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
       if (result.status === "fulfilled") next[requests[index][0]] = result.value.data;
     });
     setShift(next.current ?? null);
+    if (!next.current && Array.isArray(next.shifts)) {
+      const previousClosed = next.shifts.find((item: any) => item.status === "closed");
+      if (previousClosed) setOpenFloat(String(previousClosed.counted_cash ?? previousClosed.expected_cash ?? previousClosed.opening_float ?? "0"));
+    }
     setData((old: any) => ({ ...old, ...next }));
     if (next.tax) setTax(next.tax);
     if (next.restaurant) setRestaurant(next.restaurant);
@@ -117,6 +124,18 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     if (!window.confirm(`Delete this ${entry.entry_type.replace("_", " ")} record for ${money(entry.amount)}? This will change the shift expected cash.`)) return;
     await run(() => api.delete(`/api/admin/cash-shifts/${shiftId}/entries/${entry.id}`), "Cash movement deleted.");
   };
+  const correctSystemSaleEntry = async (entry: any, shiftId: string) => {
+    const method = window.prompt("Correct payment method (cash, qr, card, bank_transfer):", "qr");
+    if (method === null) return;
+    const normalized = method.trim().toLowerCase();
+    if (!["cash", "qr", "card", "bank_transfer"].includes(normalized)) {
+      setError("Choose cash, qr, card or bank_transfer.");
+      return;
+    }
+    await run(() => api.patch(`/api/admin/cash-shifts/${shiftId}/entries/${entry.id}/sale-correction`, { method: normalized }),
+      normalized === "cash" ? "Payment remains recorded as cash." : `Payment changed to ${normalized}; removed from physical cash drawer.`);
+  };
+
   const correctClosedCashEntry = async (entry: any, shiftId: string) => {
     const amount = window.prompt("Correct cash movement amount (NPR):", String(entry.amount));
     if (amount === null) return;
@@ -285,14 +304,14 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
             <button className={primary} disabled={busy}>Record movement</button>
           </form>
           <div className="border-t pt-3 space-y-2"><label className="block text-xs">Counted cash at close<input required type="number" min="0" step="0.01" className={field + " mt-1"} value={countedCash} onChange={e => setCountedCash(e.target.value)} /></label><button className="w-full rounded-lg bg-neutral-900 px-4 py-2 text-sm font-semibold text-white" disabled={busy || !countedCash} onClick={closeShift}>Close shift & reconcile</button></div>
-        </div> : <div className="mt-3 space-y-3"><p className="text-sm text-neutral-500">No drawer session is currently open.</p><label className="block text-xs">Opening float (NPR)<input type="number" min="0" step="0.01" className={field + " mt-1"} value={openFloat} onChange={e => setOpenFloat(e.target.value)} /></label><button className={primary} disabled={busy} onClick={openShift}>Open cash drawer</button></div>}
+        </div> : <div className="mt-3 space-y-3"><p className="text-sm text-neutral-500">No drawer session is currently open.</p><div className="rounded-lg bg-[#f7f3ee] p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-[#90785f]">Opening cash carried forward</p><p className="mt-1 text-lg font-extrabold">{money(openFloat)}</p><p className="mt-1 text-xs text-neutral-500">Prefilled from the previous shift's actual closing cash. The server verifies and carries it forward when opening.</p></div><label className="block text-xs">Opening float override (NPR)<input type="number" min="0" step="0.01" className={field + " mt-1"} value={openFloat} onChange={e => setOpenFloat(e.target.value)} /></label><button className={primary} disabled={busy} onClick={openShift}>Open cash drawer</button></div>}
       </section>
       <section className={panel}>
         {shift && <div className="mb-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-lg">Session cash movements</h2><span className="text-xs text-neutral-500">{(shift.cash_entries || []).length} record(s)</span></div>
           <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Time</th><th>Type</th><th>Reference / notes</th><th>Amount</th><th>Actions</th></tr></thead><tbody>
             {(shift.cash_entries || []).map((entry: any) => <React.Fragment key={entry.id}>
-              <tr className="border-b align-top"><td className="py-2 whitespace-nowrap">{new Date(entry.created_at).toLocaleString()}</td><td className="capitalize">{entry.entry_type.replace("_", " ")}</td><td>{entry.reference || "—"}{entry.notes ? <p className="text-xs text-neutral-500">{entry.notes}</p> : null}</td><td>{money(entry.amount)}</td><td><div className="flex gap-2"><button type="button" disabled={busy || !["cash_in","cash_out","payout"].includes(entry.entry_type)} onClick={() => editCashEntry(entry)} className="rounded-lg border px-2 py-1 text-xs font-semibold">Edit</button><button type="button" disabled={busy || !["cash_in","cash_out","payout","sale","refund"].includes(entry.entry_type)} onClick={() => deleteCashEntry(entry)} className="rounded-lg bg-red-700 px-2 py-1 text-xs font-semibold text-white">Delete</button></div></td></tr>
+              <tr className="border-b align-top"><td className="py-2 whitespace-nowrap">{new Date(entry.created_at).toLocaleString()}</td><td className="capitalize">{entry.entry_type.replace("_", " ")}</td><td>{entry.reference || "—"}{entry.notes ? <p className="text-xs text-neutral-500">{entry.notes}</p> : null}</td><td>{money(entry.amount)}</td><td><div className="flex gap-2">{canAdminEditCash && <>{entry.entry_type === "sale" ? <button type="button" disabled={busy} onClick={() => correctSystemSaleEntry(entry, shift.id)} className="rounded-lg border px-2 py-1 text-xs font-semibold">Edit payment</button> : <button type="button" disabled={busy || !["cash_in","cash_out","payout"].includes(entry.entry_type)} onClick={() => editCashEntry(entry)} className="rounded-lg border px-2 py-1 text-xs font-semibold">Edit</button>}<button type="button" disabled={busy || !["cash_in","cash_out","payout","sale","refund"].includes(entry.entry_type)} onClick={() => deleteCashEntry(entry)} className="rounded-lg bg-red-700 px-2 py-1 text-xs font-semibold text-white">Delete</button></>}</div></td></tr>
               {editingCashEntry === entry.id && <tr className="border-b bg-neutral-50"><td colSpan={5} className="p-3"><form onSubmit={saveCashEntryEdit} className="grid gap-2 md:grid-cols-2">
                 <label className="block text-xs">Movement<select className={field + " mt-1"} value={cashEntryEdit.entry_type} onChange={e => setCashEntryEdit({ ...cashEntryEdit, entry_type: e.target.value })}><option value="cash_in">Cash in</option><option value="cash_out">Cash out</option><option value="payout">Payout</option></select></label>
                 <label className="block text-xs">Amount (NPR)<input required type="number" min="0.01" step="0.01" className={field + " mt-1"} value={cashEntryEdit.amount} onChange={e => setCashEntryEdit({ ...cashEntryEdit, amount: e.target.value })} /></label>
@@ -303,9 +322,9 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
             </React.Fragment>)}
             {(shift.cash_entries || []).length === 0 && <tr><td colSpan={5} className="py-5 text-center text-neutral-400">No cash movements recorded in this session.</td></tr>}
           </tbody></table></div>
-          <p className="mt-2 text-xs text-amber-700">Managers can delete system-generated sale/refund cash-drawer entries with a reason. This removes only the drawer entry; the original bill or refund remains in its own records.</p>
+          <p className="mt-2 text-xs text-neutral-500">Only admins can edit or delete cash-drawer entries. Correcting a sale payment to QR, card or bank transfer removes it from physical cash while preserving the bill and receipt history.</p>
         </div>}
-        <h2 className="font-semibold text-lg mb-3">Recent shift reconciliation</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Opened</th><th>Staff</th><th>Status</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>{data.shifts.map((s: any) => <React.Fragment key={s.id}><tr className="border-b"><td className="py-2">{new Date(s.opened_at).toLocaleString()}</td><td>{s.opened_by_name}</td><td className="capitalize">{s.status}</td><td>{s.expected_cash == null ? "—" : money(s.expected_cash)}</td><td>{s.counted_cash == null ? "—" : money(s.counted_cash)}</td><td className={Number(s.cash_difference) < 0 ? "text-red-700" : "text-emerald-700"}>{s.cash_difference == null ? "—" : money(s.cash_difference)}</td></tr>{(s.cash_entries || []).length > 0 && <tr className="border-b bg-neutral-50"><td colSpan={6} className="p-3"><p className="mb-2 text-xs font-semibold">Cash movements · {s.status === "closed" ? "Manager corrections" : "History"}</p>{s.cash_entries.map((entry: any) => <div key={entry.id} className="flex flex-wrap items-center justify-between gap-2 border-b py-2 text-xs"><span>{new Date(entry.created_at).toLocaleString()} · <b className="capitalize">{entry.entry_type.replace("_"," ")}</b> · {money(entry.amount)} · {entry.reference || entry.notes || "No reference"}</span>{s.status === "closed" && <span className="flex gap-2">{["cash_in","cash_out","payout"].includes(entry.entry_type) && <><button type="button" disabled={busy} onClick={() => correctClosedCashEntry(entry,s.id)} className="rounded border px-2 py-1 font-semibold">Edit</button><button type="button" disabled={busy} onClick={() => deleteClosedCashEntry(entry,s.id)} className="rounded bg-red-700 px-2 py-1 font-semibold text-white">Delete</button></>}{["sale","refund"].includes(entry.entry_type) && <button type="button" disabled={busy} onClick={() => deleteCashEntry(entry,s.id)} className="rounded bg-red-700 px-2 py-1 font-semibold text-white">Delete</button>}</span>}</div>)}</td></tr>}</React.Fragment>)}</tbody></table></div></section>
+        <h2 className="font-semibold text-lg mb-3">Recent shift reconciliation</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Opened</th><th>Staff</th><th>Status</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>{data.shifts.map((s: any) => <React.Fragment key={s.id}><tr className="border-b"><td className="py-2">{new Date(s.opened_at).toLocaleString()}</td><td>{s.opened_by_name}</td><td className="capitalize">{s.status}</td><td>{s.expected_cash == null ? "—" : money(s.expected_cash)}</td><td>{s.counted_cash == null ? "—" : money(s.counted_cash)}</td><td className={Number(s.cash_difference) < 0 ? "text-red-700" : "text-emerald-700"}>{s.cash_difference == null ? "—" : money(s.cash_difference)}</td></tr>{(s.cash_entries || []).length > 0 && <tr className="border-b bg-neutral-50"><td colSpan={6} className="p-3"><p className="mb-2 text-xs font-semibold">Cash movements · {s.status === "closed" ? "Manager corrections" : "History"}</p>{s.cash_entries.map((entry: any) => <div key={entry.id} className="flex flex-wrap items-center justify-between gap-2 border-b py-2 text-xs"><span>{new Date(entry.created_at).toLocaleString()} · <b className="capitalize">{entry.entry_type.replace("_"," ")}</b> · {money(entry.amount)} · {entry.reference || entry.notes || "No reference"}</span>{s.status === "closed" && canAdminEditCash && <span className="flex gap-2">{["cash_in","cash_out","payout"].includes(entry.entry_type) && <><button type="button" disabled={busy} onClick={() => correctClosedCashEntry(entry,s.id)} className="rounded border px-2 py-1 font-semibold">Edit</button><button type="button" disabled={busy} onClick={() => deleteClosedCashEntry(entry,s.id)} className="rounded bg-red-700 px-2 py-1 font-semibold text-white">Delete</button></>}{entry.entry_type === "sale" && <><button type="button" disabled={busy} onClick={() => correctSystemSaleEntry(entry,s.id)} className="rounded border px-2 py-1 font-semibold">Edit payment</button><button type="button" disabled={busy} onClick={() => deleteCashEntry(entry,s.id)} className="rounded bg-red-700 px-2 py-1 font-semibold text-white">Delete</button></>}{entry.entry_type === "refund" && <button type="button" disabled={busy} onClick={() => deleteCashEntry(entry,s.id)} className="rounded bg-red-700 px-2 py-1 font-semibold text-white">Delete</button>}</span>}</div>)}</td></tr>}</React.Fragment>)}</tbody></table></div></section>
     </div>}
 
     {tab === "sales" && <section className={panel}>
