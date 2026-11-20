@@ -1418,3 +1418,137 @@ html[data-theme="light"] main [class*="border-[#"] {border-color:#dfeae7!importa
 html[data-theme="light"] main button[class*="bg-[#"]:not(:disabled) {
   border-color:#d8e9e3;
 }
+
+
+/* Astra theme polish — final shared component layer. */
+html[data-theme="dark"] {
+  color-scheme:dark;
+  --rs-ink:#e7f3ef;--rs-muted:#91aaa2;--rs-line:#294744;
+  --rs-paper:#080f12;--rs-panel:#101a1e;--rs-accent:#65e6c2;--rs-gold:#f2b86b;
+}
+html[data-theme="dark"] body,
+html[data-theme="dark"] .rs-app-shell {background:#080f12!important;color:#e7f3ef!important;}
+html[data-theme="dark"] .rs-app-shell > aside {
+  background:linear-gradient(180deg,#0c171b,#091216)!important;
+  border-right:1px solid #203a38!important;
+  box-shadow:12px 0 40px rgba(0,0,0,.22)!important;
+}
+html[data-theme="dark"] .rs-app-shell > aside [class*="text-[#a99b91]"],
+html[data-theme="dark"] .rs-app-shell > aside [class*="text-[#8e8178]"],
+html[data-theme="dark"] .rs-app-shell > aside [class*="text-[#b7aaa1]"],
+html[data-theme="dark"] .rs-app-shell > aside [class*="text-[#766b64]"] {color:#86a39a!important;}
+html[data-theme="dark"] .rs-app-shell > aside [class*="bg-white/"] {background:rgba(101,230,194,.055)!important;border-color:#294744!important;}
+html[data-theme="dark"] .rs-app-shell > aside a[class*="bg-gradient-to-r"] {
+  background:linear-gradient(105deg,rgba(22,125,107,.34),rgba(16,54,51,.72))!important;
+  color:#d8fff1!important;border-color:rgba(101,230,194,.22)!important;
+  box-shadow:inset 3px 0 #65e6c2,0 8px 24px rgba(0,0,0,.18)!important;
+}
+html[data-theme="dark"] .rs-app-shell > aside a[class*="bg-gradient-to-r"] span,
+html[data-theme="dark"] .rs-app-shell > aside a[class*="bg-gradient-to-r"] svg {color:#baf8e5!important;}
+html[data-theme="dark"] .rs-app-shell > aside [class*="bg-[#d9b98f]"] {background:#1b4a42!important;color:#c9ffed!important;}
+html[data-theme="dark"] .rs-app-shell main > div.sticky {
+  background:rgba(9,18,22,.94)!important;border-color:#203a38!important;
+  box-shadow:0 8px 28px rgba(0,0,0,.18)!important;
+}
+html[data-theme="dark"] .rs-app-shell main > div.sticky [class*="bg-[#efe3d5]"] {
+  background:#173a35!important;color:#baf8e5!important;border-color:#315b53!important;
+}
+html[data-theme="dark"] .rs-app-shell footer {color:#78938b!important;}
+html[data-theme="dark"] .rs-app-shell footer a {color:#65e6c2!important;}
+
+/* Billing is fully Astra in dark mode; neutralize the remaining brown utilities
+   in the legacy JSX without changing payment, order, customer or receipt logic. */
+html[data-theme="dark"] main .billing-page {
+  color:#e7f3ef!important;
+  --billing-surface:#101c20;
+  --billing-raised:#142328;
+  --billing-border:#294744;
+  --billing-muted:#91aaa2;
+  --billing-accent:#65e6c2;
+}
+html[data-theme="dark"] main .billing-page > header p {color:#65bda8!important;}
+html[data-theme="dark"] main .billing-page > header > span {
+  background:#122622!important;border-color:#31574f!important;color:#baf8e5!important;
+}
+html[data-theme="dark"] main .billing-page section,
+html[data-theme="dark"] main .billing-page aside > section:not(.receipt-print) {
+  background:linear-gradient(145deg,#101c20 0%,#0b171b 100%)!important;
+  border-color:#294744!important;color:#e7f3ef!important;
+  box-shadow:0 14px 36px rgba(0,0,0,.20),inset 0 1px rgba(255,255,255,.025)!important;
+}
+html[data-theme="dark"] main .billing-page section h2,
+html[data-theme="dark"] main .billing-page aside h2 {color:#eaf7f2!important;}
+html[data-theme="dark"] main .billing-page section p,
+html[data-theme="dark"] main .billing-page section label,
+html[data-theme="dark"] main .billing-page section summary,
+html[data-theme="dark"] main .billing-page aside > section p,
+html[data-theme="dark"] main .billing-page aside > section span {color:#a9c0b9!important;}
+html[data-theme="dark"] main .billing-page [class*="text-[#"],
+html[data-theme="dark"] main .billing-page [class*="text-neutral-"] {color:#a9c0b9!important;}
+html[data-theme="dark"] main .billing-page [class*="bg-[#"],
+html[data-theme="dark"] main .billing-page [class*="bg-white"],
+html[data-theme="dark"] main .billing-page details,
+html[data-theme="dark"] main .billing-page details > div {
+  background:#142328!important;border-color:#294744!important;color:#dcece6!important;
+}
+html[data-theme="dark"] main .billing-page [class*="border-[#"],
+html[data-theme="dark"] main .billing-page details,
+html[data-theme="dark"] main .billing-page details > div,
+html[data-theme="dark"] main .billing-page .border-t,
+html[data-theme="dark"] main .billing-page .border-b {border-color:#294744!important;}
+html[data-theme="dark"] main .billing-page input:not([type="checkbox"]),
+html[data-theme="dark"] main .billing-page select,
+html[data-theme="dark"] main .billing-page textarea {
+  background:#091316!important;color:#e8f4ef!important;border-color:#355650!important;color-scheme:dark;
+}
+html[data-theme="dark"] main .billing-page input::placeholder {color:#77928a!important;}
+html[data-theme="dark"] main .billing-page button {
+  background:#172b2c!important;border:1px solid #31534d!important;color:#c9eee2!important;
+}
+html[data-theme="dark"] main .billing-page button:hover {border-color:#65e6c2!important;background:#1a3735!important;}
+html[data-theme="dark"] main .billing-page button:disabled {opacity:.42;}
+html[data-theme="dark"] main .billing-page button[class*="bg-[#"],
+html[data-theme="dark"] main .billing-page button[class*="bg-\["] {
+  background:linear-gradient(105deg,#167866,#2dbb9b)!important;
+  border-color:rgba(101,230,194,.5)!important;color:#041411!important;
+}
+html[data-theme="dark"] main .billing-page [class*="text-[#a044"],
+html[data-theme="dark"] main .billing-page [class*="text-[#a36"],
+html[data-theme="dark"] main .billing-page [class*="text-[#477"] {color:#9edbb7!important;}
+html[data-theme="dark"] main .billing-page [role="alert"] {background:#351c20!important;color:#ffb8b8!important;border-color:#713c43!important;}
+html[data-theme="dark"] main .billing-page .receipt-print,
+html[data-theme="dark"] main .billing-page .receipt-print * {
+  background:#fff!important;color:#111!important;border-color:#ddd!important;box-shadow:none!important;
+}
+html[data-theme="dark"] main .billing-page .receipt-print {color:#111!important;}
+html[data-theme="dark"] main .billing-page .receipt-print button {background:#172b2c!important;color:#c9eee2!important;}
+
+/* The login screen is a dedicated dark surface, independent of saved workspace theme. */
+html[data-theme="light"] main.rs-login,
+html[data-theme="dark"] main.rs-login {
+  color:#edf4f4!important;
+  background:
+    radial-gradient(ellipse at 23% 48%,rgba(35,119,106,.19),transparent 38%),
+    radial-gradient(ellipse at 85% 12%,rgba(180,124,66,.10),transparent 34%),
+    #070a0d!important;
+}
+html[data-theme="light"] main.rs-login [class*="bg-[#2ac5a2]"],
+html[data-theme="light"] main.rs-login [class*="bg-[#d49b5c]"] {background-color:transparent!important;}
+html[data-theme="light"] main.rs-login .rs-login-card {
+  background:linear-gradient(145deg,rgba(17,28,34,.94),rgba(9,15,20,.94))!important;
+  border-color:rgba(137,185,174,.20)!important;color:#edf4f4!important;
+}
+html[data-theme="light"] main.rs-login .rs-login-input {
+  background:rgba(4,10,14,.82)!important;color:#edf4f4!important;border-color:rgba(148,177,177,.20)!important;
+}
+html[data-theme="light"] main.rs-login .rs-login-button {
+  background:linear-gradient(100deg,#1d927d,#45c9a7)!important;color:#06120f!important;
+}
+html[data-theme="light"] main.rs-login [class*="text-[#"] {color:inherit;}
+html[data-theme="light"] main.rs-login .rs-login-visual [class*="text-[#"] {color:#8ba39f!important;}
+html[data-theme="light"] main.rs-login .rs-login-credit,
+html[data-theme="light"] main.rs-login .rs-login-credit * {color:#c9d9d5!important;}
+@media (prefers-reduced-motion:reduce) {
+  html[data-theme="light"] main.rs-login *,
+  html[data-theme="dark"] main.rs-login * {animation:none!important;transition:none!important;}
+}
