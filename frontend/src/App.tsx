@@ -122,7 +122,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           <div key={location.pathname} className="min-h-[70vh]">{children}</div>
           <footer className="pt-10 text-center text-[9px] font-semibold tracking-[.18em] text-[#b1a59b]">
             ROYAL SKYE · DEVELOPED BY{" "}
-            <a href="https://rijan-adhikari.onrender.com/" target="_blank" rel="noopener noreferrer" className="transition hover:text-[#8b1a1a] hover:underline">
+            <a href="https://adhikari-rijan.onrender.com/" target="_blank" rel="noopener noreferrer" className="transition hover:text-[#8b1a1a] hover:underline">
               RIJAN ADHIKARI
             </a>
           </footer>
