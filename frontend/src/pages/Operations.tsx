@@ -4,7 +4,6 @@ import { api, apiErrorMessage } from "../api/client";
 import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
 import AdminControl from "./AdminControl";
-import Admin from "./Admin";
 
 type Tab = "cash" | "expenses" | "inventory" | "reservations" | "controls" | "reports" | "payroll" | "staff";
 const tabs: Tab[] = ["expenses", "inventory", "reservations", "controls", "payroll", "reports", "staff"];
