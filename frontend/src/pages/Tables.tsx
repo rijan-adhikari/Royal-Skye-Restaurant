@@ -37,7 +37,7 @@ export default function Tables() {
   const startService = (service:"takeaway"|"delivery")=>navigate(`/pos?service=${service}`);
 
   return <div className="tables-page mx-auto max-w-[1500px] space-y-6 pb-8">
-    <header className="overflow-hidden rounded-[26px] bg-[#29211d] px-6 py-7 text-[#fffaf4] shadow-[0_18px_44px_rgba(45,30,22,.12)] md:px-8">
+    <header className="tables-hero overflow-hidden rounded-[26px] bg-[#29211d] px-6 py-7 text-[#fffaf4] shadow-[0_18px_44px_rgba(45,30,22,.12)] md:px-8">
       <p className="text-[10px] font-extrabold uppercase tracking-[.22em] text-[#d7b17b]">Royal Skye / Front of house</p>
       <div className="mt-3 flex flex-wrap items-end justify-between gap-4"><div><h1 className="text-3xl font-extrabold tracking-tight md:text-4xl">Tables & service</h1><p className="mt-2 text-sm text-[#c7b8ac]">Choose a table or open a takeaway and delivery order.</p></div><span className="rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-xs font-bold text-[#ead8c2]">{visibleTables.length} tables on this floor</span></div>
       <div className="mt-6 grid grid-cols-2 gap-3 border-t border-white/10 pt-5 sm:grid-cols-4">
