@@ -251,7 +251,7 @@ class RestaurantSetting(Base):
     vat = Column(String(32), default="")
     currency = Column(String(8), default="NPR")
     logo_path = Column(String(255), default="")
-    qr_image_path = Column(String(255), default="")
+    qr_image_path = Column(Text, default="")
     receipt_footer = Column(Text, default="Thank you for visiting!")
 
 
