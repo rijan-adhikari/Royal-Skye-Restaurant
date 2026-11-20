@@ -186,7 +186,7 @@ export default function Login() {
           </form>
           <p className="mt-5 text-center text-[10px] text-[#6e8580]">
             Built by{" "}
-            <a href="https://rijan-adhikari.onrender.com/" target="_blank" rel="noopener noreferrer" className="font-medium text-[#a8c4bb] transition hover:text-[#65e6c2] hover:underline">
+            <a href="https://adhikari-rijan.onrender.com/" target="_blank" rel="noopener noreferrer" className="font-medium text-[#a8c4bb] transition hover:text-[#65e6c2] hover:underline">
               Rijan Adhikari
             </a>
           </p>
