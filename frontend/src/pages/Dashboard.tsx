@@ -222,6 +222,18 @@ export default function Dashboard() {
         <div className="px-5 pb-5 md:px-6"><Link to="/operations?tab=inventory" className="text-xs font-extrabold text-[#8b1a1a] hover:underline">{t("Open inventory")} →</Link><p className="mt-1 text-[10px] text-[#a18d7c]">{t("This alert remains visible until stock is replenished.")}</p></div>
       </section>}
       {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</p>}
+      {role === "admin" && profitPeriod && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-3" onClick={() => setProfitPeriod(null)}>
+        <section className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl" onClick={event => event.stopPropagation()}>
+          <div className="flex items-center justify-between"><div><h2 className="text-xl font-bold">{profitPeriod === "monthly" ? "Monthly" : "Yearly"} profit / loss</h2><p className="text-xs text-neutral-500">{profitPeriod === "monthly" ? reportDate.slice(0,7) : reportDate.slice(0,4)}</p></div><button type="button" onClick={() => setProfitPeriod(null)} className="rounded-lg border px-3 py-2 text-sm">Close</button></div>
+          <div className="mt-4 space-y-3 text-sm">
+            <div className="flex justify-between"><span>Net sales collected</span><b>{money(profitPeriod === "monthly" ? summary.monthly_sales : summary.yearly_sales)}</b></div>
+            <div className="flex justify-between"><span>Estimated cost of goods sold</span><b>{money(profitPeriod === "monthly" ? summary.monthly_estimated_cogs : summary.yearly_estimated_cogs)}</b></div>
+            <div className="flex justify-between"><span>Expenses + payroll</span><b>{money(profitPeriod === "monthly" ? summary.monthly_expenses : summary.yearly_expenses)}</b></div>
+            <div className="flex justify-between border-t pt-3 text-base font-extrabold"><span>Estimated result</span><b>{money((profitPeriod === "monthly" ? summary.monthly_profit : summary.yearly_profit) || "0")}</b></div>
+          </div>
+          <p className="mt-4 text-[11px] text-neutral-500">Estimate based on collected sales, recipe-based ingredient costs and recorded expenses/payroll.</p>
+        </section>
+      </div>}
       {showMonthlySales && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" onClick={() => setShowMonthlySales(false)}>
         <section className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold">{t("Monthly sales details")}</h2><p className="text-sm text-neutral-500">{reportDate.slice(0, 7)}</p></div><button type="button" onClick={() => setShowMonthlySales(false)} className="rounded-lg border px-3 py-2">{t("Close")}</button></div>
