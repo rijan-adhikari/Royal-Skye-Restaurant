@@ -47,7 +47,7 @@ def on_startup():
     command.upgrade(migration_config, "head")
 
     # Bootstrap exactly one administrator only on a genuinely empty database.
-    # The password is supplied through a Render secret and must be changed at first login.
+    # The password is supplied through a Render secret; the administrator can rotate it after signing in.
     if settings.INITIAL_ADMIN_PASSWORD:
         db = SessionLocal()
         try:
@@ -58,7 +58,7 @@ def on_startup():
                     password_hash=hash_password(settings.INITIAL_ADMIN_PASSWORD),
                     role=models.RoleName.admin,
                     is_active=True,
-                    must_change_password=True,
+                    must_change_password=False,
                 ))
                 db.commit()
         finally:
