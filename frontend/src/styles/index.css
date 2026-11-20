@@ -326,38 +326,3 @@ html[data-theme="dark"] main [class*="bg-green-50"] { background:#26382f!importa
 html[data-theme="dark"] main [class*="bg-amber-50"],
 html[data-theme="dark"] main [class*="bg-yellow-50"] { background:#403321!important; border-color:#705632!important; }
 html[data-theme="dark"] main [class*="border-[#"] { border-color:#514238!important; }
-
-
-/* Calm, premium loading states: shimmer skeletons and gentle page entrances. */
-.rs-skeleton {
-  position: relative;
-  overflow: hidden;
-  background: #eee9e3;
-  isolation: isolate;
-}
-.rs-skeleton::after {
-  position: absolute;
-  inset: 0;
-  content: "";
-  transform: translateX(-100%);
-  background: linear-gradient(100deg, transparent 18%, rgba(255,255,255,.76) 48%, transparent 78%);
-  animation: rs-skeleton-shimmer 1.55s cubic-bezier(.4,0,.2,1) infinite;
-}
-.rs-page-enter {
-  animation: rs-page-enter .34s cubic-bezier(.2,.75,.25,1) both;
-}
-@keyframes rs-skeleton-shimmer {
-  100% { transform: translateX(100%); }
-}
-@keyframes rs-page-enter {
-  from { opacity: 0; transform: translateY(7px); filter: blur(1.5px); }
-  to { opacity: 1; transform: translateY(0); filter: blur(0); }
-}
-html[data-theme="dark"] .rs-skeleton { background: #39312b; }
-html[data-theme="dark"] .rs-skeleton::after {
-  background: linear-gradient(100deg, transparent 18%, rgba(255,255,255,.09) 48%, transparent 78%);
-}
-@media (prefers-reduced-motion: reduce) {
-  .rs-skeleton::after { animation: none; }
-  .rs-page-enter { animation: none; }
-}
