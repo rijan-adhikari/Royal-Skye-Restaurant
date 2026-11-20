@@ -25,7 +25,7 @@ class RestaurantSettingsUpdate(BaseModel):
     vat: str = ""
     currency: str = "NPR"
     logo_path: str = ""
-    qr_image_path: str = ""
+    qr_image_path: str = Field(default="", max_length=8_000_000)
     receipt_footer: str = "Thank you for visiting!"
 
 
@@ -67,6 +67,14 @@ def update_tax_setting(payload: schemas.TaxSettingUpdate, db: Session = Depends(
     db.add(models.AuditLog(user_id=user.id, action="settings.tax.update", details=f"VAT enabled={payload.tax_enabled}, rate={payload.tax_percent}%, service charge enabled={payload.service_charge_enabled}, rate={payload.service_charge_percent}%"))
     db.commit()
     return {"ok": True}
+
+
+@router.get("/settings/payment-qr")
+def get_payment_qr(db: Session = Depends(get_db), user=Depends(require_roles(
+    models.RoleName.admin, models.RoleName.manager, models.RoleName.cashier,
+))):
+    setting = db.query(models.RestaurantSetting).first()
+    return {"qr_image_path": setting.qr_image_path if setting else ""}
 
 
 @router.get("/settings/restaurant")
