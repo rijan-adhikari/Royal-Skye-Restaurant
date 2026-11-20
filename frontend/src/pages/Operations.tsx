@@ -7,7 +7,7 @@ import AdminControl from "./AdminControl";
 import Admin from "./Admin";
 
 type Tab = "cash" | "expenses" | "inventory" | "reservations" | "menu" | "controls" | "reports" | "payroll" | "staff";
-const tabs: Tab[] = ["cash", "expenses", "inventory", "reservations", "menu", "controls", "payroll", "reports", "staff"];
+const tabs: Tab[] = ["expenses", "inventory", "reservations", "menu", "controls", "payroll", "reports", "staff"];
 const units = ["kg", "g", "litre", "ml", "dozen", "pcs", "bottle", "packet", "box"];
 const field = "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm";
 const button = "rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white";
@@ -19,7 +19,7 @@ export default function Operations() {
   const { role } = useAuth();
   // Keep the manager workspace focused on the three daily controls; advanced administration stays with the admin role.
   const visibleTabs = role === "admin" ? tabs : tabs.filter((item) => ["expenses", "inventory", "controls"].includes(item));
-  const [tab, setTab] = useState<Tab>("cash");
+  const [tab, setTab] = useState<Tab>("expenses");
   const [searchParams] = useSearchParams();
   useEffect(() => {
     const requested = searchParams.get("tab") as Tab | null;
@@ -90,8 +90,8 @@ export default function Operations() {
     {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{[["Expenses recorded", data.expenses.length], ["Total expenses", money(data.expenses.reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0))], ["Stock items", data.inventory.length], ["Low stock", lowStock.length]].map((x) => <div className={panel} key={x[0]}><p className="text-xs text-neutral-500">{t(x[0])}</p><p className="mt-1 text-2xl font-bold">{x[1]}</p></div>)}</div>
     <nav className="space-y-3 rounded-2xl border border-[#e8dfd6] bg-white p-4 shadow-sm">
-      <div><p className="mb-2 text-[10px] font-extrabold uppercase tracking-[.16em] text-[#a18d7c]">Daily restaurant operations</p><div className="flex flex-wrap gap-2">{visibleTabs.filter((name) => ["expenses", "inventory"].includes(name)).map((tabName) => <button key={tabName} onClick={() => setTab(tabName)} className={"rounded-xl px-4 py-2.5 text-xs font-bold transition " + (tab === tabName ? "bg-[#7d2523] text-white shadow-sm" : "border border-[#e8dfd6] bg-[#fbfaf8] text-[#6f6258] hover:bg-[#f4eee7]")}>{t(tabName === "expenses" ? "Expenses" : "Inventory")}</button>)}</div></div>
-      {role === "admin" && <div className="border-t border-[#eee7df] pt-3"><p className="mb-2 text-[10px] font-extrabold uppercase tracking-[.16em] text-[#a18d7c]">Administration & controls</p><div className="flex flex-wrap gap-2">{visibleTabs.filter((name) => !["cash", "expenses", "inventory", "controls"].includes(name)).map((tabName) => <button key={tabName} onClick={() => setTab(tabName)} className={"rounded-xl px-3 py-2 text-xs font-semibold capitalize transition " + (tab === tabName ? "bg-[#7d2523] text-white" : "border border-[#e8dfd6] bg-white text-[#6f6258] hover:bg-[#faf7f3]")}>{t(tabName)}</button>)}</div></div>}
+      <div><p className="mb-2 text-[10px] font-extrabold uppercase tracking-[.16em] text-[#a18d7c]">Daily restaurant operations</p><div className="flex flex-wrap gap-2">{visibleTabs.filter((name) => ["expenses", "inventory", "controls"].includes(name)).map((tabName) => <button key={tabName} onClick={() => setTab(tabName)} className={"rounded-xl px-4 py-2.5 text-xs font-bold transition " + (tab === tabName ? "bg-[#7d2523] text-white shadow-sm" : "border border-[#e8dfd6] bg-[#fbfaf8] text-[#6f6258] hover:bg-[#f4eee7]")}>{t(tabName === "expenses" ? "Expenses" : tabName === "inventory" ? "Inventory" : "Control Center")}</button>)}</div></div>
+      {role === "admin" && <div className="border-t border-[#eee7df] pt-3"><p className="mb-2 text-[10px] font-extrabold uppercase tracking-[.16em] text-[#a18d7c]">Team operations</p><div className="flex flex-wrap gap-2">{visibleTabs.filter((name) => !["expenses", "inventory", "controls"].includes(name)).map((tabName) => <button key={tabName} onClick={() => setTab(tabName)} className={"rounded-xl px-3 py-2 text-xs font-semibold capitalize transition " + (tab === tabName ? "bg-[#7d2523] text-white" : "border border-[#e8dfd6] bg-white text-[#6f6258] hover:bg-[#faf7f3]")}>{t(tabName === "staff" ? "Staff attendance" : tabName)}</button>)}</div></div>}
     </nav>
 
     {tab === "inventory" && <div className="grid gap-4 xl:grid-cols-[340px_1fr]">
@@ -149,7 +149,7 @@ export default function Operations() {
 
     
     {tab === "menu" && <Admin embedded />}
-    {tab === "controls" && <AdminControl embedded managerView={role !== "admin"} initialTab={searchParams.get("control") || undefined} />}
+    {tab === "controls" && <AdminControl embedded managerView={role !== "admin"} visibleTabs={role === "admin" ? ["cash", "suppliers", "reports", "service", "loyalty"] : ["cash", "service", "loyalty"]} initialTab={searchParams.get("control") || "cash"} />}
     {tab === "payroll" && <div className="grid gap-4 lg:grid-cols-2">
       <section className={panel}>{heading("Payroll register", "Record salary periods, partial cash-outs and remaining balances.")}<form className="grid gap-2 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); run(() => api.post("/api/operations/staff/payroll", { ...payrollForm, gross_pay: Number(payrollForm.gross_pay), deductions: Number(payrollForm.deductions) }), "Payroll entry created."); }}>
         <label className="block text-xs">{t("Staff member")}<select className={field} required value={payrollForm.user_id} onChange={(e) => setPayrollForm({ ...payrollForm, user_id: e.target.value })}><option value="">{t("Select staff")}</option>{data.payrollStaff.map((member: any) => <option key={member.id} value={member.id}>{member.full_name} · {member.role}</option>)}</select></label>

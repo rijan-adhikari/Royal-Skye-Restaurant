@@ -27,12 +27,12 @@ interface CustomerHistory {
 }
 const staffRoles = ["admin", "manager", "waiter", "cashier"] as const;
 
-export default function Admin({ embedded = false }: { embedded?: boolean }) {
+export default function Admin({ embedded = false, staffOnly = false }: { embedded?: boolean; staffOnly?: boolean }) {
   const { t } = useLanguage();
   const { role } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const requestedPanel = searchParams.get("panel") || "menu";
-  const panel = requestedPanel === "staff" && role !== "admin" ? "menu" : requestedPanel;
+  const requestedPanel = staffOnly ? "staff" : (searchParams.get("panel") || "menu");
+  const panel = requestedPanel === "staff" && (!staffOnly && role === "admin" || role !== "admin") ? "menu" : requestedPanel;
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [menuEditingId, setMenuEditingId] = useState<string | null>(null);
@@ -248,11 +248,10 @@ export default function Admin({ embedded = false }: { embedded?: boolean }) {
         <h1 className="text-2xl font-semibold">{panel === "menu" ? "Menu Management" : panel === "customers" ? "Customer Management" : "Staff Accounts"}</h1>
         <p className="text-sm text-neutral-500 mt-1">{panel === "menu" ? "Organize categories, dishes, prices and availability." : panel === "customers" ? "Customer records, visit history and spending." : "Create staff logins, assign roles and manage account access."}</p>
       </div>
-      <nav className="flex flex-wrap gap-2 rounded-2xl border border-[#e8dfd6] bg-white p-2 shadow-sm">
+      {!staffOnly && <nav className="flex flex-wrap gap-2 rounded-2xl border border-[#e8dfd6] bg-white p-2 shadow-sm">
         <button type="button" onClick={() => setSearchParams({panel:"menu"})} className={"rounded-xl px-4 py-2.5 text-sm font-semibold "+(panel==="menu"?"bg-[#342720] text-white":"text-[#6f6258] hover:bg-[#f7f2ec]")}>Menu Management</button>
         <button type="button" onClick={() => setSearchParams({panel:"customers"})} className={"rounded-xl px-4 py-2.5 text-sm font-semibold "+(panel==="customers"?"bg-[#342720] text-white":"text-[#6f6258] hover:bg-[#f7f2ec]")}>Customer Management</button>
-        {role==="admin" && <button type="button" onClick={() => setSearchParams({panel:"staff"})} className={"rounded-xl px-4 py-2.5 text-sm font-semibold "+(panel==="staff"?"bg-[#342720] text-white":"text-[#6f6258] hover:bg-[#f7f2ec]")}>Staff Accounts</button>}
-      </nav>
+      </nav>}
 
       {role === "admin" && panel === "staff" && (
       <section className="bg-white rounded-xl shadow p-5">

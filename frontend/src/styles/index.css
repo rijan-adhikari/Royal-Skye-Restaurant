@@ -267,3 +267,62 @@ html[data-theme="dark"] main [class*="bg-[#f8"] {
   background-color: #29231f !important;
   border-color: #514238 !important;
 }
+
+
+/* Semantic table status cards: consistent status colours in both themes. */
+.tables-page { color:var(--rs-ink); }
+.tables-page .table-status-legend { background:var(--rs-paper); color:var(--rs-muted); border:1px solid var(--rs-line); }
+.tables-page .table-card { background:var(--rs-panel); color:var(--rs-ink); border-color:var(--rs-line); }
+.tables-page .table-card .table-kicker,.tables-page .table-card .table-meta { color:var(--rs-muted); }
+.tables-page .table-card .table-name { color:var(--rs-ink); }
+.tables-page .table-card .table-action { border-color:var(--rs-line); color:var(--rs-gold); }
+.tables-page .table-card--available { --table-tone:#668b6d; background:#f2f8f2; border-color:#d7e5d8; }
+.tables-page .table-card--occupied { --table-tone:#b45b55; background:#fff4f2; border-color:#edcfcc; }
+.tables-page .table-card--billing { --table-tone:#c39445; background:#fff9ed; border-color:#ecdcbf; }
+.tables-page .table-card--reserved { --table-tone:#6d88ad; background:#f2f6fc; border-color:#d7e0ed; }
+.tables-page .table-card--cleaning { --table-tone:#8e8983; background:#f5f4f2; border-color:#e1dfdc; }
+.tables-page .table-status-dot { background:var(--table-tone); }
+.tables-page .table-status-text { color:var(--table-tone); }
+.tables-page .table-floor-button,.tables-page .table-service-card,.tables-page .table-cabin-card { background:var(--rs-panel); border-color:var(--rs-line); color:var(--rs-ink); }
+.tables-page .table-floor-button { color:var(--rs-muted); }
+.tables-page .table-floor-button[aria-pressed="true"] { background:var(--rs-accent); color:#fff; border-color:var(--rs-accent); }
+.tables-page .table-empty-state { background:var(--rs-paper); border-color:var(--rs-line); color:var(--rs-muted); }
+html[data-theme="dark"] .tables-page .table-card--available { --table-tone:#a5d0ac; background:#24372c; border-color:#456b53; }
+html[data-theme="dark"] .tables-page .table-card--occupied { --table-tone:#e18a80; background:#402725; border-color:#75433e; }
+html[data-theme="dark"] .tables-page .table-card--billing { --table-tone:#e3bd79; background:#403321; border-color:#705632; }
+html[data-theme="dark"] .tables-page .table-card--reserved { --table-tone:#a9bfdf; background:#293545; border-color:#536b89; }
+html[data-theme="dark"] .tables-page .table-card--cleaning { --table-tone:#c1b8ae; background:#34302c; border-color:#5b5148; }
+html[data-theme="dark"] .tables-page .table-card .table-kicker,.tables-page .table-card .table-meta { color:#c9bbae; }
+html[data-theme="dark"] .tables-page .table-card .table-name { color:#f3e9df; }
+html[data-theme="dark"] .tables-page .table-card .table-action { border-color:#59483b; color:#d0a66e; }
+html[data-theme="dark"] .tables-page .table-status-legend { background:#29231f; color:#dfcfc0; border-color:#514238; }
+html[data-theme="dark"] .tables-page .table-floor-button,.html[data-theme="dark"] .tables-page .table-service-card,.html[data-theme="dark"] .tables-page .table-cabin-card { background:#29231f; color:#f0e6dc; border-color:#514238; }
+html[data-theme="dark"] .tables-page .table-floor-button[aria-pressed="true"] { background:#7d2523; color:#fff; border-color:#a85b52; }
+html[data-theme="dark"] .tables-page .table-empty-state { background:#211c18; color:#d0c1b4; border-color:#59483b; }
+
+/* Dark-mode fallbacks for the remaining modules that use fixed Tailwind surfaces. */
+html[data-theme="dark"] main [class*="bg-white"],
+html[data-theme="dark"] main [class*="bg-[#fff"],
+html[data-theme="dark"] main [class*="bg-[#fb"],
+html[data-theme="dark"] main [class*="bg-[#faf"],
+html[data-theme="dark"] main [class*="bg-[#f9"],
+html[data-theme="dark"] main [class*="bg-[#f8"],
+html[data-theme="dark"] main [class*="bg-[#f7"],
+html[data-theme="dark"] main [class*="bg-[#f6"],
+html[data-theme="dark"] main [class*="bg-[#f5"],
+html[data-theme="dark"] main [class*="bg-[#f4"] { background-color:#29231f!important; border-color:#514238!important; }
+html[data-theme="dark"] main [class*="text-neutral-900"],
+html[data-theme="dark"] main [class*="text-neutral-800"],
+html[data-theme="dark"] main [class*="text-neutral-700"],
+html[data-theme="dark"] main [class*="text-neutral-600"] { color:#e2d6ca!important; }
+html[data-theme="dark"] main [class*="text-neutral-500"],
+html[data-theme="dark"] main [class*="text-neutral-400"] { color:#b8a99c!important; }
+html[data-theme="dark"] main [class*="bg-neutral-50"],
+html[data-theme="dark"] main [class*="bg-neutral-100"] { background:#302923!important; border-color:#514238!important; color:#e6d9cd!important; }
+html[data-theme="dark"] main [class*="bg-red-50"],
+html[data-theme="dark"] main [class*="bg-rose-50"] { background:#402827!important; border-color:#75433e!important; }
+html[data-theme="dark"] main [class*="bg-emerald-50"],
+html[data-theme="dark"] main [class*="bg-green-50"] { background:#26382f!important; border-color:#456b53!important; }
+html[data-theme="dark"] main [class*="bg-amber-50"],
+html[data-theme="dark"] main [class*="bg-yellow-50"] { background:#403321!important; border-color:#705632!important; }
+html[data-theme="dark"] main [class*="border-[#"] { border-color:#514238!important; }
