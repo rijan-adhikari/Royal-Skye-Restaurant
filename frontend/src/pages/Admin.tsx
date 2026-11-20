@@ -253,9 +253,6 @@ export default function Admin({ embedded = false }: { embedded?: boolean }) {
         <button type="button" onClick={() => setSearchParams({panel:"customers"})} className={"rounded-xl px-4 py-2.5 text-sm font-semibold "+(panel==="customers"?"bg-[#342720] text-white":"text-[#6f6258] hover:bg-[#f7f2ec]")}>Customer Management</button>
         {role==="admin" && <button type="button" onClick={() => setSearchParams({panel:"staff"})} className={"rounded-xl px-4 py-2.5 text-sm font-semibold "+(panel==="staff"?"bg-[#342720] text-white":"text-[#6f6258] hover:bg-[#f7f2ec]")}>Staff Accounts</button>}
       </nav>
-      </div>
-      <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
-      </div>
 
       {role === "admin" && panel === "staff" && (
       <section className="bg-white rounded-xl shadow p-5">
