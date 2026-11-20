@@ -71,7 +71,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       {mobileOpen && <button aria-label="Close navigation" onClick={() => setMobileOpen(false)} className="fixed inset-0 z-40 bg-black/45 lg:hidden"/>}
       <aside className={`fixed inset-y-0 left-0 z-50 flex w-[264px] flex-col overflow-y-auto bg-[#211d1b] px-4 py-5 text-[#f7f2ed] shadow-[12px_0_40px_rgba(25,18,14,.12)] transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="flex items-center gap-3 px-2 pb-7">
-          <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl border border-[#d7b17b]/30 bg-[#fffaf4] p-1 shadow-lg shadow-black/20"><img src="/images/logo.jpg" alt="Royal Skye" className="h-full w-full object-contain"/></div>
+          <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl border border-[#d7b17b]/30 bg-[#fffaf4] p-0 shadow-lg shadow-black/20"><img src="/images/logo.jpg" alt="Royal Skye" className="h-full w-full object-contain"/></div>
           <div className="min-w-0"><p className="text-[13px] font-black tracking-[.19em] text-white">ROYAL SKYE</p><p className="mt-1 text-[9px] font-semibold tracking-[.22em] text-[#a99b91]">RESTAURANT & BAR</p></div>
           <button onClick={() => setMobileOpen(false)} className="ml-auto rounded-lg p-2 text-[#b7aaa1] hover:bg-white/10 lg:hidden" aria-label="Close menu">✕</button>
         </div>
