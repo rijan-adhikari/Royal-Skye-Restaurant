@@ -17,7 +17,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 export default function Operations() {
   const { t } = useLanguage();
   const { role } = useAuth();
-  const visibleTabs = role === "admin" ? tabs : tabs.filter((item) => item !== "staff" && item !== "reports");
+  // Keep the manager workspace focused on the three daily controls; advanced administration stays with the admin role.\n  const visibleTabs = role === "admin" ? tabs : tabs.filter((item) => ["cash", "expenses", "inventory"].includes(item));
   const [tab, setTab] = useState<Tab>("cash");
   const [searchParams] = useSearchParams();
   useEffect(() => {
@@ -88,7 +88,10 @@ export default function Operations() {
     {message && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</div>}
     {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{[["Expenses recorded", data.expenses.length], ["Total expenses", money(data.expenses.reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0))], ["Stock items", data.inventory.length], ["Low stock", lowStock.length]].map((x) => <div className={panel} key={x[0]}><p className="text-xs text-neutral-500">{t(x[0])}</p><p className="mt-1 text-2xl font-bold">{x[1]}</p></div>)}</div>
-    <nav className="flex gap-2 overflow-x-auto border-b pb-2">{visibleTabs.map((tabName) => <button key={tabName} onClick={() => setTab(tabName)} className={"shrink-0 rounded-lg px-3 py-2 text-sm font-medium capitalize " + (tab === tabName ? "bg-brand text-white" : "bg-white text-neutral-600")}>{t(tabName)}</button>)}</nav>
+    <nav className="space-y-3 rounded-2xl border border-[#e8dfd6] bg-white p-4 shadow-sm">
+      <div><p className="mb-2 text-[10px] font-extrabold uppercase tracking-[.16em] text-[#a18d7c]">Daily restaurant operations</p><div className="flex flex-wrap gap-2">{visibleTabs.filter((name) => ["cash", "expenses", "inventory"].includes(name)).map((tabName) => <button key={tabName} onClick={() => setTab(tabName)} className={"rounded-xl px-4 py-2.5 text-xs font-bold transition " + (tab === tabName ? "bg-[#7d2523] text-white shadow-sm" : "border border-[#e8dfd6] bg-[#fbfaf8] text-[#6f6258] hover:bg-[#f4eee7]")}>{t(tabName === "cash" ? "Cash drawer" : tabName === "expenses" ? "Expenses" : "Inventory")}</button>)}</div></div>
+      {role === "admin" && <div className="border-t border-[#eee7df] pt-3"><p className="mb-2 text-[10px] font-extrabold uppercase tracking-[.16em] text-[#a18d7c]">Administration & controls</p><div className="flex flex-wrap gap-2">{visibleTabs.filter((name) => !["cash", "expenses", "inventory"].includes(name)).map((tabName) => <button key={tabName} onClick={() => setTab(tabName)} className={"rounded-xl px-3 py-2 text-xs font-semibold capitalize transition " + (tab === tabName ? "bg-[#7d2523] text-white" : "border border-[#e8dfd6] bg-white text-[#6f6258] hover:bg-[#faf7f3]")}>{t(tabName)}</button>)}</div></div>}
+    </nav>
 
     {tab === "inventory" && <div className="grid gap-4 xl:grid-cols-[340px_1fr]">
       <section className={panel}>{heading("Add stock item", "Enter the item, expiry, cost and stock quantity.")}<form className="space-y-3" onSubmit={(e) => {

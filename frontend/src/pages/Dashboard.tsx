@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api/client";
 import { useLanguage } from "../context/LanguageContext";
+import DailySavings from "./DailySavings";
 
 interface Summary {
   daily_sales: string;
@@ -181,6 +182,7 @@ export default function Dashboard() {
         <div className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3 md:p-5">{lowStockItems.map((item) => <div key={item.id} className="rounded-xl border border-[#efe3d3] bg-white p-3.5 text-xs"><p className="font-extrabold text-[#49392d]">{item.name}</p><div className="mt-2 flex justify-between gap-2 text-[#8c7b6b]"><span>{t("On hand")}: <b className="text-[#a14b47]">{item.quantity} {item.unit}</b></span><span>{t("Reorder")}: {item.reorder_level} {item.unit}</span></div></div>)}</div>
         <div className="px-5 pb-5 md:px-6"><Link to="/operations?tab=inventory" className="text-xs font-extrabold text-[#8b1a1a] hover:underline">{t("Open inventory")} →</Link><p className="mt-1 text-[10px] text-[#a18d7c]">{t("This alert remains visible until stock is replenished.")}</p></div>
       </section>}
+      {role === "admin" && <DailySavings embedded />}
       {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</p>}
       {showMonthlySales && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" onClick={() => setShowMonthlySales(false)}>
         <section className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
