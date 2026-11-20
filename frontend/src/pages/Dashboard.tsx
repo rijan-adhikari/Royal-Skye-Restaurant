@@ -35,7 +35,7 @@ export default function Dashboard() {
   const { fullName, role } = useAuth();
   const { t } = useLanguage();
   const { theme, setTheme } = useTheme();
-  const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
+  const [reportDate, setReportDate] = useState(() => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`; });
   const [summary, setSummary] = useState<Summary>(emptySummary);
   const [error, setError] = useState("");
   const [lowStockItems, setLowStockItems] = useState<any[]>([]);
