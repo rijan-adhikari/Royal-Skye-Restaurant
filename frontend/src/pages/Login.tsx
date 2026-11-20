@@ -184,10 +184,10 @@ export default function Login() {
               </div>
             </div>
           </form>
-          <p className="mt-5 text-center text-[10px] text-[#6e8580]">
-            Built by{" "}
-            <a href="https://adhikari-rijan.onrender.com/" target="_blank" rel="noopener noreferrer" className="text-sm font-extrabold tracking-[.02em] text-[#d5eee6] transition hover:text-[#65e6c2] hover:underline">
-              Rijan Adhikari
+          <p className="mt-7 text-center text-base font-extrabold tracking-[.12em] text-[#d5eee6]">
+            DEVELOPED BY{" "}
+            <a href="https://adhikari-rijan.onrender.com/" target="_blank" rel="noopener noreferrer" className="text-lg font-black tracking-[.1em] text-[#65e6c2] transition hover:text-[#f2b86b] hover:underline">
+              RIJAN ADHIKARI
             </a>
           </p>
         </section>
