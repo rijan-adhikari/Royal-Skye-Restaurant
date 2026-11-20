@@ -1552,3 +1552,58 @@ html[data-theme="light"] main.rs-login .rs-login-credit * {color:#c9d9d5!importa
   html[data-theme="light"] main.rs-login *,
   html[data-theme="dark"] main.rs-login * {animation:none!important;transition:none!important;}
 }
+
+
+/* Global Astra dark palette for remaining restaurant modules and legacy utility markup. */
+html[data-theme="dark"] main {
+  color:#e7f3ef!important;
+  background:transparent!important;
+}
+html[data-theme="dark"] main section[class*="bg-white"],
+html[data-theme="dark"] main article[class*="bg-white"],
+html[data-theme="dark"] main [class*="rounded-"][class*="bg-white"] {
+  background:linear-gradient(145deg,#101c20,#0c171b)!important;
+  border-color:#294744!important;
+  color:#e7f3ef!important;
+  box-shadow:0 12px 30px rgba(0,0,0,.18)!important;
+}
+html[data-theme="dark"] main [class*="bg-[#29211d]"],
+html[data-theme="dark"] main [class*="bg-[#302"],
+html[data-theme="dark"] main [class*="bg-[#332"],
+html[data-theme="dark"] main [class*="bg-[#342"],
+html[data-theme="dark"] main [class*="bg-[#403"],
+html[data-theme="dark"] main [class*="bg-[#514"],
+html[data-theme="dark"] main [class*="bg-[#6c"],
+html[data-theme="dark"] main [class*="bg-[#7b"],
+html[data-theme="dark"] main [class*="bg-[#8b1a"],
+html[data-theme="dark"] main [class*="bg-[#9b"] {
+  background:#142328!important;border-color:#294744!important;color:#dcece6!important;
+}
+html[data-theme="dark"] main [class*="text-[#302"],
+html[data-theme="dark"] main [class*="text-[#332"],
+html[data-theme="dark"] main [class*="text-[#403"],
+html[data-theme="dark"] main [class*="text-[#433"],
+html[data-theme="dark"] main [class*="text-[#514"],
+html[data-theme="dark"] main [class*="text-[#594"],
+html[data-theme="dark"] main [class*="text-[#6"],
+html[data-theme="dark"] main [class*="text-[#7"],
+html[data-theme="dark"] main [class*="text-[#8"],
+html[data-theme="dark"] main [class*="text-[#9b"] {color:#9bb4ac!important;}
+html[data-theme="dark"] main [class*="border-[#e"],
+html[data-theme="dark"] main [class*="border-[#d"],
+html[data-theme="dark"] main [class*="border-[#c"] {border-color:#294744!important;}
+html[data-theme="dark"] main button[class*="bg-[#342"],
+html[data-theme="dark"] main button[class*="bg-[#7b"],
+html[data-theme="dark"] main button[class*="bg-[#8b1a"] {
+  background:linear-gradient(105deg,#167866,#2dbb9b)!important;
+  border-color:rgba(101,230,194,.45)!important;color:#041411!important;
+}
+html[data-theme="dark"] main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+html[data-theme="dark"] main select,
+html[data-theme="dark"] main textarea {
+  background:#091316!important;color:#e8f4ef!important;border-color:#355650!important;
+}
+html[data-theme="dark"] main table thead th {background:#142a2b!important;color:#a9cfc2!important;border-color:#294744!important;}
+html[data-theme="dark"] main table tbody tr:hover {background:#142328!important;}
+html[data-theme="light"] main.rs-login [class*="bg-[#"] {background-color:transparent!important;}
+html[data-theme="light"] main.rs-login [class*="bg-[#65e6c2]"] {background-color:#65e6c2!important;}
