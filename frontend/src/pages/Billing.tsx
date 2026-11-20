@@ -31,16 +31,13 @@ export default function Billing() {
   const [showPaymentQr, setShowPaymentQr] = useState(false);
 
   const loadData = async () => {
-    const [orderResponse, customerResponse, loyaltyResponse, qrResponse] = await Promise.all([
+    const [orderResponse, customerResponse, loyaltyResponse] = await Promise.all([
       api.get("/api/orders/open"),
       api.get("/api/customers"),
       api.get("/api/admin/loyalty/settings"),
-      api.get("/api/settings/payment-qr"),
     ]);
     setOrders(orderResponse.data);
     setCustomers(customerResponse.data);
-    setPaymentQr(qrResponse.data.qr_image_path || "");
-    setShowPaymentQr(false);
     setLoyaltyEnabled(!!loyaltyResponse.data.enabled);
     setPointValue(Number(loyaltyResponse.data.point_value || 0));
     return orderResponse.data as OpenOrder[];
@@ -48,6 +45,11 @@ export default function Billing() {
 
   useEffect(() => {
     loadData().catch(() => setError("Could not load open orders and customers."));
+  }, []);
+  useEffect(() => {
+    api.get("/api/settings/payment-qr")
+      .then(response => setPaymentQr(response.data.qr_image_path || ""))
+      .catch(() => setPaymentQr(""));
   }, []);
 
   useEffect(() => {
