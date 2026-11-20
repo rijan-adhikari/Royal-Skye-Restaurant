@@ -229,7 +229,7 @@ def yearly_sales_details(report_date: date | None = None, db: Session = Depends(
 
 @router.get("/summary.pdf")
 def dashboard_summary_pdf(report_date: date | None = None, db: Session = Depends(get_db),
-                           user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager, models.RoleName.cashier))):
+                           user=Depends(require_roles(models.RoleName.admin))):
     from xml.sax.saxutils import escape
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import landscape, A4
@@ -326,7 +326,7 @@ def dashboard_summary_pdf(report_date: date | None = None, db: Session = Depends
 
 @router.get("/summary.xlsx")
 def dashboard_summary_excel(report_date: date | None = None, db: Session = Depends(get_db),
-                             user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager, models.RoleName.cashier))):
+                             user=Depends(require_roles(models.RoleName.admin))):
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
     from openpyxl.utils import get_column_letter
