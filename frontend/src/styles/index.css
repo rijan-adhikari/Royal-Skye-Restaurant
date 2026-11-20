@@ -326,3 +326,88 @@ html[data-theme="dark"] main [class*="bg-green-50"] { background:#26382f!importa
 html[data-theme="dark"] main [class*="bg-amber-50"],
 html[data-theme="dark"] main [class*="bg-yellow-50"] { background:#403321!important; border-color:#705632!important; }
 html[data-theme="dark"] main [class*="border-[#"] { border-color:#514238!important; }
+
+
+/* Mobile-first hardening: iPhone safe areas, Android touch input and compact screens. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-padding-top: env(safe-area-inset-top, 0px);
+}
+body, #root {
+  width: 100%;
+  min-width: 320px;
+  min-height: 100%;
+}
+body {
+  overscroll-behavior-y: contain;
+}
+button, a, input, select, textarea {
+  touch-action: manipulation;
+}
+img, video, canvas, svg {
+  max-width: 100%;
+}
+@supports (min-height: 100dvh) {
+  #root { min-height: 100dvh; }
+}
+@supports (min-height: 100svh) {
+  .mobile-viewport-height { min-height: 100svh; }
+}
+@media (max-width: 767px) {
+  html, body, #root {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+  main, main > div, main section, main article {
+    min-width: 0;
+    max-width: 100%;
+  }
+  main .sticky.top-0 {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  main select,
+  main textarea {
+    min-width: 0;
+    max-width: 100%;
+    font-size: 16px !important;
+  }
+  main table {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  main table th,
+  main table td {
+    white-space: nowrap;
+  }
+  main button, main a[role="button"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+  main .billing-page,
+  main .tables-page {
+    min-width: 0;
+    max-width: 100%;
+  }
+  main .billing-page > *,
+  main .tables-page > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .mobile-safe-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  }
+}
+@media (max-width: 380px) {
+  main .text-3xl { font-size: 1.65rem; line-height: 1.2; }
+  main .text-2xl { font-size: 1.35rem; line-height: 1.25; }
+  main .rounded-\[26px\] { border-radius: 1.1rem; }
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  aside.fixed { padding-top: max(.75rem, env(safe-area-inset-top, 0px)); padding-bottom: max(.75rem, env(safe-area-inset-bottom, 0px)); }
+  main .sticky.top-0 > div { min-height: 58px; }
+}
