@@ -1,7 +1,7 @@
 import React from "react";
 
 function SkeletonBlock({ className = "" }: { className?: string }) {
-  return <div aria-hidden="true" className={`rs-skeleton rounded-xl ${className}`} />;
+  return <div aria-hidden="true" className={`bg-[#eee9e3] rounded-xl ${className}`} />;
 }
 
 export default function LoadingScreen() {
