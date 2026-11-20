@@ -204,8 +204,8 @@ def dashboard_low_stock(db: Session = Depends(get_db), user=Depends(require_role
 
 @router.get("/daily-sales")
 def daily_sales_details(report_date: date | None = None, db: Session = Depends(get_db),
-                        user=Depends(require_roles(models.RoleName.admin))):
-    target = report_date or datetime.utcnow().date()
+                        user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager))):
+    target = report_date or datetime.now(BUSINESS_TIMEZONE).date()
     start, end = _business_window(target, target + timedelta(days=1))
     return _sales_details_for_period(db, start, end)
 
