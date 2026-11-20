@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
     CORS_ORIGINS: str = "http://localhost:5173"
+    INITIAL_ADMIN_USERNAME: str = "admin"
+    INITIAL_ADMIN_PASSWORD: str = ""
+    INITIAL_ADMIN_FULL_NAME: str = "Royal Skye Administrator"
 
     @property
     def cors_origin_list(self) -> List[str]:

@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { api, apiErrorMessage } from "../api/client";
 
-type Tab = "cash" | "sales" | "suppliers" | "reports" | "service" | "backup" | "audit" | "settings";
+type Tab = "cash" | "sales" | "suppliers" | "reports" | "service" | "backup" | "audit" | "settings" | "loyalty";
 type AdminControlProps = { visibleTabs?: Tab[]; embedded?: boolean; managerView?: boolean };
 const tabs: { id: Tab; label: string }[] = [
   { id: "cash", label: "Cash drawer" },
   { id: "sales", label: "Manage sales" }, { id: "suppliers", label: "Supplier ledger" },
-  { id: "reports", label: "Reports & exports" }, { id: "service", label: "Service orders" }, { id: "backup", label: "Backup & restore" },
+  { id: "reports", label: "Reports & exports" }, { id: "service", label: "Service orders" }, { id: "loyalty", label: "Loyalty points" }, { id: "backup", label: "Backup & restore" },
   { id: "audit", label: "Audit trail" }, { id: "settings", label: "Business settings" },
 ];
 const field = "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm";
@@ -15,12 +15,14 @@ const panel = "rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm";
 const money = (v: any) => "Rs. " + Number(v || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function AdminControl({ visibleTabs, embedded = false, managerView = false }: AdminControlProps) {
-  const roleTabs = managerView ? tabs.filter((item) => ["suppliers", "service"].includes(item.id)) : tabs.filter((item) => item.id !== "cash");
+  // Managers can use day-to-day operations and loyalty controls, but destructive backup/restore and audit access remain admin-only.
+  const roleTabs = managerView ? tabs.filter((item) => ["cash", "service", "loyalty", "settings"].includes(item.id)) : tabs.filter((item) => !["cash", "suppliers"].includes(item.id));
   const availableTabs = visibleTabs ?? roleTabs.map((item) => item.id);
   const [tab, setTab] = useState<Tab>(availableTabs[0] ?? "cash");
   const [data, setData] = useState<any>({ shifts: [], refunds: [], bills: [], suppliers: [], inventory: [], ledger: [], supplierBalances: [], loyalty: [], serviceOrders: [], audit: [] });
   const [shift, setShift] = useState<any>(null);
   const [tax, setTax] = useState<any>({ tax_enabled: true, tax_percent: "14", service_charge_enabled: false, service_charge_percent: "0" });
+  const [loyaltySettings, setLoyaltySettings] = useState<any>({ enabled: true, spend_per_point: "100", point_value: "1" });
   const [restaurant, setRestaurant] = useState<any>({ name: "", email: "", phone: "", address: "", pan: "", vat: "", currency: "NPR", logo_path: "", qr_image_path: "", receipt_footer: "" });
   const [openFloat, setOpenFloat] = useState("0");
   const [countedCash, setCountedCash] = useState("");
@@ -45,7 +47,8 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
       ...(!managerView ? ([["sales", "/api/admin/sales"]] as [string, string][]) : []),
       ["suppliers", "/api/operations/suppliers"], ["inventory", "/api/operations/inventory"], ["ledger", "/api/admin/suppliers/ledger"], ["supplierBalances", "/api/admin/suppliers/balances"],
       ["serviceOrders", "/api/admin/service-orders"],
-      ...(!managerView ? ([["audit", "/api/admin/audit"], ["tax", "/api/settings/tax"], ["restaurant", "/api/settings/restaurant"]] as [string, string][]) : []),
+      ["loyalty", "/api/admin/loyalty/accounts"], ["loyaltySettings", "/api/admin/loyalty/settings"],
+      ...(!managerView ? ([["audit", "/api/admin/audit"], ["tax", "/api/settings/tax"], ["restaurant", "/api/settings/restaurant"]] as [string, string][]) : [["tax", "/api/settings/tax"], ["restaurant", "/api/settings/restaurant"]] as [string, string][]),
     ] as const;
     const results = await Promise.allSettled(requests.map(([, url]) => api.get(url)));
     const next: any = {};
@@ -56,6 +59,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     setData((old: any) => ({ ...old, ...next }));
     if (next.tax) setTax(next.tax);
     if (next.restaurant) setRestaurant(next.restaurant);
+    if (next.loyaltySettings) setLoyaltySettings(next.loyaltySettings);
   };
 
   useEffect(() => { load().catch(() => setError("Could not load administration data.")); }, []);
@@ -201,6 +205,22 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     } finally { setBusy(false); }
   };
 
+  const saveLoyaltySettings = () => run(() => api.put("/api/admin/loyalty/settings", {
+    enabled: !!loyaltySettings.enabled,
+    spend_per_point: Number(loyaltySettings.spend_per_point),
+    point_value: Number(loyaltySettings.point_value),
+  }), "Loyalty settings saved.");
+
+  const adjustLoyaltyPoints = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adjustment.customer_id || !adjustment.notes.trim() || !Number.isFinite(Number(adjustment.points)) || Number(adjustment.points) === 0) {
+      setError("Select a customer and enter a non-zero point adjustment with a reason.");
+      return;
+    }
+    run(() => api.post("/api/admin/loyalty/adjust", { ...adjustment, points: Number(adjustment.points) }), "Customer loyalty points adjusted.");
+    setAdjustment({ customer_id: "", points: "", notes: "" });
+  };
+
   const saveSettings = async () => {
     if (!restaurant.name?.trim()) {
       setError("Restaurant name is required.");
@@ -329,7 +349,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     </section>}
 
     {tab === "backup" && <div className="grid gap-4 lg:grid-cols-2">
-      <section className={panel}><h2 className="font-semibold text-lg">Create database backup</h2><p className="mt-2 text-sm text-neutral-500">Download a PostgreSQL custom-format backup containing restaurant data and configuration. Backups are also stored on the server's persistent backup volume.</p><button className={primary + " mt-4"} disabled={busy} onClick={downloadBackup}>Create & download backup</button></section>
+      <section className={panel}><h2 className="font-semibold text-lg">Create database backup</h2><p className="mt-2 text-sm text-neutral-500">Download a PostgreSQL custom-format backup containing restaurant data and configuration. Download the backup and store your own secure copy. Server-local temporary files are not guaranteed to persist across deployments.</p><button className={primary + " mt-4"} disabled={busy} onClick={downloadBackup}>Create & download backup</button></section>
       <section className={panel}><h2 className="font-semibold text-lg">Restore from backup</h2><p className="mt-2 text-sm text-red-700">Restore replaces the current database. The system first creates a safety backup and blocks restore while orders or cash drawer shifts are open.</p><form onSubmit={restoreBackup} className="mt-4 space-y-3">
         <label className="block text-xs">PostgreSQL backup file (.dump)<input required type="file" accept=".dump,application/octet-stream" className={field + " mt-1"} onChange={e => setBackupFile(e.target.files?.[0] || null)} /></label>
         <label className="block text-xs">Type RESTORE ROYAL SKYE DATABASE to confirm<input required className={field + " mt-1"} value={restoreConfirmation} onChange={e => setRestoreConfirmation(e.target.value)} /></label>
@@ -338,6 +358,24 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     </div>}
 
     {tab === "audit" && <section className={panel}><h2 className="font-semibold text-lg mb-3">Recent administrative activity</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead><tbody>{data.audit.map((a: any) => <tr key={a.id} className="border-b"><td className="py-2 whitespace-nowrap">{new Date(a.created_at).toLocaleString()}</td><td>{a.full_name || a.username || "System"}</td><td>{a.action}</td><td>{a.details}</td></tr>)}</tbody></table></div></section>}
+
+    {tab === "loyalty" && <div className="grid gap-4 lg:grid-cols-2">
+      <section className={panel}><h2 className="mb-3 text-lg font-semibold">Loyalty programme</h2>
+        <label className="mb-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={!!loyaltySettings.enabled} onChange={e => setLoyaltySettings({ ...loyaltySettings, enabled: e.target.checked })} /> Enable customer loyalty points</label>
+        <label className="mb-3 block text-xs">Spend required per point (NPR)<input className={field + " mt-1"} type="number" min="0.01" step="0.01" value={loyaltySettings.spend_per_point} onChange={e => setLoyaltySettings({ ...loyaltySettings, spend_per_point: e.target.value })} /></label>
+        <label className="mb-3 block text-xs">Value per point (NPR)<input className={field + " mt-1"} type="number" min="0" step="0.01" value={loyaltySettings.point_value} onChange={e => setLoyaltySettings({ ...loyaltySettings, point_value: e.target.value })} /></label>
+        <button className={primary} disabled={busy} onClick={saveLoyaltySettings}>Save loyalty settings</button>
+        <form className="mt-5 space-y-2 border-t pt-4" onSubmit={adjustLoyaltyPoints}><h3 className="font-semibold">Adjust customer points</h3>
+          <select className={field} required value={adjustment.customer_id} onChange={e => setAdjustment({ ...adjustment, customer_id: e.target.value })}><option value="">Select customer</option>{data.loyalty.map((a: any) => <option key={a.customer_id} value={a.customer_id}>{a.name} · {a.points_balance} points</option>)}</select>
+          <input className={field} required type="number" step="0.01" placeholder="Points to add (+) or deduct (-)" value={adjustment.points} onChange={e => setAdjustment({ ...adjustment, points: e.target.value })} />
+          <input className={field} required minLength={3} placeholder="Reason for adjustment" value={adjustment.notes} onChange={e => setAdjustment({ ...adjustment, notes: e.target.value })} />
+          <button className={primary} disabled={busy}>Apply adjustment</button>
+        </form>
+      </section>
+      <section className={panel}><h2 className="mb-3 text-lg font-semibold">Customer points register</h2>
+        <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Customer</th><th>Phone</th><th>Available points</th><th>Lifetime points</th></tr></thead><tbody>{data.loyalty.map((a: any) => <tr key={a.id} className="border-b"><td className="py-3 font-medium">{a.name}</td><td>{a.phone || "—"}</td><td className={Number(a.points_balance) <= 5 ? "font-semibold text-amber-700" : "font-semibold"}>{a.points_balance}</td><td>{a.lifetime_points}</td></tr>)}{data.loyalty.length === 0 && <tr><td colSpan={4} className="py-6 text-center text-neutral-400">No customer points recorded yet.</td></tr>}</tbody></table></div>
+      </section>
+    </div>}
 
     {tab === "settings" && <div className="grid gap-4 lg:grid-cols-2">
       <section className={panel}><h2 className="font-semibold text-lg mb-3">Restaurant identity & receipt</h2><div className="space-y-3">

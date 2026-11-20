@@ -6,7 +6,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.database import Base, engine
+from app.database import Base, engine, SessionLocal
+from app import models
+from app.security import hash_password
 from app.routers import auth, floors, menu, orders, billing, customers, credit, dashboard, expenses, settings as settings_router, operations, admin_control, users
 
 app = FastAPI(title="Royal Skye Birds POS API", version="0.1.0")
@@ -43,6 +45,24 @@ def on_startup():
     migration_config.set_main_option("script_location", str(backend_dir / "alembic"))
     migration_config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
     command.upgrade(migration_config, "head")
+
+    # Bootstrap exactly one administrator only on a genuinely empty database.
+    # The password is supplied through a Render secret and must be changed at first login.
+    if settings.INITIAL_ADMIN_PASSWORD:
+        db = SessionLocal()
+        try:
+            if db.query(models.User).count() == 0:
+                db.add(models.User(
+                    username=settings.INITIAL_ADMIN_USERNAME,
+                    full_name=settings.INITIAL_ADMIN_FULL_NAME,
+                    password_hash=hash_password(settings.INITIAL_ADMIN_PASSWORD),
+                    role=models.RoleName.admin,
+                    is_active=True,
+                    must_change_password=True,
+                ))
+                db.commit()
+        finally:
+            db.close()
 
 
 @app.get("/api/health")
