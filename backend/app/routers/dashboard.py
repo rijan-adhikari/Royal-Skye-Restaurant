@@ -50,7 +50,7 @@ def _collection_amounts(db: Session, start: datetime, end: datetime):
         ) x JOIN bills b ON b.id=x.bill_id WHERE b.sale_status='active'
         GROUP BY x.bill_id ORDER BY MAX(b.created_at) DESC"""),
         {"start": start, "end": end}).mappings().all()
-    return {row["bill_id"]: row["collected_amount"] for row in rows}
+    return {str(row["bill_id"]): row["collected_amount"] for row in rows}
 
 
 def _sales_details_for_period(db: Session, start: datetime, end: datetime):
@@ -76,7 +76,7 @@ def _sales_details_for_period(db: Session, start: datetime, end: datetime):
             "customer_phone": customer.phone if customer else (service["phone"] if service else None),
             "service_type": service["service_type"] if service else "dine_in",
             "table_name": service["service_type"].title() if service else (order.table.name if order and order.table else ""),
-            "grand_total": str(bill.grand_total), "collected_amount": str(collected[bill.id]),
+            "grand_total": str(bill.grand_total), "collected_amount": str(collected[str(bill.id)]),
             "amount_paid": str(bill.amount_paid), "outstanding_amount": str(bill.outstanding_amount),
             "items": [{**dict(item), "unit_price": str(item["unit_price"]), "total": str(item["total"])} for item in items],
         })
