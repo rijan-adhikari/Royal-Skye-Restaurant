@@ -11,8 +11,6 @@ const Billing = lazy(() => import("./pages/Billing"));
 const Credit = lazy(() => import("./pages/Credit"));
 const Operations = lazy(() => import("./pages/Operations"));
 const Admin = lazy(() => import("./pages/Admin"));
-const Kitchen = lazy(() => import("./pages/Kitchen"));
-const Bar = lazy(() => import("./pages/Bar"));
 type NavItem = { to: string; label: string; icon: string; tab?: string };
 
 const iconPaths: Record<string, string> = {
@@ -20,8 +18,6 @@ const iconPaths: Record<string, string> = {
   tables: "M3 4h18v16H3z M8 4v16 M16 4v16 M3 10h18",
   billing: "M5 3h14v18H5z M8 8h8 M8 12h8 M8 16h5",
   credit: "M12 2v20 M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6",
-  kitchen: "M4 11h16 M6 11V7a6 6 0 0 1 12 0v4 M7 11v9 M17 11v9",
-  bar: "M4 3h16l-6 8v8l-4 2v-10z M8 7h8",
   master: "M12 3 3 8l9 5 9-5-9-5z M3 12l9 5 9-5 M3 16l9 5 9-5",
   inventory: "M4 7 12 3l8 4-8 4-8-4z M4 7v10l8 4 8-4V7 M12 11v10",
   expenses: "M4 5h16 M4 10h10 M4 15h7 M16 14l2 2 4-5",
@@ -48,8 +44,6 @@ function Shell({ children }: { children: React.ReactNode }) {
     ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/dashboard", label: t("Dashboard"), icon: "overview" }] : []),
     { to: "/tables", label: t("Tables & POS"), icon: "tables" },
     ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/billing", label: t("Billing & Orders"), icon: "billing" }] : []),
-    ...(["admin", "manager", "kitchen"].includes(role || "") ? [{ to: "/kitchen", label: t("Kitchen"), icon: "kitchen" }] : []),
-    ...(["admin", "manager", "bar"].includes(role || "") ? [{ to: "/bar", label: t("Bar"), icon: "bar" }] : []),
   ];
   const management: NavItem[] = isManager ? [
     { to: "/admin", label: t("Menu & Customers"), icon: "master" },
@@ -183,22 +177,7 @@ export default function App() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/kitchen"
-        element={
-          <ProtectedRoute allowedRoles={["admin", "manager", "kitchen"]}>
-            <Shell><Kitchen /></Shell>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/bar"
-        element={
-          <ProtectedRoute allowedRoles={["admin", "manager", "bar"]}>
-            <Shell><Bar /></Shell>
-          </ProtectedRoute>
-        }
-      />
+
       <Route
         path="/operations"
         element={
