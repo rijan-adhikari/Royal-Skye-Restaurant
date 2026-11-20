@@ -411,3 +411,148 @@ img, video, canvas, svg {
   aside.fixed { padding-top: max(.75rem, env(safe-area-inset-top, 0px)); padding-bottom: max(.75rem, env(safe-area-inset-bottom, 0px)); }
   main .sticky.top-0 > div { min-height: 58px; }
 }
+
+
+/* Astra-inspired restaurant workspace: dark graphite, teal telemetry and amber highlights. */
+@media screen {
+  html[data-theme="dark"] {
+    color-scheme: dark;
+    --rs-paper: #0b1215;
+    --rs-panel: #101a1e;
+    --rs-ink: #e8f2ef;
+    --rs-muted: #91aaa4;
+    --rs-line: #243b3c;
+    --rs-accent: #65e6c2;
+    --rs-gold: #f2b86b;
+  }
+  html[data-theme="dark"] body {
+    background: #070a0d !important;
+    color: #e8f2ef !important;
+  }
+  html[data-theme="dark"] body::before {
+    opacity: .025;
+    filter: grayscale(1);
+  }
+  html[data-theme="dark"] #root,
+  html[data-theme="dark"] .rs-app-shell {
+    background: #070a0d !important;
+    color: #e8f2ef !important;
+  }
+  html[data-theme="dark"] aside.fixed {
+    background: linear-gradient(180deg, #0b1418 0%, #080d10 100%) !important;
+    border-right: 1px solid #1c3434;
+  }
+  html[data-theme="dark"] aside .bg-white\\/\\[.045\\],
+  html[data-theme="dark"] aside .bg-white\\/\\[.055\\] {
+    background: rgba(101,230,194,.045) !important;
+    border-color: rgba(101,230,194,.13) !important;
+  }
+  html[data-theme="dark"] main {
+    background: #080e11 !important;
+    color: #e8f2ef !important;
+  }
+  html[data-theme="dark"] main .sticky.top-0 {
+    background: rgba(8,14,17,.94) !important;
+    border-color: #1d3434 !important;
+    box-shadow: 0 8px 28px rgba(0,0,0,.22);
+  }
+  html[data-theme="dark"] main [class*="bg-white"],
+  html[data-theme="dark"] main [class*="bg-[#fff"],
+  html[data-theme="dark"] main [class*="bg-[#fb"],
+  html[data-theme="dark"] main [class*="bg-[#faf"],
+  html[data-theme="dark"] main [class*="bg-[#f9"],
+  html[data-theme="dark"] main [class*="bg-[#f8"],
+  html[data-theme="dark"] main [class*="bg-[#f7"],
+  html[data-theme="dark"] main [class*="bg-[#f6"],
+  html[data-theme="dark"] main [class*="bg-[#f5"],
+  html[data-theme="dark"] main [class*="bg-[#f4"] {
+    background-color: #101a1e !important;
+    border-color: #243b3c !important;
+    color: #e3efeb !important;
+  }
+  html[data-theme="dark"] main [class*="bg-neutral-50"],
+  html[data-theme="dark"] main [class*="bg-neutral-100"],
+  html[data-theme="dark"] main [class*="bg-neutral-200"] {
+    background: #142125 !important;
+    border-color: #294342 !important;
+    color: #dcebe6 !important;
+  }
+  html[data-theme="dark"] main h1,
+  html[data-theme="dark"] main h2,
+  html[data-theme="dark"] main h3,
+  html[data-theme="dark"] main h4,
+  html[data-theme="dark"] main [class*="text-neutral-900"],
+  html[data-theme="dark"] main [class*="text-neutral-800"],
+  html[data-theme="dark"] main [class*="text-neutral-700"] {
+    color: #e8f2ef !important;
+  }
+  html[data-theme="dark"] main [class*="text-neutral-600"],
+  html[data-theme="dark"] main [class*="text-neutral-500"],
+  html[data-theme="dark"] main [class*="text-[#3"],
+  html[data-theme="dark"] main [class*="text-[#4"],
+  html[data-theme="dark"] main [class*="text-[#5"],
+  html[data-theme="dark"] main [class*="text-[#6"],
+  html[data-theme="dark"] main [class*="text-[#7"],
+  html[data-theme="dark"] main [class*="text-[#8"],
+  html[data-theme="dark"] main [class*="text-[#9"] {
+    color: #9bb4ad !important;
+  }
+  html[data-theme="dark"] main [class*="text-[#a"],
+  html[data-theme="dark"] main [class*="text-[#b"] {
+    color: #f2c98e !important;
+  }
+  html[data-theme="dark"] main [class*="border-"] {
+    border-color: #29413f !important;
+  }
+  html[data-theme="dark"] main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  html[data-theme="dark"] main select,
+  html[data-theme="dark"] main textarea {
+    background: #0b1418 !important;
+    color: #e8f2ef !important;
+    border-color: #31504c !important;
+    box-shadow: inset 0 0 0 1px rgba(101,230,194,.025);
+  }
+  html[data-theme="dark"] main input:focus,
+  html[data-theme="dark"] main select:focus,
+  html[data-theme="dark"] main textarea:focus {
+    border-color: #65e6c2 !important;
+    outline: 2px solid rgba(101,230,194,.16) !important;
+  }
+  html[data-theme="dark"] main table thead th {
+    background: #142326 !important;
+    color: #9fd8c8 !important;
+    border-color: #294342 !important;
+  }
+  html[data-theme="dark"] main table tbody tr:hover {
+    background: rgba(101,230,194,.045) !important;
+  }
+  html[data-theme="dark"] main button:focus-visible,
+  html[data-theme="dark"] main a:focus-visible {
+    outline-color: rgba(101,230,194,.65) !important;
+  }
+  html[data-theme="dark"] main section[class*="bg-white"] {
+    box-shadow: 0 10px 34px rgba(0,0,0,.22), 0 0 0 1px rgba(101,230,194,.018);
+  }
+  html[data-theme="dark"] .tables-page .table-card--available { background:#10251e; border-color:#2b5948; }
+  html[data-theme="dark"] .tables-page .table-card--occupied { background:#2b1719; border-color:#63363a; }
+  html[data-theme="dark"] .tables-page .table-card--billing { background:#2b2416; border-color:#62502d; }
+  html[data-theme="dark"] .tables-page .table-card--reserved { background:#172235; border-color:#354e70; }
+  html[data-theme="dark"] .tables-page .table-card--cleaning { background:#1b2022; border-color:#3c4848; }
+  html[data-theme="dark"] .tables-page .table-floor-button[aria-pressed="true"] {
+    background:#164d43 !important;
+    border-color:#65e6c2 !important;
+    color:#dffff6 !important;
+  }
+  html[data-theme="dark"] main .receipt-print {
+    background:#fff !important;
+    color:#111 !important;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  html[data-theme="dark"] main section[class*="bg-white"] {
+    transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+  }
+  html[data-theme="dark"] main section[class*="bg-white"]:hover {
+    border-color: rgba(101,230,194,.28) !important;
+  }
+}
