@@ -43,28 +43,22 @@ function Shell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const currentTab = new URLSearchParams(location.search).get("tab") || "";
   const isManager = role === "admin" || role === "manager";
+  // Keep the first-stage restaurant workflow focused; advanced tools remain available inside their relevant screens.
   const workspace: NavItem[] = [
     ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/dashboard", label: t("Dashboard"), icon: "overview" }] : []),
     { to: "/tables", label: t("Tables & POS"), icon: "tables" },
-    ...(["admin", "manager", "cashier"].includes(role || "") ? [
-      { to: "/billing", label: t("Billing & Orders"), icon: "billing" },
-      { to: "/credit", label: t("Credit"), icon: "credit" },
-    ] : []),
+    ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/billing", label: t("Billing & Orders"), icon: "billing" }] : []),
     ...(["admin", "manager", "kitchen"].includes(role || "") ? [{ to: "/kitchen", label: t("Kitchen"), icon: "kitchen" }] : []),
     ...(["admin", "manager", "bar"].includes(role || "") ? [{ to: "/bar", label: t("Bar"), icon: "bar" }] : []),
   ];
   const management: NavItem[] = isManager ? [
-    { to: "/admin", label: role === "admin" ? t("Master Panel") : t("Menu & Customers"), icon: "master" },
-    { to: "/operations?tab=inventory", label: t("Inventory & Stock"), icon: "inventory", tab: "inventory" },
+    { to: "/admin", label: t("Menu & Customers"), icon: "master" },
+    { to: "/operations?tab=inventory", label: t("Inventory"), icon: "inventory", tab: "inventory" },
     { to: "/operations?tab=expenses", label: t("Expenses"), icon: "expenses", tab: "expenses" },
     { to: "/operations?tab=cash", label: t("Cash Drawer"), icon: "cash", tab: "cash" },
-    { to: "/operations?tab=payroll", label: t("Payroll"), icon: "payroll", tab: "payroll" },
-    { to: "/operations?tab=reservations", label: t("Reservations"), icon: "reservations", tab: "reservations" },
-    { to: "/operations?tab=controls", label: t("Control Center"), icon: "controls", tab: "controls" },
   ] : [];
   const administration: NavItem[] = role === "admin" ? [
-    { to: "/operations?tab=staff", label: t("Staff Attendance"), icon: "staff", tab: "staff" },
-    { to: "/operations?tab=reports", label: t("Reports & Activity"), icon: "reports", tab: "reports" },
+    { to: "/admin", label: t("Settings"), icon: "controls" },
   ] : [];
   const groups = [
     { label: t("Workspace"), items: workspace },
