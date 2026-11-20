@@ -248,8 +248,7 @@ def cancel_order(order_id: str, db: Session = Depends(get_db),
 
 @router.patch("/orders/{order_id}/items/{item_id}/remove")
 async def remove_order_item(order_id: str, item_id: str, db: Session = Depends(get_db),
-                            user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager,
-                                                        models.RoleName.waiter, models.RoleName.cashier))):
+                            user=Depends(require_roles(models.RoleName.admin))):
     order = db.query(models.Order).filter(models.Order.id == order_id).with_for_update().first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
