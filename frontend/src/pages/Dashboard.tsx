@@ -24,6 +24,19 @@ interface Summary {
   occupied_tables: number;
 }
 
+
+const dashboardSettingsIndex = [
+  { title: "Restaurant profile", detail: "Name, contact details, address, PAN, VAT number and currency", keywords: "restaurant business profile identity contact phone email address pan vat currency", href: "/admin-controls?section=system&tab=settings" },
+  { title: "Receipt settings", detail: "Receipt footer and restaurant branding", keywords: "receipt footer logo branding print bill", href: "/admin-controls?section=system&tab=settings" },
+  { title: "Payment QR code", detail: "Upload, preview or remove the billing QR image", keywords: "payment qr code billing scan upload image", href: "/admin-controls?section=system&tab=settings" },
+  { title: "VAT / tax", detail: "Enable or change the tax rate", keywords: "vat tax percentage enable disable", href: "/admin-controls?section=system&tab=settings" },
+  { title: "Service charge", detail: "Enable or change the service-charge rate", keywords: "service charge percentage enable disable", href: "/admin-controls?section=system&tab=settings" },
+  { title: "Loyalty points", detail: "Configure customer points and redemption value", keywords: "loyalty rewards points spend value customers", href: "/admin-controls?section=system&tab=loyalty" },
+  { title: "Staff accounts & roles", detail: "Create accounts, change roles, reset passwords and disable access", keywords: "staff employee user account role permission password access", href: "/admin-controls?section=staff" },
+  { title: "Backup & restore", detail: "Create, download or restore a database backup", keywords: "database backup restore export import", href: "/admin-controls?section=system&tab=backup" },
+  { title: "Audit trail", detail: "Review privileged actions and account changes", keywords: "audit history logs security activity", href: "/admin-controls?section=system&tab=audit" },
+] as const;
+
 const emptySummary: Summary = {
   daily_sales: "0", monthly_sales: "0", yearly_sales: "0",
   daily_expenses: "0", total_expenses: "0", monthly_expenses: "0", yearly_expenses: "0",
@@ -50,6 +63,11 @@ export default function Dashboard() {
   const [showYearlySales, setShowYearlySales] = useState(false);
   const [yearlySalesLoading, setYearlySalesLoading] = useState(false);
   const [profitPeriod, setProfitPeriod] = useState<"monthly" | "yearly" | null>(null);
+  const [settingsQuery, setSettingsQuery] = useState("");
+  const [settingsSearchOpen, setSettingsSearchOpen] = useState(false);
+  const settingsMatches = dashboardSettingsIndex.filter((item) =>
+    (item.title + " " + item.detail + " " + item.keywords).toLowerCase().includes(settingsQuery.trim().toLowerCase())
+  ).slice(0, 7);
 
   const load = () => api.get(`/api/dashboard/summary?report_date=${reportDate}`).then((response) => setSummary(response.data));
 
@@ -143,6 +161,18 @@ export default function Dashboard() {
             {role === "admin" && <button type="button" onClick={downloadDashboardPdf} className="rounded-xl border border-[#d7b17b]/40 bg-[#d7b17b] px-4 py-[13px] text-xs font-extrabold text-[#2b211d] shadow-lg shadow-black/10 transition hover:bg-[#e5c493]">{t("Premium PDF")} <span className="ml-1">↗</span></button>}
             {role === "admin" && <button type="button" onClick={() => downloadReport(`/api/dashboard/summary.xlsx?report_date=${reportDate}`, `royal-skye-financial-report-${reportDate}.xlsx`, "Could not download Excel report.")} className="rounded-xl border border-white/20 bg-white/10 px-4 py-[13px] text-xs font-extrabold text-white hover:bg-white/15">Excel workbook ↗</button>}
 <button type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} className="rounded-xl border border-white/20 bg-white/10 px-4 py-[13px] text-xs font-extrabold text-white hover:bg-white/15">{theme === "dark" ? "☀ White theme" : "☾ Dark theme"}</button>
+            {role === "admin" && <div className="relative w-full sm:w-[260px]">
+              <label className="sr-only" htmlFor="dashboard-settings-search">Search website settings</label>
+              <div className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2.5">
+                <span aria-hidden="true" className="text-[#d7b17b]">⌕</span>
+                <input id="dashboard-settings-search" value={settingsQuery} onChange={(event) => { setSettingsQuery(event.target.value); setSettingsSearchOpen(true); }} onFocus={() => setSettingsSearchOpen(true)} onKeyDown={(event) => { if (event.key === "Escape") { setSettingsSearchOpen(false); setSettingsQuery(""); } }} placeholder="Search all settings..." className="min-w-0 flex-1 bg-transparent text-xs font-semibold text-white outline-none placeholder:text-[#c7b8ac]" />
+                {settingsQuery && <button type="button" aria-label="Clear settings search" onClick={() => { setSettingsQuery(""); setSettingsSearchOpen(true); }} className="text-sm text-[#d7b17b]">×</button>}
+              </div>
+              {settingsSearchOpen && <div className="absolute right-0 top-full z-40 mt-2 max-h-[360px] w-[min(92vw,360px)] overflow-y-auto rounded-2xl border border-[#e8dfd5] bg-white p-2 text-left shadow-2xl">
+                <div className="flex items-center justify-between px-3 py-2"><p className="text-[10px] font-extrabold uppercase tracking-[.15em] text-[#9b8b7f]">Website settings</p><button type="button" onClick={() => setSettingsSearchOpen(false)} className="text-xs font-semibold text-[#8d6542]">Close</button></div>
+                {settingsQuery.trim() ? settingsMatches.length ? settingsMatches.map((item) => <Link key={item.title} to={item.href} onClick={() => { setSettingsSearchOpen(false); setSettingsQuery(""); }} className="block rounded-xl px-3 py-3 transition hover:bg-[#f7f2ec]"><span className="block text-xs font-extrabold text-[#3d3028]">{item.title}</span><span className="mt-1 block text-[10px] leading-4 text-[#8b7c70]">{item.detail}</span></Link>) : <p className="px-3 py-5 text-xs text-[#8b7c70]">No matching settings. Try another keyword.</p> : <div className="px-3 pb-3 pt-1"><p className="text-xs font-semibold text-[#514238]">Find a setting by name or keyword.</p><p className="mt-1 text-[10px] leading-4 text-[#9b8b7f]">Search business details, tax, service charge, QR, loyalty, staff access, backups and audit history.</p></div>}
+              </div>}
+            </div>
           </div>
         </div>
         <div className="relative mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/10 pt-5 text-[10px] font-semibold uppercase tracking-[.13em] text-[#b8a89b]">
