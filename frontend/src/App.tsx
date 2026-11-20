@@ -67,9 +67,9 @@ function Shell({ children }: { children: React.ReactNode }) {
   const initials = (fullName || "RS").split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join("").toUpperCase() || "RS";
 
   return (
-    <div className="min-h-screen bg-[#f5f3f0] text-[#282321] lg:grid lg:grid-cols-[264px_minmax(0,1fr)]">
+    <div className="rs-app-shell min-h-screen bg-[#070a0d] text-[#e8f2ef] lg:grid lg:grid-cols-[264px_minmax(0,1fr)]">
       {mobileOpen && <button aria-label="Close navigation" onClick={() => setMobileOpen(false)} className="fixed inset-0 z-40 bg-black/45 lg:hidden"/>}
-      <aside className={`fixed inset-y-0 left-0 z-50 flex w-[264px] flex-col overflow-y-auto bg-[#211d1b] px-4 py-5 text-[#f7f2ed] shadow-[12px_0_40px_rgba(25,18,14,.12)] transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 flex w-[264px] flex-col overflow-y-auto bg-[#090f12] px-4 py-5 text-[#e8f2ef] shadow-[12px_0_40px_rgba(25,18,14,.12)] transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="flex items-center gap-3 px-2 pb-7">
           <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl border border-[#d7b17b]/30 bg-[#fffaf4] p-0 shadow-lg shadow-black/20"><img src="/images/logo.jpg" alt="Royal Skye" className="h-full w-full object-contain"/></div>
           <div className="min-w-0"><p className="text-[13px] font-black tracking-[.19em] text-white">ROYAL SKYE</p><p className="mt-1 text-[9px] font-semibold tracking-[.22em] text-[#a99b91]">RESTAURANT & BAR</p></div>
@@ -104,17 +104,17 @@ function Shell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
       <main className="min-w-0">
-        <div className="sticky top-0 z-30 border-b border-[#e8e1da] bg-[#fbfaf8]/95 backdrop-blur-xl">
+        <div className="sticky top-0 z-30 border-b border-[#1d3434] bg-[#0a1114]/95 backdrop-blur-xl">
           <div className="mx-auto flex min-h-[76px] max-w-[1600px] items-center justify-between gap-3 px-4 py-3 md:px-7 xl:px-10">
             <div className="flex min-w-0 items-center gap-3">
-              <button onClick={() => setMobileOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#e7ded5] bg-white text-[#51433a] shadow-sm lg:hidden" aria-label="Open navigation"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-              <div className="min-w-0"><p className="truncate text-[9px] font-bold uppercase tracking-[.2em] text-[#a08f81]">ROYAL SKYE <span className="px-1 text-[#c7b9ac]">/</span> {pageTitle.toUpperCase()}</p><h1 className="mt-1 truncate text-lg font-extrabold tracking-tight text-[#302722] md:text-xl">{pageTitle}</h1></div>
+              <button onClick={() => setMobileOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#29413f] bg-[#101b1e] text-[#c5d8d2] shadow-sm lg:hidden" aria-label="Open navigation"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+              <div className="min-w-0"><p className="truncate text-[9px] font-bold uppercase tracking-[.2em] text-[#78928d]">ROYAL SKYE <span className="px-1 text-[#c7b9ac]">/</span> {pageTitle.toUpperCase()}</p><h1 className="mt-1 truncate text-lg font-extrabold tracking-tight text-[#e8f2ef] md:text-xl">{pageTitle}</h1></div>
             </div>
             <div className="flex shrink-0 items-center gap-2 md:gap-3">
               
               <div className="hidden h-9 w-px bg-[#e8e1da] sm:block"/>
               <div className="grid h-9 w-9 place-items-center rounded-full border border-[#d9c5ad] bg-[#efe3d5] text-xs font-black text-[#6a4932]">{initials}</div>
-              <div className="hidden sm:block"><p className="max-w-36 truncate text-xs font-bold text-[#3c312b]">{fullName}</p><p className="text-[10px] capitalize text-[#95867b]">{role}</p></div>
+              <div className="hidden sm:block"><p className="max-w-36 truncate text-xs font-bold text-[#e8f2ef]">{fullName}</p><p className="text-[10px] capitalize text-[#78928d]">{role}</p></div>
             </div>
           </div>
         </div>
