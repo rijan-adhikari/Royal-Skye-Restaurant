@@ -146,7 +146,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="mx-auto max-w-[1500px] space-y-7 pb-8">
+    <div className="dashboard-page mx-auto max-w-[1500px] space-y-7 pb-8">
       <section className="relative isolate overflow-hidden rounded-[28px] bg-[#2b211d] px-6 py-7 text-[#fffaf4] shadow-[0_22px_55px_rgba(45,30,22,.16)] md:px-9 md:py-9">
         <div className="pointer-events-none absolute -right-16 -top-28 h-80 w-80 rounded-full border border-[#d9b98f]/15" />
         <div className="pointer-events-none absolute -right-2 -top-16 h-64 w-64 rounded-full border border-[#d9b98f]/10" />
