@@ -83,7 +83,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             <p className="mb-2 px-3 text-[9px] font-extrabold uppercase tracking-[.2em] text-[#8e8178]">{group.label}</p>
             <div className="space-y-1">
               {group.items.map(item => {
-                const active = item.to.split("?")[0] === location.pathname && (item.tab ? item.tab === currentTab : !currentTab);
+                const active = item.to.split("?")[0] === location.pathname && (item.panel ? item.panel === (new URLSearchParams(location.search).get("panel") || "menu") : item.tab ? item.tab === currentTab : !currentTab);
                 return <Link key={item.to} to={item.to} onClick={() => setMobileOpen(false)} className={`group relative flex items-center gap-3 rounded-xl px-3 py-[11px] text-[12px] font-semibold transition-all duration-150 ${active ? "bg-gradient-to-r from-[#8b1a1a]/90 to-[#69201e]/80 text-white shadow-lg shadow-black/15 ring-1 ring-[#d8a86f]/20" : "text-[#c9beb6] hover:bg-white/[.065] hover:text-white"}`}>
                   {active && <span className="absolute bottom-2 left-0 top-2 w-[3px] rounded-r-full bg-[#e4bc83]"/>}
                   <NavGlyph name={item.icon} active={active}/><span className="min-w-0 flex-1">{item.label}</span>
