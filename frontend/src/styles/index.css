@@ -1033,8 +1033,8 @@ img, video, canvas, svg {
   html[data-theme="light"] .dashboard-page > section:not(.dashboard-hero) [class*="text-[#a18d7c"],
   html[data-theme="light"] .dashboard-page > section:not(.dashboard-hero) [class*="text-[#9b8b7f"],
   html[data-theme="light"] .dashboard-page > section:not(.dashboard-hero) [class*="text-[#928276"] {color:#718780!important;}
-  html[data-theme="light"] .dashboard-page > section:not(.dashboard-hero) > div.rounded-\\[24px\\],
-  html[data-theme="light"] .dashboard-page > section:not(.dashboard-hero) > div.rounded-\\[22px\\] {
+  html[data-theme="light"] .dashboard-page > section:not(.dashboard-hero) > div[class*="rounded-[24px]"],
+  html[data-theme="light"] .dashboard-page > section:not(.dashboard-hero) > div[class*="rounded-[22px]"] {
     background:#fff!important;border-color:#dce9e5!important;
     box-shadow:0 10px 28px rgba(24,74,64,.05)!important;
   }
@@ -1100,8 +1100,8 @@ img, video, canvas, svg {
   html[data-theme="light"] main .pos-page [class*="bg-neutral-100"] {background:#f3f8f6!important;}
 
   /* Dialogs and reports remain legible in both themes. */
-  html[data-theme="light"] .dashboard-page .fixed.z-\\[60\\] > div,
-  html[data-theme="light"] .dashboard-page .fixed.z-\\[60\\] article {
+  html[data-theme="light"] .dashboard-page [class*="fixed"][class*="z-[60]"] > div,
+  html[data-theme="light"] .dashboard-page [class*="fixed"][class*="z-[60]"] article {
     background:#fff!important;color:#203a36!important;border-color:#dce9e5!important;
   }
 }
