@@ -172,7 +172,7 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between px-3 py-2"><p className="text-[10px] font-extrabold uppercase tracking-[.15em] text-[#9b8b7f]">Website settings</p><button type="button" onClick={() => setSettingsSearchOpen(false)} className="text-xs font-semibold text-[#8d6542]">Close</button></div>
                 {settingsQuery.trim() ? settingsMatches.length ? settingsMatches.map((item) => <Link key={item.title} to={item.href} onClick={() => { setSettingsSearchOpen(false); setSettingsQuery(""); }} className="block rounded-xl px-3 py-3 transition hover:bg-[#f7f2ec]"><span className="block text-xs font-extrabold text-[#3d3028]">{item.title}</span><span className="mt-1 block text-[10px] leading-4 text-[#8b7c70]">{item.detail}</span></Link>) : <p className="px-3 py-5 text-xs text-[#8b7c70]">No matching settings. Try another keyword.</p> : <div className="px-3 pb-3 pt-1"><p className="text-xs font-semibold text-[#514238]">Find a setting by name or keyword.</p><p className="mt-1 text-[10px] leading-4 text-[#9b8b7f]">Search business details, tax, service charge, QR, loyalty, staff access, backups and audit history.</p></div>}
               </div>}
-            </div>
+            </div>}
           </div>
         </div>
         <div className="relative mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/10 pt-5 text-[10px] font-semibold uppercase tracking-[.13em] text-[#b8a89b]">
