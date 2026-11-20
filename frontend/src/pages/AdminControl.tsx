@@ -263,7 +263,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
 
   return <div className="mx-auto max-w-7xl space-y-5">
     <header className="flex flex-wrap items-end justify-between gap-3">
-      <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Royal Skye · {embedded ? "Restaurant Operations" : "Administration"}</p><h1 className="mt-1 text-3xl font-bold">{embedded ? (tab === "cash" ? "Cash drawer" : "Restaurant controls") : "Control centre"}</h1><p className="text-sm text-neutral-500">{embedded ? "Restaurant administration and operational controls." : "Financial controls, business configuration and accountability."}</p></div>
+      <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Royal Skye · {embedded ? "Restaurant Operations" : "Administration"}</p><h1 className="mt-1 text-3xl font-bold">{embedded ? (tab === "cash" ? "Cash drawer" : "Restaurant operations") : "Admin controls"}</h1><p className="text-sm text-neutral-500">{embedded ? "Cash handling, order fulfilment and customer loyalty." : "Sales oversight, suppliers, reports, business configuration and security."}</p></div>
       <button className={primary} disabled={busy} onClick={() => load()}>{busy ? "Working…" : "Refresh"}</button>
     </header>
     {message && <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p>}
