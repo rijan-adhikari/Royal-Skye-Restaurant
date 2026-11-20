@@ -16,6 +16,6 @@ export default function AdminControls() {
         <button onClick={() => setParams({section:"staff"})} className={"rounded-xl px-4 py-2.5 text-xs font-bold "+(section==="staff"?"bg-[#7d2523] text-white":"border border-[var(--rs-line)] text-[var(--rs-ink)]")}>Staff Accounts</button>
       </div>
     </header>
-    {section === "system" ? <AdminControl visibleTabs={["sales","backup","audit","settings"]} /> : <Admin staffOnly />}
+    {section === "system" ? <AdminControl visibleTabs={["sales","suppliers","reports","backup","audit","settings"]} /> : <Admin staffOnly />}
   </div>;
 }
