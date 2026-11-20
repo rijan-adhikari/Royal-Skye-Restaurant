@@ -42,7 +42,7 @@ def create_menu_item(payload: schemas.MenuItemCreate, db: Session = Depends(get_
 
 @router.patch("/menu-items/{item_id}", response_model=schemas.MenuItemOut)
 def update_menu_item(item_id: str, payload: schemas.MenuItemCreate, db: Session = Depends(get_db),
-                      user=Depends(require_roles(models.RoleName.admin))):
+                      user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager))):
     item = db.query(models.MenuItem).filter(models.MenuItem.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Menu item not found")
