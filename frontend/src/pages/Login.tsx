@@ -143,7 +143,7 @@ export default function Login() {
             <div className="absolute right-0 top-0 h-36 w-36 rounded-full bg-[#65e6c2]/[.07] blur-3xl"/>
             <div className="relative">
               <div className="mb-7 flex items-center gap-3">
-                <div className="grid h-12 w-12 place-items-center rounded-xl border border-[#65e6c2]/25 bg-[#65e6c2]/[.08] text-lg font-bold tracking-[-.08em] text-[#65e6c2] shadow-[0_0_28px_rgba(101,230,194,.08)]">RS</div>
+                <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl border border-[#d7b17b]/35 bg-[#fffaf4] p-1.5 shadow-[0_0_28px_rgba(101,230,194,.10)]"><img src="/images/logo.jpg" alt="Royal Skye restaurant logo" className="h-full w-full object-contain" /></div>
                 <div>
                   <p className="text-[13px] font-bold tracking-[.19em] text-[#f2f5f2]">ROYAL SKYE</p>
                   <p className="mt-1 text-[9px] font-semibold tracking-[.2em] text-[#7f9691]">RESTAURANT & BAR CAFE</p>
