@@ -165,6 +165,7 @@ html[data-theme="dark"] body::before { opacity:.065;filter:grayscale(1) invert(.
 html[data-theme="dark"] main { background:#191613;color:#eee5dc; }
 html[data-theme="dark"] main h1,html[data-theme="dark"] main h2,html[data-theme="dark"] main h3,html[data-theme="dark"] main h4 { color:#f3e9df!important; }
 html[data-theme="dark"] main [class*="bg-white"] { background:#29231f!important;border-color:#4a3d34!important; }
+html[data-theme="dark"] main [class*="bg-neutral-100"],html[data-theme="dark"] main [class*="bg-neutral-200"] { background:#3a3029!important;border-color:#59483b!important;color:#eadfd4!important; }
 html[data-theme="dark"] main [class*="bg-neutral-50"],html[data-theme="dark"] main [class*="bg-[#fb"],html[data-theme="dark"] main [class*="bg-[#f8"],html[data-theme="dark"] main [class*="bg-[#f5"],html[data-theme="dark"] main [class*="bg-[#f4"],html[data-theme="dark"] main [class*="bg-[#f1"],html[data-theme="dark"] main [class*="bg-[#fff"] { background:#302923!important;border-color:#514238!important; }
 html[data-theme="dark"] main [class*="bg-[#f7eeee"],html[data-theme="dark"] main [class*="bg-red-50"] { background:#402827!important;border-color:#75433e!important; }
 html[data-theme="dark"] main [class*="bg-[#edf2ee"],html[data-theme="dark"] main [class*="bg-emerald-50"] { background:#26382f!important;border-color:#456b53!important; }
