@@ -5,7 +5,7 @@ services:
     plan: free
     region: singapore
     repo: https://github.com/rijan-adhikari/Royal-Skye-Restaurant
-    branch: staging/pos-rebuild
+    branch: main
     dockerContext: ./backend
     dockerfilePath: ./backend/Dockerfile
     healthCheckPath: /api/health
@@ -31,7 +31,7 @@ services:
     plan: free
     region: singapore
     repo: https://github.com/rijan-adhikari/Royal-Skye-Restaurant
-    branch: staging/pos-rebuild
+    branch: main
     dockerContext: ./frontend
     dockerfilePath: ./frontend/Dockerfile
     autoDeployTrigger: checksPass
