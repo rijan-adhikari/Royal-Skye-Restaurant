@@ -142,6 +142,10 @@ def dashboard_summary(report_date: date | None = None, db: Session = Depends(get
     monthly_expenses += monthly_payroll
     yearly_expenses += yearly_payroll
 
+    total_recorded_expenses = db.query(func.coalesce(func.sum(models.Expense.amount), 0)).scalar() or 0
+    total_payroll_expenses = db.execute(text("SELECT COALESCE(SUM(gross_pay),0) FROM payroll_entries")).scalar_one() or 0
+    total_expenses = Decimal(str(total_recorded_expenses)) + Decimal(str(total_payroll_expenses))
+
     outstanding = db.query(func.coalesce(func.sum(models.CustomerBalance.remaining_amount), 0)).filter(
         models.CustomerBalance.remaining_amount > 0
     ).scalar()
@@ -152,9 +156,10 @@ def dashboard_summary(report_date: date | None = None, db: Session = Depends(get
         "report_date": target.isoformat(),
         "daily_sales": str(daily_sales), "monthly_sales": str(monthly_sales), "yearly_sales": str(yearly_sales),
         "daily_expenses": str(daily_expenses), "monthly_expenses": str(monthly_expenses), "yearly_expenses": str(yearly_expenses),
+        "total_expenses": str(total_expenses),
         "daily_profit": str(daily_sales - daily_cogs - daily_expenses),
-        "monthly_profit": str(monthly_sales - monthly_cogs - monthly_expenses),
-        "yearly_profit": str(yearly_sales - yearly_cogs - yearly_expenses),
+        "monthly_profit": str(monthly_sales - monthly_cogs - monthly_expenses) if user.role == models.RoleName.admin else None,
+        "yearly_profit": str(yearly_sales - yearly_cogs - yearly_expenses) if user.role == models.RoleName.admin else None,
         "daily_estimated_cogs": str(daily_cogs), "monthly_estimated_cogs": str(monthly_cogs),
         "yearly_estimated_cogs": str(yearly_cogs),
         "daily_payroll_expense": str(daily_payroll), "monthly_payroll_expense": str(monthly_payroll),
