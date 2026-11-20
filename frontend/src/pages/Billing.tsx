@@ -110,10 +110,7 @@ export default function Billing() {
     const subtotal = Number(selectedOrder.subtotal);
     const taxRate = Number(selectedOrder.tax_percent || 0);
     const serviceRate = Number(selectedOrder.service_charge_percent || 0);
-    const taxAmount = roundMoney(subtotal * taxRate / 100);
-    const serviceAmount = roundMoney(subtotal * serviceRate / 100);
-    const grossTotal = roundMoney(subtotal + taxAmount + serviceAmount);
-    const percentDiscountAmount = roundMoney(grossTotal * percent / 100);
+    const percentDiscountAmount = roundMoney(subtotal * percent / 100);
     const fixedDiscountAmount = Number(discountAmount || 0);
     if (!Number.isFinite(fixedDiscountAmount) || fixedDiscountAmount < 0) {
       setError("Enter a valid fixed discount amount.");
@@ -126,11 +123,14 @@ export default function Billing() {
     }
     const loyaltyDiscount = roundMoney(points * pointValue);
     const totalDiscountAmount = roundMoney(percentDiscountAmount + fixedDiscountAmount + loyaltyDiscount);
-    if (totalDiscountAmount > grossTotal) {
-      setError("Discounts and loyalty redemption cannot exceed the bill total.");
+    if (totalDiscountAmount > subtotal) {
+      setError("Discounts and loyalty redemption cannot exceed the subtotal.");
       return;
     }
-    const grandTotal = roundMoney(grossTotal - totalDiscountAmount);
+    const taxableSubtotal = roundMoney(subtotal - totalDiscountAmount);
+    const taxAmount = roundMoney(taxableSubtotal * taxRate / 100);
+    const serviceAmount = roundMoney(taxableSubtotal * serviceRate / 100);
+    const grandTotal = roundMoney(taxableSubtotal + taxAmount + serviceAmount);
     let amountReceived = method === "credit" ? 0 : Number(amount || 0);
     if (!Number.isFinite(amountReceived) || amountReceived < 0) {
       setError("Enter a valid amount received.");
