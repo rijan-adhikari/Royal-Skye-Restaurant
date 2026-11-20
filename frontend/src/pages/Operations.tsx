@@ -17,7 +17,8 @@ const today = () => new Date().toISOString().slice(0, 10);
 export default function Operations() {
   const { t } = useLanguage();
   const { role } = useAuth();
-  // Keep the manager workspace focused on the three daily controls; advanced administration stays with the admin role.\n  const visibleTabs = role === "admin" ? tabs : tabs.filter((item) => ["cash", "expenses", "inventory"].includes(item));
+  // Keep the manager workspace focused on the three daily controls; advanced administration stays with the admin role.
+  const visibleTabs = role === "admin" ? tabs : tabs.filter((item) => ["cash", "expenses", "inventory"].includes(item));
   const [tab, setTab] = useState<Tab>("cash");
   const [searchParams] = useSearchParams();
   useEffect(() => {
