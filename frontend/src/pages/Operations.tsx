@@ -6,8 +6,8 @@ import { useAuth } from "../context/AuthContext";
 import AdminControl from "./AdminControl";
 import Admin from "./Admin";
 
-type Tab = "cash" | "expenses" | "inventory" | "reservations" | "menu" | "controls" | "reports" | "payroll" | "staff";
-const tabs: Tab[] = ["expenses", "inventory", "reservations", "menu", "controls", "payroll", "reports", "staff"];
+type Tab = "cash" | "expenses" | "inventory" | "reservations" | "controls" | "reports" | "payroll" | "staff";
+const tabs: Tab[] = ["expenses", "inventory", "reservations", "controls", "payroll", "reports", "staff"];
 const units = ["kg", "g", "litre", "ml", "dozen", "pcs", "bottle", "packet", "box"];
 const field = "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm";
 const button = "rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white";
@@ -25,7 +25,7 @@ export default function Operations() {
     const requested = searchParams.get("tab") as Tab | null;
     if (requested && visibleTabs.includes(requested)) setTab(requested);
   }, [searchParams, role]);
-  const [data, setData] = useState<any>({ inventory: [], expenses: [], staff: [], attendance: [], payroll: [], payrollStaff: [], reservations: [], menuItems: [], tables: [] });
+  const [data, setData] = useState<any>({ inventory: [], expenses: [], staff: [], attendance: [], payroll: [], payrollStaff: [], reservations: [], tables: [] });
   const [report, setReport] = useState<any>(null);
   const [start, setStart] = useState(today().slice(0, 7) + "-01");
   const [end, setEnd] = useState(today());
@@ -42,7 +42,7 @@ export default function Operations() {
     const requests: [string, string][] = [
       ["inventory", "/api/operations/inventory"],
       ["expenses", "/api/operations/expenses"], ["reservations", "/api/operations/reservations"],
-      ["menuItems", "/api/menu-items"], ["tables", "/api/tables"],
+      ["tables", "/api/tables"],
       ...(role === "admin" ? ([["staff", "/api/users"], ["attendance", "/api/operations/staff/attendance"]] as [string, string][]) : []),
       ...(role === "admin" || role === "manager" ? ([["payroll", "/api/operations/staff/payroll"], ["payrollStaff", "/api/operations/staff/payroll/staff"]] as [string, string][]) : []),
     ];
@@ -148,8 +148,7 @@ export default function Operations() {
     {role === "admin" && tab === "reports" && <section className={panel}>{heading("Profit & loss", "Net sales, estimated recipe-based COGS and operating expenses.")}<div className="flex flex-wrap items-end gap-3"><label className="text-xs">{t("From")}<input className={field} type="date" value={start} onChange={(e) => setStart(e.target.value)} /></label><label className="text-xs">{t("To")}<input className={field} type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></label><button className={button} onClick={() => run(async () => { const r = await api.get("/api/operations/reports/profit-loss", { params: { start, end } }); setReport(r.data); }, "Report generated.")}>{t("Generate report")}</button><a className="rounded-lg border px-4 py-2 text-sm" href={api.defaults.baseURL + "/api/operations/reports/stock.csv"} target="_blank" rel="noreferrer">{t("Export stock CSV")}</a></div>{report && <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Net sales", report.net_sales], ["Estimated COGS", report.cost_of_goods_sold_estimate], ["Estimated gross profit", report.gross_profit_estimate], ["Estimated operating profit", report.operating_profit_estimate]].map((x) => <div key={x[0]} className="rounded-lg bg-neutral-50 p-4"><p className="text-xs text-neutral-500">{t(x[0])}</p><p className="text-xl font-bold">{money(x[1])}</p></div>)}<p className="col-span-full rounded-lg bg-amber-50 p-3 text-xs text-amber-900">{report.note}</p></div>}</section>}
 
     
-    {tab === "menu" && <Admin embedded />}
-    {tab === "controls" && <AdminControl embedded managerView={role !== "admin"} visibleTabs={role === "admin" ? ["cash", "suppliers", "reports", "service", "loyalty"] : ["cash", "service", "loyalty"]} initialTab={searchParams.get("control") || "cash"} />}
+    {tab === "controls" && <AdminControl embedded managerView={role !== "admin"} visibleTabs={["cash", "service", "loyalty"]} initialTab={searchParams.get("control") || "cash"} />}
     {tab === "payroll" && <div className="grid gap-4 lg:grid-cols-2">
       <section className={panel}>{heading("Payroll register", "Record salary periods, partial cash-outs and remaining balances.")}<form className="grid gap-2 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); run(() => api.post("/api/operations/staff/payroll", { ...payrollForm, gross_pay: Number(payrollForm.gross_pay), deductions: Number(payrollForm.deductions) }), "Payroll entry created."); }}>
         <label className="block text-xs">{t("Staff member")}<select className={field} required value={payrollForm.user_id} onChange={(e) => setPayrollForm({ ...payrollForm, user_id: e.target.value })}><option value="">{t("Select staff")}</option>{data.payrollStaff.map((member: any) => <option key={member.id} value={member.id}>{member.full_name} · {member.role}</option>)}</select></label>
