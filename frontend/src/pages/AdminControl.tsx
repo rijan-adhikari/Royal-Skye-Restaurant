@@ -419,7 +419,19 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
 
     {tab === "settings" && <div className="grid gap-4 lg:grid-cols-2">
       <section className={panel}><h2 className="font-semibold text-lg mb-3">Restaurant identity & receipt</h2><div className="space-y-3">
-        {(["name","email","phone","address","pan","vat","currency","logo_path","qr_image_path","receipt_footer"] as const).map(k => <label key={k} className="block text-xs capitalize">{k.replace(/_/g," ")}{k === "address" || k === "receipt_footer" ? <textarea rows={2} className={field + " mt-1"} value={restaurant[k] || ""} onChange={e => setRestaurant({ ...restaurant, [k]: e.target.value })} /> : <input className={field + " mt-1"} value={restaurant[k] || ""} onChange={e => setRestaurant({ ...restaurant, [k]: e.target.value })} />}</label>)}
+        {(["name","email","phone","address","pan","vat","currency","logo_path","receipt_footer"] as const).map(k => <label key={k} className="block text-xs capitalize">{k.replace(/_/g," ")}{k === "address" || k === "receipt_footer" ? <textarea rows={2} className={field + " mt-1"} value={restaurant[k] || ""} onChange={e => setRestaurant({ ...restaurant, [k]: e.target.value })} /> : <input className={field + " mt-1"} value={restaurant[k] || ""} onChange={e => setRestaurant({ ...restaurant, [k]: e.target.value })} />}</label>)}
+        <label className="block text-xs font-semibold">Payment QR code
+          <input className={field + " mt-2"} type="file" accept="image/png,image/jpeg,image/webp" onChange={async e => {
+            const file = e.target.files?.[0]; if (!file) return;
+            if (!["image/png","image/jpeg","image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024) { setError("Upload a PNG, JPG or WebP QR image up to 5 MB."); e.target.value = ""; return; }
+            const reader = new FileReader();
+            reader.onload = () => { setRestaurant((old: any) => ({ ...old, qr_image_path: String(reader.result || "") })); setMessage("QR image selected. Save business settings to publish it to Billing."); setError(""); };
+            reader.onerror = () => setError("Could not read the selected QR image.");
+            reader.readAsDataURL(file);
+          }} />
+          <span className="mt-1 block text-[11px] font-normal text-neutral-500">PNG, JPG or WebP · maximum 5 MB. Saved in the restaurant database, so it survives redeployments.</span>
+        </label>
+        {restaurant.qr_image_path && <div className="rounded-xl border bg-neutral-50 p-3"><p className="mb-2 text-xs font-semibold text-neutral-600">Current payment QR preview</p><img src={restaurant.qr_image_path} alt="Restaurant payment QR" className="mx-auto max-h-56 max-w-full rounded-lg object-contain" /><button type="button" className="mt-2 text-xs font-semibold text-red-700" onClick={() => setRestaurant((old: any) => ({ ...old, qr_image_path: "" }))}>Remove QR image</button></div>}
       </div></section>
       <section className={panel}><h2 className="font-semibold text-lg mb-3">Tax & service charge</h2><div className="space-y-3">
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!tax.tax_enabled} onChange={e => setTax({ ...tax, tax_enabled: e.target.checked })} /> Enable VAT / tax</label>
