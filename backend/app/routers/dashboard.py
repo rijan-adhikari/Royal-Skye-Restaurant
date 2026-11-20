@@ -1,4 +1,5 @@
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
@@ -13,6 +14,74 @@ from app.deps import require_roles
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
+BUSINESS_TIMEZONE = ZoneInfo("Asia/Kathmandu")
+
+
+def _business_window(start_date: date, end_date: date):
+    """Convert Nepal-local date boundaries to naive UTC timestamps stored by the app."""
+    start = datetime.combine(start_date, time.min, tzinfo=BUSINESS_TIMEZONE).astimezone(timezone.utc).replace(tzinfo=None)
+    end = datetime.combine(end_date, time.min, tzinfo=BUSINESS_TIMEZONE).astimezone(timezone.utc).replace(tzinfo=None)
+    return start, end
+
+
+def _net_collection_sales(db: Session, start: datetime, end: datetime):
+    value = db.execute(text("""SELECT COALESCE(SUM(x.amount *
+        (b.grand_total - b.tax_amount - b.service_charge_amount) / NULLIF(b.grand_total,0)),0)
+        FROM (
+          SELECT p.bill_id,p.amount FROM payments p WHERE p.created_at >= :start AND p.created_at < :end
+          UNION ALL
+          SELECT cb.bill_id,bt.amount FROM balance_transactions bt
+          JOIN customer_balances cb ON cb.id=bt.customer_balance_id
+          WHERE bt.created_at >= :start AND bt.created_at < :end
+        ) x JOIN bills b ON b.id=x.bill_id WHERE b.sale_status='active'"""),
+        {"start": start, "end": end}).scalar_one()
+    return value or 0
+
+
+def _collection_amounts(db: Session, start: datetime, end: datetime):
+    rows = db.execute(text("""SELECT x.bill_id,SUM(x.amount) AS collected_amount
+        FROM (
+          SELECT p.bill_id,p.amount FROM payments p WHERE p.created_at >= :start AND p.created_at < :end
+          UNION ALL
+          SELECT cb.bill_id,bt.amount FROM balance_transactions bt
+          JOIN customer_balances cb ON cb.id=bt.customer_balance_id
+          WHERE bt.created_at >= :start AND bt.created_at < :end
+        ) x JOIN bills b ON b.id=x.bill_id WHERE b.sale_status='active'
+        GROUP BY x.bill_id ORDER BY MAX(b.created_at) DESC"""),
+        {"start": start, "end": end}).mappings().all()
+    return {row["bill_id"]: row["collected_amount"] for row in rows}
+
+
+def _sales_details_for_period(db: Session, start: datetime, end: datetime):
+    collected = _collection_amounts(db, start, end)
+    if not collected:
+        return []
+    bills = db.query(models.Bill).filter(
+        models.Bill.id.in_(list(collected.keys())), models.Bill.sale_status == "active"
+    ).order_by(models.Bill.created_at.desc()).all()
+    result = []
+    for bill in bills:
+        order = db.query(models.Order).filter(models.Order.id == bill.order_id).first()
+        customer = db.query(models.Customer).filter(models.Customer.id == bill.customer_id).first() if bill.customer_id else None
+        service = db.execute(text("SELECT service_type,customer_name,phone FROM order_service_details WHERE order_id=:id"),
+                             {"id": bill.order_id}).mappings().first()
+        items = db.execute(text("""SELECT mi.name,oi.quantity,oi.unit_price,(oi.quantity * oi.unit_price) total
+            FROM order_items oi JOIN menu_items mi ON mi.id=oi.menu_item_id
+            WHERE oi.order_id=:order_id AND oi.is_cancelled=FALSE ORDER BY mi.name"""),
+            {"order_id": bill.order_id}).mappings().all()
+        result.append({
+            "id": bill.id, "bill_number": bill.bill_number, "created_at": bill.created_at,
+            "customer_name": customer.name if customer else (service["customer_name"] if service else "Walk-in"),
+            "customer_phone": customer.phone if customer else (service["phone"] if service else None),
+            "service_type": service["service_type"] if service else "dine_in",
+            "table_name": service["service_type"].title() if service else (order.table.name if order and order.table else ""),
+            "grand_total": str(bill.grand_total), "collected_amount": str(collected[bill.id]),
+            "amount_paid": str(bill.amount_paid), "outstanding_amount": str(bill.outstanding_amount),
+            "items": [{**dict(item), "unit_price": str(item["unit_price"]), "total": str(item["total"])} for item in items],
+        })
+    return result
+
+
 
 def _sum_amount(db: Session, model, column, start: datetime, end: datetime, date_column=None):
     date_column = date_column or model.created_at
@@ -26,19 +95,16 @@ def dashboard_summary(report_date: date | None = None, db: Session = Depends(get
     models.RoleName.admin, models.RoleName.manager, models.RoleName.cashier,
 ))):
     target = report_date or datetime.utcnow().date()
-    daily_start = datetime.combine(target, time.min)
-    daily_end = daily_start + timedelta(days=1)
-    month_start = daily_start.replace(day=1)
-    month_end = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
-    year_start = daily_start.replace(month=1, day=1)
-    year_end = year_start.replace(year=year_start.year + 1)
-    # Net sales exclude VAT/tax and service-charge collections; discounts are already
-    # reflected in grand_total and must not be deducted a second time.
+    month_date_start = target.replace(day=1)
+    month_date_end = (month_date_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    year_date_start, year_date_end = date(target.year, 1, 1), date(target.year + 1, 1, 1)
+    daily_start, daily_end = _business_window(target, target + timedelta(days=1))
+    month_start, month_end = _business_window(month_date_start, month_date_end)
+    year_start, year_end = _business_window(year_date_start, year_date_end)
+    # Sales are recognized when money is received: initial bill payments plus credit repayments.
+    # Unpaid credit remains only in Customer Credit until a repayment is recorded.
     def net_sales(start: datetime, end: datetime):
-        return db.query(func.coalesce(func.sum(
-            models.Bill.grand_total - models.Bill.tax_amount - models.Bill.service_charge_amount
-        ), 0)).filter(models.Bill.business_date >= start.date(), models.Bill.business_date < end.date(),
-                      models.Bill.sale_status == "active").scalar()
+        return _net_collection_sales(db, start, end)
 
     def estimated_cogs(start: datetime, end: datetime):
         value = db.execute(text("""SELECT COALESCE(SUM(ri.quantity * oi.quantity * i.average_cost /
@@ -132,31 +198,8 @@ def dashboard_low_stock(db: Session = Depends(get_db), user=Depends(require_role
 def daily_sales_details(report_date: date | None = None, db: Session = Depends(get_db),
                         user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager, models.RoleName.cashier))):
     target = report_date or datetime.utcnow().date()
-    bills = db.query(models.Bill).filter(
-        models.Bill.business_date == target, models.Bill.sale_status == "active"
-    ).order_by(models.Bill.created_at.desc()).all()
-    result = []
-    for bill in bills:
-        order = db.query(models.Order).filter(models.Order.id == bill.order_id).first()
-        customer = db.query(models.Customer).filter(models.Customer.id == bill.customer_id).first() if bill.customer_id else None
-        service = db.execute(text("SELECT service_type,customer_name,phone FROM order_service_details WHERE order_id=:id"),
-                             {"id": bill.order_id}).mappings().first()
-        items = db.execute(text("""SELECT mi.name,oi.quantity,oi.unit_price,
-            (oi.quantity * oi.unit_price) total
-            FROM order_items oi JOIN menu_items mi ON mi.id=oi.menu_item_id
-            WHERE oi.order_id=:order_id AND oi.is_cancelled=FALSE
-            ORDER BY mi.name"""), {"order_id": bill.order_id}).mappings().all()
-        result.append({
-            "id": bill.id, "bill_number": bill.bill_number, "created_at": bill.created_at,
-            "customer_name": customer.name if customer else (service["customer_name"] if service else "Walk-in"),
-            "customer_phone": customer.phone if customer else (service["phone"] if service else None),
-            "service_type": service["service_type"] if service else "dine_in",
-            "table_name": service["service_type"].title() if service else (order.table.name if order and order.table else ""),
-            "grand_total": str(bill.grand_total), "amount_paid": str(bill.amount_paid),
-            "outstanding_amount": str(bill.outstanding_amount),
-            "items": [{**dict(item), "unit_price": str(item["unit_price"]), "total": str(item["total"])} for item in items],
-        })
-    return result
+    start, end = _business_window(target, target + timedelta(days=1))
+    return _sales_details_for_period(db, start, end)
 
 
 @router.get("/monthly-sales")
@@ -164,66 +207,17 @@ def monthly_sales_details(report_date: date | None = None, db: Session = Depends
                           user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager, models.RoleName.cashier))):
     target = report_date or datetime.utcnow().date()
     month_start = target.replace(day=1)
-    next_month = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
-    bills = db.query(models.Bill).filter(
-        models.Bill.business_date >= month_start,
-        models.Bill.business_date < next_month, models.Bill.sale_status == "active",
-    ).order_by(models.Bill.created_at.desc()).all()
-    result = []
-    for bill in bills:
-        order = db.query(models.Order).filter(models.Order.id == bill.order_id).first()
-        customer = db.query(models.Customer).filter(models.Customer.id == bill.customer_id).first() if bill.customer_id else None
-        service = db.execute(text("SELECT service_type,customer_name,phone FROM order_service_details WHERE order_id=:id"),
-                             {"id": bill.order_id}).mappings().first()
-        items = db.execute(text("""SELECT mi.name,oi.quantity,oi.unit_price,
-            (oi.quantity * oi.unit_price) total
-            FROM order_items oi JOIN menu_items mi ON mi.id=oi.menu_item_id
-            WHERE oi.order_id=:order_id AND oi.is_cancelled=FALSE
-            ORDER BY mi.name"""), {"order_id": bill.order_id}).mappings().all()
-        result.append({
-            "id": bill.id, "bill_number": bill.bill_number, "created_at": bill.created_at,
-            "customer_name": customer.name if customer else (service["customer_name"] if service else "Walk-in"),
-            "customer_phone": customer.phone if customer else (service["phone"] if service else None),
-            "service_type": service["service_type"] if service else "dine_in",
-            "table_name": service["service_type"].title() if service else (order.table.name if order and order.table else ""),
-            "grand_total": str(bill.grand_total), "amount_paid": str(bill.amount_paid),
-            "outstanding_amount": str(bill.outstanding_amount),
-            "items": [{**dict(item), "unit_price": str(item["unit_price"]), "total": str(item["total"])} for item in items],
-        })
-    return result
+    month_end = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    start, end = _business_window(month_start, month_end)
+    return _sales_details_for_period(db, start, end)
 
 
 @router.get("/yearly-sales")
 def yearly_sales_details(report_date: date | None = None, db: Session = Depends(get_db),
                          user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager, models.RoleName.cashier))):
     target = report_date or datetime.utcnow().date()
-    year_start, year_end = date(target.year, 1, 1), date(target.year + 1, 1, 1)
-    bills = db.query(models.Bill).filter(
-        models.Bill.business_date >= year_start, models.Bill.business_date < year_end,
-        models.Bill.sale_status == "active",
-    ).order_by(models.Bill.created_at.desc()).all()
-    result = []
-    for bill in bills:
-        order = db.query(models.Order).filter(models.Order.id == bill.order_id).first()
-        customer = db.query(models.Customer).filter(models.Customer.id == bill.customer_id).first() if bill.customer_id else None
-        service = db.execute(text("SELECT service_type,customer_name,phone FROM order_service_details WHERE order_id=:id"),
-                             {"id": bill.order_id}).mappings().first()
-        items = db.execute(text("""SELECT mi.name,oi.quantity,oi.unit_price,(oi.quantity * oi.unit_price) total
-            FROM order_items oi JOIN menu_items mi ON mi.id=oi.menu_item_id
-            WHERE oi.order_id=:order_id AND oi.is_cancelled=FALSE ORDER BY mi.name"""),
-            {"order_id": bill.order_id}).mappings().all()
-        result.append({
-            "id": bill.id, "bill_number": bill.bill_number, "business_date": bill.business_date.isoformat(),
-            "created_at": bill.created_at,
-            "customer_name": customer.name if customer else (service["customer_name"] if service else "Walk-in"),
-            "customer_phone": customer.phone if customer else (service["phone"] if service else None),
-            "service_type": service["service_type"] if service else "dine_in",
-            "table_name": service["service_type"].title() if service else (order.table.name if order and order.table else ""),
-            "grand_total": str(bill.grand_total), "amount_paid": str(bill.amount_paid),
-            "outstanding_amount": str(bill.outstanding_amount),
-            "items": [{**dict(item), "unit_price": str(item["unit_price"]), "total": str(item["total"])} for item in items],
-        })
-    return result
+    start, end = _business_window(date(target.year, 1, 1), date(target.year + 1, 1, 1))
+    return _sales_details_for_period(db, start, end)
 
 
 @router.get("/summary.pdf")
@@ -242,8 +236,8 @@ def dashboard_summary_pdf(report_date: date | None = None, db: Session = Depends
     for month in range(1, 13):
         start = date(target.year, month, 1)
         end = date(target.year + (month == 12), 1 if month == 12 else month + 1, 1)
-        sales = db.query(func.coalesce(func.sum(models.Bill.grand_total-models.Bill.tax_amount-models.Bill.service_charge_amount),0)).filter(
-            models.Bill.business_date>=start,models.Bill.business_date<end,models.Bill.sale_status=="active").scalar() or 0
+        sales_start, sales_end = _business_window(start, end)
+        sales = _net_collection_sales(db, sales_start, sales_end)
         expenses = db.query(func.coalesce(func.sum(models.Expense.amount),0)).filter(
             models.Expense.expense_date>=datetime.combine(start,time.min),models.Expense.expense_date<datetime.combine(end,time.min)).scalar() or 0
         payroll = db.execute(text("SELECT COALESCE(SUM(gross_pay),0) FROM payroll_entries WHERE period_end>=:s AND period_end<:e"),
