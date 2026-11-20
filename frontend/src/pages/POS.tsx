@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
+import { useAuth } from "../context/AuthContext";
 
 interface Category { id: string; name: string; }
 interface MenuItem { id: string; category_id: string; name: string; price: string; is_available: boolean; }
@@ -9,6 +10,8 @@ interface SentOrderLine { id: string; menu_item_id: string; name: string; quanti
 interface TableRow { id: string; floor_id: string; name: string; status: string; capacity: number; }
 
 export default function POS() {
+  const { role } = useAuth();
+  const canRemoveSentItems = role === "admin";
   const [params] = useSearchParams();
   const tableId = params.get("table") || "";
   const serviceType = params.get("service") || "dine_in";
@@ -227,7 +230,7 @@ export default function POS() {
               </div>
               <div className="flex items-center gap-2">
                 <span>Rs. {Number(line.total).toFixed(2)}</span>
-                <button type="button" onClick={() => removeSentItem(line)} title={`Remove ${line.name}`} aria-label={`Remove ${line.name} from order`} className="rounded border border-red-200 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50">Remove</button>
+                {canRemoveSentItems && <button type="button" onClick={() => removeSentItem(line)} title={`Remove ${line.name}`} aria-label={`Remove ${line.name} from order`} className="rounded border border-red-200 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50">Remove</button>}
               </div>
             </div>
           ))}
