@@ -11,11 +11,12 @@ interface Summary {
   monthly_sales: string;
   yearly_sales: string;
   daily_expenses: string;
+  total_expenses: string;
   monthly_expenses: string;
   yearly_expenses: string;
   daily_profit: string;
-  monthly_profit: string;
-  yearly_profit: string;
+  monthly_profit: string | null;
+  yearly_profit: string | null;
   daily_estimated_cogs: string;
   monthly_estimated_cogs: string;
   yearly_estimated_cogs: string;
@@ -25,7 +26,7 @@ interface Summary {
 
 const emptySummary: Summary = {
   daily_sales: "0", monthly_sales: "0", yearly_sales: "0",
-  daily_expenses: "0", monthly_expenses: "0", yearly_expenses: "0",
+  daily_expenses: "0", total_expenses: "0", monthly_expenses: "0", yearly_expenses: "0",
   daily_profit: "0", monthly_profit: "0", yearly_profit: "0",
   daily_estimated_cogs: "0", monthly_estimated_cogs: "0", yearly_estimated_cogs: "0",
   outstanding: "0", occupied_tables: 0,
@@ -48,6 +49,7 @@ export default function Dashboard() {
   const [yearlySales, setYearlySales] = useState<any[]>([]);
   const [showYearlySales, setShowYearlySales] = useState(false);
   const [yearlySalesLoading, setYearlySalesLoading] = useState(false);
+  const [profitPeriod, setProfitPeriod] = useState<"monthly" | "yearly" | null>(null);
 
   const load = () => api.get(`/api/dashboard/summary?report_date=${reportDate}`).then((response) => setSummary(response.data));
 
@@ -110,7 +112,7 @@ export default function Dashboard() {
 
   const cards = [
     [t("Today's sales"), summary.daily_sales, "sales"],
-    [t("Today's expenses"), summary.daily_expenses, "expenses"],
+    [t("Daily expenses"), summary.daily_expenses, "expenses"],
     [t("Estimated profit / loss"), summary.daily_profit, "profit"],
     [t("Occupied tables"), String(summary.occupied_tables), "tables"],
     [t("Outstanding credit"), summary.outstanding, "credit"],
@@ -119,8 +121,10 @@ export default function Dashboard() {
   const money = (value: string) => `Rs. ${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
   const periods = [
     { label: t("Today"), sales: summary.daily_sales, expenses: summary.daily_expenses, profit: summary.daily_profit },
-    { label: t("This month"), sales: summary.monthly_sales, expenses: summary.monthly_expenses, profit: summary.monthly_profit },
-    { label: t("This year"), sales: summary.yearly_sales, expenses: summary.yearly_expenses, profit: summary.yearly_profit },
+    ...(role === "admin" ? [
+      { label: t("This month"), sales: summary.monthly_sales, expenses: summary.monthly_expenses, profit: summary.monthly_profit || "0" },
+      { label: t("This year"), sales: summary.yearly_sales, expenses: summary.yearly_expenses, profit: summary.yearly_profit || "0" },
+    ] : []),
   ];
 
   return (
@@ -162,7 +166,7 @@ export default function Dashboard() {
           {role === "admin" && <button type="button" onClick={openYearlySales} className="group rounded-2xl border border-[#e9dfd5] bg-white p-5 text-left shadow-[0_5px_18px_rgba(45,30,22,.035)] transition hover:-translate-y-1 hover:border-[#c6a77f] hover:shadow-[0_14px_28px_rgba(45,30,22,.08)]"><div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">Yearly sales</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#edf2ee] text-[#52765b]">↗</span></div><p className="mt-4 text-[25px] font-extrabold tracking-[-.045em] text-[#30251f]">{money(summary.yearly_sales)}</p><p className="mt-2 text-[10px] font-bold text-[#9a7652]">View this year's bills →</p></button>}
           <Link to="/operations?tab=expenses" className="group rounded-2xl border border-[#e9dfd5] bg-white p-5 shadow-[0_5px_18px_rgba(45,30,22,.035)] transition hover:-translate-y-1 hover:border-[#c6a77f] hover:shadow-[0_14px_28px_rgba(45,30,22,.08)]">
             <div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">{t("Today's expenses")}</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#faeeee] text-[#9a3434]">↘</span></div>
-            <p className="mt-4 text-[25px] font-extrabold tracking-[-.045em] text-[#a43d3d]">{money(summary.daily_expenses)}</p><p className="mt-2 text-[10px] font-semibold text-[#a18d7c]">{t("Recorded operating costs")}</p>
+            <p className="mt-4 text-[25px] font-extrabold tracking-[-.045em] text-[#a43d3d]">{money(summary.daily_expenses)}</p><p className="mt-2 text-[10px] font-semibold text-[#a18d7c]">{t("Expenses recorded on the selected date")}</p>
           </Link>
           <div className="rounded-2xl border border-[#e9dfd5] bg-white p-5 shadow-[0_5px_18px_rgba(45,30,22,.035)]">
             <div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">{t("Estimated profit / loss")}</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#f1eee8] text-[#80664c]">◒</span></div>
