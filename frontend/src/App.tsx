@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import { useLanguage } from "./context/LanguageContext";
 import ProtectedRoute from "./components/ProtectedRoute";
+import LoadingScreen from "./components/LoadingScreen";
 const Login = lazy(() => import("./pages/Login"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Tables = lazy(() => import("./pages/Tables"));
@@ -118,7 +119,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <div className="mx-auto w-full max-w-[1600px] px-4 py-6 md:px-7 md:py-8 xl:px-10">
-          <div className="min-h-[70vh]">{children}</div>
+          <div key={location.pathname} className="min-h-[70vh] rs-page-enter">{children}</div>
           <footer className="pt-10 text-center text-[9px] font-semibold tracking-[.18em] text-[#b1a59b]">ROYAL SKYE · DEVELOPED BY RIJAN ADHIKARI</footer>
         </div>
       </main>
@@ -130,7 +131,7 @@ export default function App() {
   const { token } = useAuth();
 
   return (
-    <Suspense fallback={<div className="min-h-[40vh] flex items-center justify-center text-sm text-neutral-500">Loading...</div>}><Routes>
+    <Suspense fallback={<LoadingScreen />}><Routes>
       <Route path="/login" element={token ? <Navigate to="/dashboard" /> : <Login />} />
       <Route
         path="/dashboard"
