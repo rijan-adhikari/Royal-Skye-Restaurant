@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api/client";
 
-interface Balance { id: string; bill_id: string; original_amount: string; remaining_amount: string; created_at: string; }
+interface Balance { id: string; bill_id: string; bill_number?: string; business_date?: string; service_type?: string; table_name?: string; original_amount: string; remaining_amount: string; created_at: string; items?: { name: string; quantity: number; unit_price: string; line_total: string }[]; }
 interface CreditCustomer { customer_id: string; name: string; phone?: string | null; total_due: string; balances: Balance[]; }
 
 export default function Credit() {
@@ -40,8 +40,8 @@ export default function Credit() {
 
   return (
     <div className="max-w-6xl">
-      <h1 className="text-2xl font-semibold mb-1">Credit</h1>
-      <p className="text-neutral-500 mb-5">Search customers and record due payments.</p>
+      <h1 className="text-2xl font-semibold mb-1">Customer credit</h1>
+      <p className="text-neutral-500 mb-5">Select a customer to review their orders, outstanding bills and record repayments. Payments are added to sales on the day they are received.</p>
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <section className="bg-white rounded-xl shadow p-5">
           <input className="w-full border rounded-lg px-3 py-2 mb-4" placeholder="Search customer by name or phone" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -52,7 +52,7 @@ export default function Credit() {
         </section>
         <section className="bg-white rounded-xl shadow p-5">
           {!selected && <p className="text-sm text-neutral-500">Select a customer to view credit details.</p>}
-          {selected && <div><div className="flex flex-wrap justify-between gap-3 border-b pb-4 mb-4"><div><h2 className="font-semibold text-lg">{selected.name}</h2><p className="text-sm text-neutral-500">{selected.phone || "No phone"} · Customer ID: {selected.customer_id}</p></div><p className="font-semibold text-lg">Due: Rs. {selected.total_due}</p></div>{selected.balances.length === 0 && <p className="text-sm text-neutral-500">This customer has no outstanding credit.</p>}<div className="space-y-4">{selected.balances.map((balance) => <div key={balance.id} className="border rounded-lg p-4"><div className="flex flex-wrap justify-between gap-2 text-sm"><span>Bill: {balance.bill_id}</span><span>{formatDateTime(balance.created_at)}</span></div><p className="text-sm mt-2">Original credit: Rs. {balance.original_amount}</p><p className="font-semibold">Remaining due: Rs. {balance.remaining_amount}</p><div className="flex gap-2 mt-3"><input type="number" min="0" step="0.01" placeholder="Payment amount" className="border rounded-lg px-3 py-2" value={repayAmounts[balance.id] || ""} onChange={(e) => setRepayAmounts((current) => ({ ...current, [balance.id]: e.target.value }))} /><button type="button" onClick={() => repay(balance.id)} className="bg-brand text-white rounded-lg px-3 py-2">Record payment</button></div></div>)}</div></div>}
+          {selected && <div><div className="flex flex-wrap justify-between gap-3 border-b pb-4 mb-4"><div><h2 className="font-semibold text-lg">{selected.name}</h2><p className="text-sm text-neutral-500">{selected.phone || "No phone"} · Customer ID: {selected.customer_id}</p></div><p className="font-semibold text-lg">Due: Rs. {selected.total_due}</p></div>{selected.balances.length === 0 && <p className="text-sm text-neutral-500">This customer has no outstanding credit.</p>}<div className="space-y-4">{selected.balances.map((balance) => <div key={balance.id} className="border rounded-lg p-4"><div className="flex flex-wrap justify-between gap-2 text-sm"><div><span className="font-semibold">Bill: {balance.bill_number || balance.bill_id}</span><p className="text-xs text-neutral-500">{balance.business_date || formatDateTime(balance.created_at)} · {(balance.service_type || "dine_in").replace("_", " ")} {balance.table_name ? `· ${balance.table_name}` : ""}</p></div><span>{formatDateTime(balance.created_at)}</span></div><p className="text-sm mt-2">Original credit: Rs. {balance.original_amount}</p><p className="font-semibold">Remaining due: Rs. {balance.remaining_amount}</p><div className="mt-3 rounded-lg bg-neutral-50 p-3"><p className="mb-2 text-xs font-bold uppercase tracking-wider text-neutral-500">What this customer ordered</p>{(balance.items || []).length ? <div className="space-y-1">{balance.items!.map((item, index) => <div key={index} className="flex justify-between gap-3 text-sm"><span>{item.name} × {item.quantity}</span><span>Rs. {Number(item.line_total).toLocaleString("en-NP", {minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>)}</div> : <p className="text-xs text-neutral-500">No item details available for this bill.</p>}</div><div className="flex flex-wrap gap-2 mt-3"><input type="number" min="0.01" max={balance.remaining_amount} step="0.01" placeholder="Payment amount" className="min-w-0 flex-1 border rounded-lg px-3 py-2" value={repayAmounts[balance.id] || ""} onChange={(e) => setRepayAmounts((current) => ({ ...current, [balance.id]: e.target.value }))} /><button type="button" onClick={() => repay(balance.id)} className="bg-brand text-white rounded-lg px-3 py-2">Record payment</button></div></div>)}</div></div>}
           {message && <p className="text-sm text-green-700 mt-4">{message}</p>}
           {error && <p className="text-sm text-red-600 mt-4">{error}</p>}
         </section>
