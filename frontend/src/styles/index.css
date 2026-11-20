@@ -1110,3 +1110,99 @@ img, video, canvas, svg {
   html[data-theme="light"] .tables-page *,
   html[data-theme="light"] .pos-page * {transition:none!important;animation:none!important;}
 }
+
+
+/* Billing dark-mode completion: cover every nested checkout control and disclosure. */
+html[data-theme="dark"] main .billing-page {
+  color:#e5f2ee!important;
+}
+html[data-theme="dark"] main .billing-page > div > section,
+html[data-theme="dark"] main .billing-page aside > section {
+  background:linear-gradient(145deg,#101c20 0%,#0c171b 100%)!important;
+  border:1px solid #294744!important;
+  box-shadow:0 14px 36px rgba(0,0,0,.22),inset 0 1px rgba(255,255,255,.025)!important;
+}
+html[data-theme="dark"] main .billing-page section h2,
+html[data-theme="dark"] main .billing-page aside h2 {
+  color:#eaf7f2!important;
+}
+html[data-theme="dark"] main .billing-page section label,
+html[data-theme="dark"] main .billing-page section summary,
+html[data-theme="dark"] main .billing-page section p,
+html[data-theme="dark"] main .billing-page aside > section > div,
+html[data-theme="dark"] main .billing-page aside > section > p {
+  color:#a9c0b9;
+}
+html[data-theme="dark"] main .billing-page section [class*="text-neutral-"],
+html[data-theme="dark"] main .billing-page section [class*="text-[#"],
+html[data-theme="dark"] main .billing-page aside [class*="text-neutral-"],
+html[data-theme="dark"] main .billing-page aside [class*="text-[#"] {
+  color:#a9c0b9!important;
+}
+html[data-theme="dark"] main .billing-page section [class*="border-[#"],
+html[data-theme="dark"] main .billing-page aside [class*="border-[#"],
+html[data-theme="dark"] main .billing-page section details,
+html[data-theme="dark"] main .billing-page section details > div,
+html[data-theme="dark"] main .billing-page section details > p {
+  border-color:#294744!important;
+}
+html[data-theme="dark"] main .billing-page section details,
+html[data-theme="dark"] main .billing-page section [class*="bg-[#f"],
+html[data-theme="dark"] main .billing-page section [class*="bg-white"],
+html[data-theme="dark"] main .billing-page aside > section [class*="bg-white"],
+html[data-theme="dark"] main .billing-page aside > section [class*="bg-[#"] {
+  background:#142328!important;
+  color:#dcece6!important;
+}
+html[data-theme="dark"] main .billing-page section input:not([type="checkbox"]),
+html[data-theme="dark"] main .billing-page section select,
+html[data-theme="dark"] main .billing-page section textarea {
+  background:#091316!important;
+  color:#e8f4ef!important;
+  border:1px solid #355650!important;
+  color-scheme:dark;
+}
+html[data-theme="dark"] main .billing-page section input::placeholder {
+  color:#77928a!important;
+}
+html[data-theme="dark"] main .billing-page section input:focus,
+html[data-theme="dark"] main .billing-page section select:focus,
+html[data-theme="dark"] main .billing-page section textarea:focus {
+  border-color:#65e6c2!important;
+  box-shadow:0 0 0 3px rgba(101,230,194,.12)!important;
+}
+html[data-theme="dark"] main .billing-page section button,
+html[data-theme="dark"] main .billing-page aside > section button {
+  border-color:#31534d!important;
+  background:#172b2c!important;
+  color:#c9eee2!important;
+}
+html[data-theme="dark"] main .billing-page section button[class*="bg-[#342923]"],
+html[data-theme="dark"] main .billing-page section button[class*="bg-[#7b2926]"],
+html[data-theme="dark"] main .billing-page aside > section button[class*="bg-[#342923]"],
+html[data-theme="dark"] main .billing-page aside > section button[class*="bg-[#7b2926]"] {
+  background:linear-gradient(105deg,#167866,#2dbb9b)!important;
+  border-color:rgba(101,230,194,.5)!important;
+  color:#041411!important;
+}
+html[data-theme="dark"] main .billing-page section button:hover,
+html[data-theme="dark"] main .billing-page aside > section button:hover {
+  border-color:#65e6c2!important;
+}
+html[data-theme="dark"] main .billing-page section button:disabled,
+html[data-theme="dark"] main .billing-page aside > section button:disabled {
+  opacity:.42;
+}
+html[data-theme="dark"] main .billing-page .receipt-print,
+html[data-theme="dark"] main .billing-page .receipt-print * {
+  color:#111!important;
+  border-color:#ddd!important;
+}
+html[data-theme="dark"] main .billing-page .receipt-print {background:#fff!important;}
+html[data-theme="dark"] main .billing-page [role="alert"] {
+  background:#351c20!important;color:#ffb8b8!important;border-color:#713c43!important;
+}
+html[data-theme="dark"] main .billing-page details > summary {
+  color:#c8e8dd!important;
+}
+html[data-theme="dark"] main .billing-page details > summary::marker {color:#65e6c2;}
