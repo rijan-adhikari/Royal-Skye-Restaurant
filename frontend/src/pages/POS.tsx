@@ -163,7 +163,7 @@ export default function POS() {
   );
 
   return (
-    <div className="mx-auto grid max-w-7xl grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
+    <div className="pos-page mx-auto grid max-w-7xl grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
       <div className="min-w-0">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Royal Skye · Point of Sale</p><h1 className="mt-1 text-2xl font-bold">Take an order</h1><p className="text-sm text-neutral-500">{selectedTable ? "Table " + selectedTable.name + " · " + selectedTable.capacity + " seats" : isServiceOrder ? serviceType === "delivery" ? "Delivery order" : "Takeaway order" : "Select a table before opening the POS"}</p></div>{isCabinOrder && <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">Cabin pricing applies</span>}</div>
         <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-neutral-200 bg-white p-3 shadow-sm"><label className="text-xs font-medium text-neutral-600">Business / Sales date<input type="date" className="mt-1 block rounded-lg border px-3 py-2 text-sm" value={businessDate} onChange={e => setBusinessDate(e.target.value)} /></label><p className="text-xs text-neutral-500">This date controls sales reporting. The actual order timestamp remains unchanged.</p></div>
