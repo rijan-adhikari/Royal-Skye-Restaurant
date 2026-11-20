@@ -21,7 +21,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-brand-dark">
+    <div className="relative min-h-screen flex items-center justify-center bg-brand-dark px-4 py-16">
       <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-xl p-8 w-full max-w-sm">
         <h1 className="text-xl font-semibold text-brand-dark mb-1">Royal Skye Birds</h1>
         <p className="text-sm text-neutral-500 mb-6">Restaurant & Bar Cafe - Staff Login</p>
@@ -44,6 +44,17 @@ export default function Login() {
           Sign in
         </button>
       </form>
+      <p className="absolute bottom-6 left-4 right-4 text-center text-xs text-white/55">
+        Built by{" "}
+        <a
+          href="https://rijan-adhikari.onrender.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium text-white/80 transition hover:text-white hover:underline"
+        >
+          Rijan Adhikari
+        </a>
+      </p>
     </div>
   );
 }
