@@ -494,7 +494,14 @@ def list_cash_shifts(limit: int = Query(50, ge=1, le=200),
         entries = db.execute(text("""SELECT e.id,e.entry_type,e.amount,e.reference,e.notes,e.created_at,u.full_name created_by_name
             FROM cash_drawer_entries e JOIN users u ON u.id=e.created_by
             WHERE e.shift_id=:id ORDER BY e.created_at DESC"""), {"id": row["id"]}).mappings().all()
-        result.append(dict(row) | {"cash_entries": [dict(entry) for entry in entries]})
+        entry_totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
+            FROM cash_drawer_entries WHERE shift_id=:id GROUP BY entry_type"""), {"id": row["id"]}).mappings().all()
+        amounts = {entry["entry_type"]: Decimal(str(entry["amount"])) for entry in entry_totals}
+        calculated_expected = (Decimal(str(row["opening_float"])) + amounts.get("sale", Decimal(0))
+            + amounts.get("cash_in", Decimal(0)) - amounts.get("refund", Decimal(0))
+            - amounts.get("cash_out", Decimal(0)) - amounts.get("payout", Decimal(0)))
+        expected_cash = row["expected_cash"] if row["expected_cash"] is not None else calculated_expected
+        result.append(dict(row) | {"expected_cash": str(expected_cash), "cash_entries": [dict(entry) for entry in entries]})
     return result
 
 
