@@ -1,0 +1,179 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'DM Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #211d1b;
+  background: #f6f4f1;
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Manrope', 'DM Sans', sans-serif;
+  letter-spacing: -0.025em;
+}
+
+body {
+  @apply text-neutral-900;
+  background: #f6f4f1;
+  margin: 0;
+  min-width: 320px;
+}
+
+button, input, select, textarea {
+  font: inherit;
+}
+
+button {
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid rgba(183, 138, 84, 0.32);
+  outline-offset: 2px;
+}
+
+input, select, textarea {
+  min-width: 0;
+}
+
+::selection {
+  background: rgba(183, 138, 84, 0.20);
+}
+
+@media (max-width: 767px) {
+  table {
+    white-space: nowrap;
+  }
+}
+
+@media print {
+  @page {
+    size: auto;
+    margin: 8mm;
+  }
+
+  body {
+    background: white;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  #printable-bill,
+  #printable-bill * {
+    visibility: visible;
+  }
+
+  #printable-bill {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    padding: 12px;
+    border: 0;
+    box-shadow: none;
+    color: #000;
+  }
+
+  #printable-bill button {
+    display: none !important;
+  }
+}
+
+/* Consistent surfaces and controls across every authenticated module. */
+:root {
+  --rs-ink: #302722;
+  --rs-muted: #88796e;
+  --rs-line: #e8e1da;
+  --rs-paper: #fbfaf8;
+  --rs-accent: #8b1a1a;
+  --rs-gold: #b78a54;
+}
+
+main {
+  color: var(--rs-ink);
+}
+
+main h1 {
+  color: var(--rs-ink);
+  font-weight: 800;
+}
+
+main h2, main h3 {
+  color: #40342d;
+  font-weight: 700;
+}
+
+main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+main select,
+main textarea {
+  border-color: var(--rs-line);
+  border-radius: 0.75rem;
+  background-color: #fff;
+  color: var(--rs-ink);
+  box-shadow: 0 1px 2px rgba(43, 31, 24, 0.025);
+}
+
+main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
+main select:focus,
+main textarea:focus {
+  border-color: #c49a6b;
+  outline: 3px solid rgba(183, 138, 84, 0.13);
+  outline-offset: 1px;
+}
+
+main table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+main table thead th {
+  background: #f8f5f1;
+  color: #817266;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+main table tbody tr {
+  transition: background-color 120ms ease;
+}
+
+main table tbody tr:hover {
+  background-color: #fcfaf7;
+}
+
+main section[class*="bg-white"] {
+  border-color: var(--rs-line);
+  box-shadow: 0 8px 24px rgba(43, 31, 24, 0.045);
+}
+
+main button:disabled {
+  cursor: not-allowed;
+  filter: saturate(0.72);
+}
+
+* {
+  scrollbar-color: #c9b9aa transparent;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: #c9b9aa;
+  background-clip: padding-box;
+}

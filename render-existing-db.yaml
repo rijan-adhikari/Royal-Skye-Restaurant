@@ -1,0 +1,51 @@
+services:
+  - type: web
+    name: royal-skye-pos-api
+    runtime: docker
+    plan: free
+    region: singapore
+    repo: https://github.com/rijan-adhikari/Royal-Skye-Restaurant
+    branch: main
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    healthCheckPath: /api/health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: royal-skye-pos-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: http://localhost:5173
+      - key: INITIAL_ADMIN_USERNAME
+        value: admin
+      - key: INITIAL_ADMIN_PASSWORD
+        sync: false
+      - key: INITIAL_ADMIN_FULL_NAME
+        value: Royal Skye Administrator
+  - type: web
+    name: royal-skye-pos-frontend
+    runtime: docker
+    plan: free
+    region: singapore
+    repo: https://github.com/rijan-adhikari/Royal-Skye-Restaurant
+    branch: main
+    dockerContext: ./frontend
+    dockerfilePath: ./frontend/Dockerfile
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: API_PROXY_HOSTPORT
+        fromService:
+          type: web
+          name: royal-skye-pos-api
+          property: hostport
+databases:
+  - name: royal-skye-pos-db
+    databaseName: royal_skye_pos_db
+    user: royal_skye_pos_db_user
+    plan: free
+    region: singapore
+    postgresMajorVersion: "16"
+    ipAllowList: []

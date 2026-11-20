@@ -1,0 +1,143 @@
+import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { api } from "../api/client";
+import { useLanguage } from "../context/LanguageContext";
+
+interface Summary {
+  daily_sales: string;
+  monthly_sales: string;
+  yearly_sales: string;
+  daily_expenses: string;
+  monthly_expenses: string;
+  yearly_expenses: string;
+  daily_profit: string;
+  monthly_profit: string;
+  yearly_profit: string;
+  daily_estimated_cogs: string;
+  monthly_estimated_cogs: string;
+  yearly_estimated_cogs: string;
+  outstanding: string;
+  occupied_tables: number;
+}
+
+const emptySummary: Summary = {
+  daily_sales: "0", monthly_sales: "0", yearly_sales: "0",
+  daily_expenses: "0", monthly_expenses: "0", yearly_expenses: "0",
+  daily_profit: "0", monthly_profit: "0", yearly_profit: "0",
+  daily_estimated_cogs: "0", monthly_estimated_cogs: "0", yearly_estimated_cogs: "0",
+  outstanding: "0", occupied_tables: 0,
+};
+
+export default function Dashboard() {
+  const { fullName, role } = useAuth();
+  const { t } = useLanguage();
+  const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
+  const [summary, setSummary] = useState<Summary>(emptySummary);
+  const [error, setError] = useState("");
+  const [lowStockItems, setLowStockItems] = useState<any[]>([]);
+  const [dailySales, setDailySales] = useState<any[]>([]);
+  const [showDailySales, setShowDailySales] = useState(false);
+  const [salesLoading, setSalesLoading] = useState(false);
+  const [monthlySales, setMonthlySales] = useState<any[]>([]);
+  const [showMonthlySales, setShowMonthlySales] = useState(false);
+  const [monthlySalesLoading, setMonthlySalesLoading] = useState(false);
+
+  const load = () => api.get(`/api/dashboard/summary?report_date=${reportDate}`).then((response) => setSummary(response.data));
+
+  useEffect(() => {
+    load().catch(() => setError("Could not load dashboard metrics."));
+    api.get("/api/dashboard/low-stock").then((response) => setLowStockItems(response.data)).catch(() => setLowStockItems([]));
+  }, [reportDate, role]);
+
+  const openDailySales = async () => {
+    setShowDailySales(true);
+    setSalesLoading(true);
+    try {
+      const response = await api.get(`/api/dashboard/daily-sales?report_date=${reportDate}`);
+      setDailySales(response.data);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Could not load daily sales details.");
+    } finally {
+      setSalesLoading(false);
+    }
+  };
+
+  const openMonthlySales = async () => {
+    setShowMonthlySales(true);
+    setMonthlySalesLoading(true);
+    try {
+      const response = await api.get(`/api/dashboard/monthly-sales?report_date=${reportDate}`);
+      setMonthlySales(response.data);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Could not load monthly sales details.");
+    } finally {
+      setMonthlySalesLoading(false);
+    }
+  };
+
+  const downloadDashboardPdf = async () => {
+    try {
+      const response = await api.get(`/api/dashboard/summary.pdf?report_date=${reportDate}`, { responseType: "blob" });
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `dashboard-${reportDate}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Could not download dashboard PDF.");
+    }
+  };
+
+  const cards = [
+    [t("Today's sales"), summary.daily_sales, "sales"],
+    [t("Today's expenses"), summary.daily_expenses, "expenses"],
+    [t("Estimated profit / loss"), summary.daily_profit, "profit"],
+    [t("Occupied tables"), String(summary.occupied_tables), "tables"],
+    [t("Outstanding credit"), summary.outstanding, "credit"],
+  ];
+
+  return (
+    <div className="mx-auto max-w-[1500px] space-y-7">
+      <div className="relative flex flex-wrap items-end justify-between gap-5 overflow-hidden rounded-[26px] border border-[#eadfd3] bg-gradient-to-br from-[#fffdfa] via-white to-[#f2e6d9] p-6 shadow-[0_12px_35px_rgba(63,42,29,.055)] md:p-8">
+        <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">{t("Royal Skye · Overview")}</p><h1 className="mt-2 text-3xl font-extrabold tracking-tight text-[#30251f] md:text-[34px]">{t("Good to see you,")} {fullName}</h1><p className="mt-2 text-sm text-[#88796e] capitalize">{role} · {t("Sales and operations snapshot")}</p></div>
+        <div className="flex flex-wrap items-end gap-2"><label className="text-sm">{t("Report date")}<input type="date" className="block border rounded-lg px-3 py-2 mt-1" value={reportDate} onChange={(e) => setReportDate(e.target.value)} /></label>{role !== "manager" && <button type="button" onClick={downloadDashboardPdf} className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">{t("Download dashboard PDF")}</button>}</div>
+      </div>
+      <div><div className="mb-3 flex items-center justify-between"><h2 className="text-xs font-extrabold uppercase tracking-[.18em] text-[#988679]">{t("Performance snapshot")}</h2><span className="text-[10px] font-semibold uppercase tracking-wider text-[#b09b88]">{reportDate}</span></div><div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {cards.map(([label, value, kind]) => {
+          const numeric = Number(value);
+          const isMoney = kind !== "tables";
+          const content = <><p className="text-xs font-semibold text-[#95877c]">{label}</p><p className={`mt-2 text-2xl font-bold tracking-tight ${kind === "expenses" || (kind === "profit" && numeric < 0) ? "text-red-700" : "text-[#302722]"}`}>{isMoney ? `Rs. ${numeric.toLocaleString("en-IN", { maximumFractionDigits: 2 })}` : value}</p></>;
+          if (kind === "sales") return <button type="button" key={kind} onClick={openDailySales} className="rounded-2xl border border-[#e9dfd6] bg-white p-5 text-left shadow-sm transition hover:border-[#c6a77f]">{content}<p className="mt-3 text-[11px] font-semibold text-[#9b7651]">{t("View today's bills")} →</p></button>;
+          if (kind === "expenses") return <Link key={kind} to="/operations?tab=expenses" className="rounded-2xl border border-[#e9dfd6] bg-white p-5 shadow-sm transition hover:border-[#c6a77f]">{content}</Link>;
+          return <div key={kind} className="rounded-2xl border border-[#e9dfd6] bg-white p-5 shadow-sm">{content}</div>;
+        })}
+      </div>
+      </div>
+      {role === "admin" && <section><h2 className="mb-3 text-xs font-extrabold uppercase tracking-[.18em] text-[#988679]">{t("Quick access")}</h2><div className="grid gap-4 sm:grid-cols-2">
+        <Link to="/operations?tab=inventory" className="rounded-2xl border border-[#e9dfd6] bg-white p-5 shadow-[0_8px_24px_rgba(43,31,24,.045)] transition hover:-translate-y-0.5 hover:border-[#b78a54]"><p className="font-semibold">{t("Inventory")}</p><p className="text-sm text-neutral-500">{t("Open stock register and manage stock levels")}</p></Link>
+        <Link to="/operations?tab=expenses" className="rounded-2xl border border-[#e9dfd6] bg-white p-5 shadow-[0_8px_24px_rgba(43,31,24,.045)] transition hover:-translate-y-0.5 hover:border-[#b78a54]"><p className="font-semibold">{t("Expenses")}</p><p className="text-sm text-neutral-500">{t("Open expense register and record expenses")}</p></Link>
+      </div></section>}
+      {role === "admin" && lowStockItems.length > 0 && <section className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-amber-900">{t("Low stock alert")}</h2><span className="rounded-full bg-amber-200 px-3 py-1 text-sm font-semibold text-amber-900">{lowStockItems.length}</span></div>
+        <p className="mt-1 text-sm text-amber-900">{t("These items are at or below their reorder level. This alert appears whenever you open the dashboard until stock is replenished.")}</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{lowStockItems.map((item) => <div key={item.id} className="rounded-lg border border-amber-200 bg-white p-3 text-sm"><p className="font-semibold">{item.name}</p><p>{t("On hand")}: {item.quantity} {item.unit}</p><p>{t("Reorder")}: {item.reorder_level} {item.unit}</p></div>)}</div>
+        <Link to="/operations?tab=inventory" className="mt-3 inline-block text-sm font-semibold text-amber-900 underline">{t("Open inventory")}</Link>
+      </section>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      {showMonthlySales && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" onClick={() => setShowMonthlySales(false)}>
+        <section className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold">{t("Monthly sales details")}</h2><p className="text-sm text-neutral-500">{reportDate.slice(0, 7)}</p></div><button type="button" onClick={() => setShowMonthlySales(false)} className="rounded-lg border px-3 py-2">{t("Close")}</button></div>
+          {monthlySalesLoading ? <p className="py-8 text-center">{t("Loading...")}</p> : monthlySales.length === 0 ? <p className="py-8 text-center text-sm text-neutral-500">{t("No sales recorded for this month.")}</p> : <div className="mt-4 space-y-4">{monthlySales.map((bill) => <article key={bill.id} className="rounded-xl border p-4"><div className="flex flex-wrap justify-between gap-2"><div><p className="font-semibold">{bill.bill_number} · {bill.customer_name}</p><p className="text-xs text-neutral-500">{bill.customer_phone || t("No phone")} · {bill.table_name} · {new Date(bill.created_at).toLocaleString()}</p></div><div className="text-right text-sm"><p className="font-semibold">Rs. {bill.grand_total}</p><p className="text-neutral-500">{t("Paid")}: Rs. {bill.amount_paid} · {t("Outstanding")}: Rs. {bill.outstanding_amount}</p></div></div><div className="mt-3 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">{t("Food")}</th><th>{t("Quantity")}</th><th>{t("Price")}</th><th>{t("Total")}</th></tr></thead><tbody>{bill.items.map((item: any, index: number) => <tr key={index} className="border-b last:border-0"><td className="py-2">{item.name}</td><td>{item.quantity}</td><td>Rs. {item.unit_price}</td><td>Rs. {item.total}</td></tr>)}</tbody></table></div></article>)}</div>}
+        </section>
+      </div>}
+      {showDailySales && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" onClick={() => setShowDailySales(false)}>
+        <section className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold">{t("Daily sales details")}</h2><p className="text-sm text-neutral-500">{reportDate}</p></div><button type="button" onClick={() => setShowDailySales(false)} className="rounded-lg border px-3 py-2">{t("Close")}</button></div>
+          {salesLoading ? <p className="py-8 text-center">{t("Loading...")}</p> : dailySales.length === 0 ? <p className="py-8 text-center text-sm text-neutral-500">{t("No sales recorded for this date.")}</p> : <div className="mt-4 space-y-4">{dailySales.map((bill) => <article key={bill.id} className="rounded-xl border p-4"><div className="flex flex-wrap justify-between gap-2"><div><p className="font-semibold">{bill.bill_number} · {bill.customer_name}</p><p className="text-xs text-neutral-500">{bill.customer_phone || t("No phone")} · {bill.table_name} · {new Date(bill.created_at).toLocaleString()}</p></div><div className="text-right text-sm"><p className="font-semibold">Rs. {bill.grand_total}</p><p className="text-neutral-500">{t("Paid")}: Rs. {bill.amount_paid} · {t("Outstanding")}: Rs. {bill.outstanding_amount}</p></div></div><div className="mt-3 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">{t("Food")}</th><th>{t("Quantity")}</th><th>{t("Price")}</th><th>{t("Total")}</th></tr></thead><tbody>{bill.items.map((item: any, index: number) => <tr key={index} className="border-b last:border-0"><td className="py-2">{item.name}</td><td>{item.quantity}</td><td>Rs. {item.unit_price}</td><td>Rs. {item.total}</td></tr>)}</tbody></table></div></article>)}</div>}
+        </section>
+      </div>}
+    </div>
+  );
+}
