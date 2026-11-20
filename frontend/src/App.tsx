@@ -57,13 +57,9 @@ function Shell({ children }: { children: React.ReactNode }) {
     { to: "/operations?tab=expenses", label: t("Expenses"), icon: "expenses", tab: "expenses" },
     { to: "/operations?tab=cash", label: t("Cash Drawer"), icon: "cash", tab: "cash" },
   ] : [];
-  const administration: NavItem[] = role === "admin" ? [
-    { to: "/admin", label: t("Settings"), icon: "controls" },
-  ] : [];
   const groups = [
     { label: t("Workspace"), items: workspace },
-    ...(management.length ? [{ label: t("Management"), items: management }] : []),
-    ...(administration.length ? [{ label: t("Administration"), items: administration }] : []),
+    ...(management.length ? [{ label: t("Restaurant management"), items: management }] : []),
   ];
   const activeItem = groups.flatMap(group => group.items).find(item =>
     item.to.split("?")[0] === location.pathname &&
