@@ -53,7 +53,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     { to: "/operations?tab=inventory", label: t("Inventory"), icon: "inventory", tab: "inventory" },
     { to: "/operations?tab=expenses", label: t("Expenses"), icon: "expenses", tab: "expenses" },
     { to: "/operations?tab=controls", label: t("Control Center"), icon: "controls", tab: "controls" },
-    ...(role === "admin" ? [{ to: "/admin-controls", label: t("Admin Controls"), icon: "controls" }] : []),
+    ...(["admin", "manager"].includes(role || "") ? [{ to: "/admin-controls", label: role === "admin" ? t("Admin Controls") : t("Backup & Restore"), icon: "controls" }] : []),
   ] : [];
   const groups = [
     { label: t("Workspace"), items: workspace },
@@ -184,7 +184,7 @@ export default function App() {
 
       <Route
         path="/admin-controls"
-        element={<ProtectedRoute allowedRoles={["admin"]}><Shell><AdminControls /></Shell></ProtectedRoute>}
+        element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Shell><AdminControls /></Shell></ProtectedRoute>}
       />
       <Route
         path="/operations"
