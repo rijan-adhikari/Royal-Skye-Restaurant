@@ -119,7 +119,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <div className="mx-auto w-full max-w-[1600px] px-4 py-6 md:px-7 md:py-8 xl:px-10">
-          <div key={location.pathname} className="min-h-[70vh]">{children}</div>
+          <div key={location.pathname + location.search} className="rs-page-transition min-h-[70vh]">{children}</div>
           <footer className="pt-10 text-center text-[9px] font-semibold tracking-[.18em] text-[#b1a59b]">
             ROYAL SKYE · DEVELOPED BY{" "}
             <a href="https://adhikari-rijan.onrender.com/" target="_blank" rel="noopener noreferrer" className="transition hover:text-[#8b1a1a] hover:underline">
