@@ -6,8 +6,8 @@ export default {
       colors: {
         brand: {
           DEFAULT: "#8b1a1a",
-          dark: "#5e1010",
-          light: "#c0392b",
+          dark: "#211e1d",
+          light: "#b78a54",
         },
       },
     },

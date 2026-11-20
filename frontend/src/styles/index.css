@@ -10,8 +10,8 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  color: #171717;
-  background: #f5f6f8;
+  color: #211d1b;
+  background: #f6f4f1;
 }
 
 h1, h2, h3, h4 {
@@ -20,7 +20,8 @@ h1, h2, h3, h4 {
 }
 
 body {
-  @apply bg-neutral-100 text-neutral-900;
+  @apply text-neutral-900;
+  background: #f6f4f1;
   margin: 0;
   min-width: 320px;
 }
@@ -34,7 +35,7 @@ button {
 }
 
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
-  outline: 3px solid rgba(153, 91, 56, 0.28);
+  outline: 3px solid rgba(183, 138, 84, 0.32);
   outline-offset: 2px;
 }
 
@@ -43,7 +44,7 @@ input, select, textarea {
 }
 
 ::selection {
-  background: rgba(153, 91, 56, 0.18);
+  background: rgba(183, 138, 84, 0.20);
 }
 
 @media (max-width: 767px) {

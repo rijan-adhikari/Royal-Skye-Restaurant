@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useState } from "react";
+import React, { Suspense, lazy } from "react";
 import { Routes, Route, Navigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import { useLanguage } from "./context/LanguageContext";
@@ -10,50 +10,94 @@ const POS = lazy(() => import("./pages/POS"));
 const Billing = lazy(() => import("./pages/Billing"));
 const Credit = lazy(() => import("./pages/Credit"));
 const Operations = lazy(() => import("./pages/Operations"));
+const Admin = lazy(() => import("./pages/Admin"));
+const Kitchen = lazy(() => import("./pages/Kitchen"));
+const Bar = lazy(() => import("./pages/Bar"));
+type NavItem = { to: string; label: string; icon: string; tab?: string };
 
 function Shell({ children }: { children: React.ReactNode }) {
   const { fullName, role, logout } = useAuth();
   const { language, setLanguage, t } = useLanguage();
   const location = useLocation();
-  const [logoAvailable, setLogoAvailable] = useState(true);
+  const currentTab = new URLSearchParams(location.search).get("tab") || "";
 
-  const nav = [
-    ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/dashboard", label: t("Dashboard") }] : []),
-    { to: "/tables", label: t("Tables / POS") },
-    ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/billing", label: t("Billing") }] : []),
-    ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/credit", label: t("Credit") }] : []),
-    ...(["admin", "manager"].includes(role || "") ? [{ to: "/operations", label: t("Restaurant Operations") }] : []),
+  const isManager = role === "admin" || role === "manager";
+  const workspace: NavItem[] = [
+    ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/dashboard", label: t("Dashboard"), icon: "▦" }] : []),
+    { to: "/tables", label: t("Tables & POS"), icon: "⌂" },
+    ...(["admin", "manager", "cashier"].includes(role || "") ? [
+      { to: "/billing", label: t("Billing & Orders"), icon: "▤" },
+      { to: "/credit", label: t("Credit"), icon: "◉" },
+    ] : []),
+    ...(["admin", "manager", "kitchen"].includes(role || "") ? [{ to: "/kitchen", label: t("Kitchen"), icon: "♨" }] : []),
+    ...(["admin", "manager", "bar"].includes(role || "") ? [{ to: "/bar", label: t("Bar"), icon: "◌" }] : []),
   ];
+  const management: NavItem[] = isManager ? [
+    { to: "/admin", label: role === "admin" ? t("Master Panel") : t("Menu & Customers"), icon: "♧" },
+    { to: "/operations?tab=inventory", label: t("Inventory & Stock"), icon: "▣", tab: "inventory" },
+    { to: "/operations?tab=expenses", label: t("Expenses"), icon: "↗", tab: "expenses" },
+    { to: "/operations?tab=cash", label: t("Cash Drawer"), icon: "◷", tab: "cash" },
+    { to: "/operations?tab=payroll", label: t("Payroll"), icon: "♙", tab: "payroll" },
+    { to: "/operations?tab=reservations", label: t("Reservations"), icon: "▧", tab: "reservations" },
+    { to: "/operations?tab=controls", label: t("Control Center"), icon: "⚙", tab: "controls" },
+  ] : [];
+  const administration: NavItem[] = role === "admin" ? [
+    { to: "/operations?tab=staff", label: t("Staff Attendance"), icon: "♟", tab: "staff" },
+    { to: "/operations?tab=reports", label: t("Reports & Activity"), icon: "☷", tab: "reports" },
+  ] : [];
+  const groups = [
+    { label: t("Workspace"), items: workspace },
+    ...(management.length ? [{ label: t("Management"), items: management }] : []),
+    ...(administration.length ? [{ label: t("Administration"), items: administration }] : []),
+  ];
+  const activeItem = groups.flatMap(group => group.items).find(item =>
+    item.to.split("?")[0] === location.pathname &&
+    (item.tab ? item.tab === currentTab : !item.tab || !currentTab)
+  );
+  const pageTitle = activeItem?.label || (location.pathname === "/admin" ? t("Master Panel") : t("Royal Skye"));
+  const initials = (fullName || "RS").split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join("").toUpperCase() || "RS";
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-[#f5f6f8]">
-      <aside className="w-full md:w-60 md:min-h-screen bg-brand-dark text-white flex flex-col p-4 md:p-5 shadow-xl md:sticky md:top-0 md:self-start">
-        <div className="flex items-center gap-2 font-semibold mb-1">
-          {logoAvailable && <img src="/images/logo.png" alt="" className="w-8 h-8 object-contain rounded-full" onError={() => setLogoAvailable(false)} />}
-          <span>Royal Skye Birds</span>
+    <div className="min-h-screen bg-[#f6f4f1] text-[#211d1b] md:grid md:grid-cols-[238px_minmax(0,1fr)]">
+      <aside className="flex flex-col bg-[#211e1d] px-4 py-4 text-[#f7f3ef] shadow-xl md:sticky md:top-0 md:h-screen md:px-4 md:py-6">
+        <div className="flex items-center gap-3 px-2 pb-4 md:pb-7">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#b78a54] text-sm font-extrabold tracking-tight text-[#211d1b]">RS</div>
+          <div className="min-w-0"><p className="text-sm font-extrabold tracking-[0.12em]">ROYAL SKYE</p><p className="text-[9px] tracking-[0.19em] text-[#bdb4ae]">RESTAURANT & BAR</p></div>
         </div>
-        <div className="text-xs text-white/60 mb-4 md:mb-7">{fullName} · <span className="capitalize">{role}</span></div>
-        <nav className="flex flex-row md:flex-col gap-1 overflow-x-auto md:overflow-visible flex-1">
-          {nav.map((n) => (
-            <Link
-              key={n.to}
-              to={n.to}
-              className={`shrink-0 px-3 py-2.5 rounded-xl text-sm transition-colors ${
-                location.pathname === n.to ? "bg-white/10" : "hover:bg-white/5"
-              }`}
-            >
-              {n.label}
-            </Link>
-          ))}
-        </nav>
-        <button onClick={logout} className="mt-3 md:mt-6 shrink-0 rounded-xl border border-white/15 px-3 py-2.5 text-sm text-white/75 hover:bg-white/10 hover:text-white text-left">
-          {t("Log out")}
-        </button>
+        <div className="flex gap-5 overflow-x-auto pb-2 md:flex-col md:gap-4 md:overflow-visible md:pb-0">
+          {groups.map(group => <section key={group.label} className="min-w-max md:min-w-0">
+            <p className="mb-2 px-2 text-[9px] font-bold uppercase tracking-[0.18em] text-[#968b84]">{group.label}</p>
+            <nav className="flex gap-1 md:flex-col">
+              {group.items.map(item => {
+                const active = item.to.split("?")[0] === location.pathname &&
+                  (item.tab ? item.tab === currentTab : !currentTab);
+                return <Link key={item.to} to={item.to} className={`flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[12px] transition-colors ${active ? "bg-[#39312e] text-white ring-1 ring-[#b78a54]/20" : "text-[#d5cec8] hover:bg-[#302a27] hover:text-white"}`}>
+                  <span className="w-4 text-center text-sm text-[#c6a77e]">{item.icon}</span><span>{item.label}</span>
+                </Link>;
+              })}
+            </nav>
+          </section>)}
+        </div>
+        <div className="mt-4 flex items-center justify-between gap-3 border-t border-[#403936] px-2 pt-4 md:mt-auto">
+          <div className="min-w-0"><p className="truncate text-xs font-semibold text-white">{fullName}</p><p className="text-[10px] capitalize text-[#a99f98]">{role}</p></div>
+          <button onClick={logout} className="shrink-0 rounded-lg border border-white/15 px-3 py-2 text-[11px] text-white/75 hover:bg-white/10 hover:text-white">{t("Log out")}</button>
+        </div>
+        <p className="hidden px-2 pt-4 text-[9px] tracking-[0.12em] text-[#80756e] md:block">ROYAL SKYE · OPERATIONS</p>
       </aside>
-      <main className="relative min-w-0 flex-1 p-4 md:p-7 overflow-hidden flex flex-col">
-        {logoAvailable && <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center"><img src="/images/logo.png" alt="" className="max-w-[42%] max-h-[42%] object-contain rounded-full opacity-[0.035]" onError={() => setLogoAvailable(false)} /></div>}
-        <div className="relative z-10 flex-1 w-full"><div className="flex justify-end mb-4"><label className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm shadow-sm"><span className="text-neutral-500">{t("Language")}</span><select aria-label="Select language" className="bg-transparent font-medium outline-none" value={language} onChange={(event) => setLanguage(event.target.value as "en" | "ne")}><option value="en">English</option><option value="ne">नेपाली</option></select></label></div>{children}</div>
-        <footer className="relative z-10 text-center text-[11px] tracking-[0.18em] text-neutral-400 pt-8">ROYAL SKYE · DEVELOPED BY RIJAN ADHIKARI</footer>
+
+      <main className="min-w-0 px-4 py-5 md:px-7 md:py-7 xl:px-9">
+        <div className="mx-auto w-full max-w-[1500px]">
+          <header className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-[#e9e4df] pb-4">
+            <div><p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-[#817872]">ROYAL SKYE / {pageTitle.toUpperCase()}</p><p className="mt-1 text-sm font-semibold text-[#817872]">{t("Restaurant management workspace")}</p></div>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 rounded-lg border border-[#e9e4df] bg-white px-3 py-2 text-xs shadow-sm"><span className="text-[#817872]">{t("Language")}</span><select aria-label="Select language" className="bg-transparent font-semibold outline-none" value={language} onChange={(event) => setLanguage(event.target.value as "en" | "ne")}><option value="en">English</option><option value="ne">नेपाली</option></select></label>
+              <div className="grid h-9 w-9 place-items-center rounded-full bg-[#e8d9ca] text-xs font-bold text-[#5f4631]">{initials}</div>
+              <div className="hidden sm:block"><p className="max-w-36 truncate text-xs font-semibold">{fullName}</p><p className="text-[10px] capitalize text-[#817872]">{role}</p></div>
+            </div>
+          </header>
+          <div className="min-h-[70vh]">{children}</div>
+          <footer className="pt-8 text-center text-[9px] tracking-[0.16em] text-[#a49a92]">ROYAL SKYE · DEVELOPED BY RIJAN ADHIKARI</footer>
+        </div>
       </main>
     </div>
   );
@@ -102,6 +146,30 @@ export default function App() {
         element={
           <ProtectedRoute allowedRoles={["admin", "manager", "cashier"]}>
             <Shell><Credit /></Shell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "manager"]}>
+            <Shell><Admin /></Shell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/kitchen"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "manager", "kitchen"]}>
+            <Shell><Kitchen /></Shell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/bar"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "manager", "bar"]}>
+            <Shell><Bar /></Shell>
           </ProtectedRoute>
         }
       />

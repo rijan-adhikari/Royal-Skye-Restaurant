@@ -480,8 +480,17 @@ def _ensure_payroll_payments_table(db: Session):
     db.commit()
 
 
+@router.get("/staff/payroll/staff")
+def list_payroll_staff(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    rows = db.query(models.User).filter(
+        models.User.is_active.is_(True),
+        models.User.role.in_([models.RoleName.waiter, models.RoleName.cashier, models.RoleName.kitchen, models.RoleName.bar]),
+    ).order_by(models.User.full_name).all()
+    return [{"id": row.id, "full_name": row.full_name, "username": row.username, "role": row.role.value} for row in rows]
+
+
 @router.get("/staff/payroll")
-def list_payroll(db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
+def list_payroll(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
     _ensure_payroll_payments_table(db)
     rows = db.execute(text("""SELECT p.*,u.full_name,
         COALESCE(pay.total_paid, CASE WHEN p.paid_at IS NOT NULL THEN p.gross_pay-p.deductions ELSE 0 END) total_paid,
@@ -500,9 +509,15 @@ def list_payroll(db: Session = Depends(get_db), user=Depends(require_roles(*ADMI
 
 
 @router.post("/staff/payroll")
-def create_payroll(payload: PayrollCreate, db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
+def create_payroll(payload: PayrollCreate, db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
     if payload.period_end < payload.period_start or payload.deductions > payload.gross_pay:
         raise HTTPException(422, "Invalid payroll period or deductions")
+    staff_member = db.query(models.User).filter(
+        models.User.id == payload.user_id, models.User.is_active.is_(True),
+        models.User.role.in_([models.RoleName.waiter, models.RoleName.cashier, models.RoleName.kitchen, models.RoleName.bar]),
+    ).first()
+    if not staff_member:
+        raise HTTPException(404, "Active staff member not found")
     row = db.execute(text("""INSERT INTO payroll_entries(user_id,period_start,period_end,gross_pay,deductions,notes)
         VALUES(:user,:start,:end,:gross,:deductions,:notes) RETURNING *"""),
         {"user": payload.user_id, "start": payload.period_start, "end": payload.period_end,
@@ -513,7 +528,7 @@ def create_payroll(payload: PayrollCreate, db: Session = Depends(get_db), user=D
 
 @router.post("/staff/payroll/{payroll_id}/cashout")
 def cashout_payroll(payroll_id: str, payload: PayrollCashout, db: Session = Depends(get_db),
-                    user=Depends(require_roles(*ADMIN))):
+                    user=Depends(require_roles(*MANAGERS))):
     _ensure_payroll_payments_table(db)
     payroll = db.execute(text("SELECT * FROM payroll_entries WHERE id=:id FOR UPDATE"), {"id": payroll_id}).mappings().first()
     if not payroll:
@@ -536,7 +551,7 @@ def cashout_payroll(payroll_id: str, payload: PayrollCashout, db: Session = Depe
 
 
 @router.delete("/staff/payroll/{payroll_id}")
-def delete_payroll(payroll_id: str, db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
+def delete_payroll(payroll_id: str, db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
     _ensure_payroll_payments_table(db)
     exists = db.execute(text("SELECT id FROM payroll_entries WHERE id=:id FOR UPDATE"), {"id": payroll_id}).first()
     if not exists:
@@ -550,7 +565,7 @@ def delete_payroll(payroll_id: str, db: Session = Depends(get_db), user=Depends(
 
 
 @router.post("/staff/payroll/{payroll_id}/pay")
-def mark_payroll_paid(payroll_id: str, db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
+def mark_payroll_paid(payroll_id: str, db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
     _ensure_payroll_payments_table(db)
     payroll = db.execute(text("SELECT * FROM payroll_entries WHERE id=:id FOR UPDATE"), {"id": payroll_id}).mappings().first()
     if not payroll:
