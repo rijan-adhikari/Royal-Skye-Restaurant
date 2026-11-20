@@ -19,7 +19,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const roleTabs = managerView ? tabs.filter((item) => ["cash", "service", "loyalty"].includes(item.id)) : tabs;
   const availableTabs = visibleTabs ?? roleTabs.map((item) => item.id);
   const [tab, setTab] = useState<Tab>(initialTab && availableTabs.includes(initialTab as Tab) ? initialTab as Tab : (availableTabs[0] ?? "cash"));
-  const [data, setData] = useState<any>({ shifts: [], refunds: [], bills: [], suppliers: [], inventory: [], ledger: [], supplierBalances: [], loyalty: [], serviceOrders: [], audit: [] });
+  const [data, setData] = useState<any>({ shifts: [], refunds: [], bills: [], suppliers: [], inventory: [], ledger: [], supplierBalances: [], loyalty: [], serviceOrders: [], audit: [], salesSummary: null });
   const [shift, setShift] = useState<any>(null);
   const [tax, setTax] = useState<any>({ tax_enabled: true, tax_percent: "14", service_charge_enabled: false, service_charge_percent: "0" });
   const [loyaltySettings, setLoyaltySettings] = useState<any>({ enabled: true, spend_per_point: "100", point_value: "1" });
@@ -44,7 +44,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const load = async () => {
     const requests = [
       ["current", "/api/admin/cash-shifts/current"], ["shifts", "/api/admin/cash-shifts"],
-      ...(!managerView ? ([["sales", "/api/admin/sales"]] as [string, string][]) : []),
+      ...(!managerView ? ([["sales", "/api/admin/sales"], ["salesSummary", "/api/dashboard/summary"]] as [string, string][]) : []),
       ["suppliers", "/api/operations/suppliers"], ["inventory", "/api/operations/inventory"], ["ledger", "/api/admin/suppliers/ledger"], ["supplierBalances", "/api/admin/suppliers/balances"],
       ["serviceOrders", "/api/admin/service-orders"],
       ["loyalty", "/api/admin/loyalty/accounts"], ["loyaltySettings", "/api/admin/loyalty/settings"],
@@ -303,6 +303,10 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     </div>}
 
     {tab === "sales" && <section className={panel}>
+      <div className="mb-5 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-[#e8dfd6] bg-[#faf7f3] p-4"><p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-[#92775e]">Monthly sales · current month</p><p className="mt-2 text-2xl font-extrabold tracking-tight text-[#3c3029]">{money(data.salesSummary?.monthly_sales)}</p></div>
+        <div className="rounded-xl border border-[#e8dfd6] bg-[#faf7f3] p-4"><p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-[#92775e]">Yearly sales · current year</p><p className="mt-2 text-2xl font-extrabold tracking-tight text-[#3c3029]">{money(data.salesSummary?.yearly_sales)}</p></div>
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-semibold text-lg">Manage individual sales</h2><p className="text-sm text-neutral-500">Void a sale to retain its audit record, or permanently delete its bill and order. Cash-drawer entries remain for reconciliation; record a refund separately if money was returned.</p></div><button className="rounded-lg border px-3 py-2 text-sm" onClick={() => load().catch(() => setError("Could not refresh sales."))}>Refresh</button></div>
       <div className="mt-4 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Bill / customer</th><th>Business date</th><th>Created</th><th>Table / service</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody>
         {(data.sales || []).map((s: any) => <tr key={s.id} className="border-b align-top"><td className="py-2"><span className="font-semibold">{s.bill_number}</span><p className="text-xs text-neutral-500">{s.customer_name}</p></td><td>{s.business_date}</td><td className="whitespace-nowrap">{new Date(s.created_at).toLocaleString()}</td><td>{s.table_name}</td><td>{money(s.grand_total)}</td><td><span className={s.sale_status === "voided" ? "rounded-full bg-amber-100 px-2 py-1 text-xs text-amber-800" : "rounded-full bg-emerald-100 px-2 py-1 text-xs text-emerald-800"}>{s.sale_status}{s.void_reason ? <span className="block max-w-40 text-xs">{s.void_reason}</span> : null}</span></td><td><div className="flex flex-wrap gap-2">{s.sale_status === "active" && <button disabled={busy} onClick={() => voidSale(s)} className="rounded-lg border border-amber-500 px-2 py-1 text-xs font-semibold text-amber-700">Void</button>}<button disabled={busy} onClick={() => permanentlyDeleteSale(s)} className="rounded-lg bg-red-700 px-2 py-1 text-xs font-semibold text-white">Permanently delete</button></div></td></tr>)}
