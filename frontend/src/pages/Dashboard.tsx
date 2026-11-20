@@ -79,18 +79,17 @@ export default function Dashboard() {
     }
   };
 
-  const downloadDashboardPdf = async () => {
+  const downloadReport = async (endpoint: string, filename: string, fallback: string) => {
     try {
-      const response = await api.get(`/api/dashboard/summary.pdf?report_date=${reportDate}`, { responseType: "blob" });
+      const response = await api.get(endpoint, { responseType: "blob" });
       const url = URL.createObjectURL(response.data);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `dashboard-${reportDate}.pdf`;
-      link.click();
-      URL.revokeObjectURL(url);
-    } catch (e: any) {
-      setError(e?.response?.data?.detail || "Could not download dashboard PDF.");
-    }
+      const link = document.createElement("a"); link.href = url; link.download = filename; link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch (e: any) { setError(e?.response?.data?.detail || fallback); }
+  };
+
+  const downloadDashboardPdf = async () => {
+    await downloadReport(`/api/dashboard/summary.pdf?report_date=${reportDate}`, `royal-skye-management-report-${reportDate}.pdf`, "Could not download dashboard PDF.");
   };
 
   const cards = [
@@ -121,7 +120,8 @@ export default function Dashboard() {
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <label className="text-[10px] font-bold uppercase tracking-[.14em] text-[#c7b8ac]">{t("Report date")}<input aria-label={t("Report date")} type="date" className="mt-2 block rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white [color-scheme:dark]" value={reportDate} onChange={(e) => setReportDate(e.target.value)} /></label>
-            {role !== "manager" && <button type="button" onClick={downloadDashboardPdf} className="rounded-xl border border-[#d7b17b]/40 bg-[#d7b17b] px-4 py-[13px] text-xs font-extrabold text-[#2b211d] shadow-lg shadow-black/10 transition hover:bg-[#e5c493]">{t("Download dashboard PDF")} <span className="ml-1">↗</span></button>}
+            {role !== "manager" && <button type="button" onClick={downloadDashboardPdf} className="rounded-xl border border-[#d7b17b]/40 bg-[#d7b17b] px-4 py-[13px] text-xs font-extrabold text-[#2b211d] shadow-lg shadow-black/10 transition hover:bg-[#e5c493]">{t("Premium PDF")} <span className="ml-1">↗</span></button>}
+            {role !== "manager" && <button type="button" onClick={() => downloadReport(`/api/dashboard/summary.xlsx?report_date=${reportDate}`, `royal-skye-financial-report-${reportDate}.xlsx`, "Could not download Excel report.")} className="rounded-xl border border-white/20 bg-white/10 px-4 py-[13px] text-xs font-extrabold text-white hover:bg-white/15">Excel workbook ↗</button>}
 <button type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} className="rounded-xl border border-white/20 bg-white/10 px-4 py-[13px] text-xs font-extrabold text-white hover:bg-white/15">{theme === "dark" ? "☀ White theme" : "☾ Dark theme"}</button>
           </div>
         </div>
@@ -157,7 +157,7 @@ export default function Dashboard() {
           <div className="rounded-2xl border border-[#e9dfd5] bg-white p-5 shadow-[0_5px_18px_rgba(45,30,22,.035)]">
             <div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">{t("Outstanding credit")}</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#f5eee5] text-[#8d6542]">◷</span></div>
             <p className="mt-4 text-[25px] font-extrabold tracking-[-.045em] text-[#30251f]">{money(summary.outstanding)}</p><p className="mt-2 text-[10px] font-semibold text-[#a18d7c]">{t("Pending customer payments")}</p>
-          </div>
+          <a href={api.defaults.baseURL + "/api/dashboard/operations-guide.pdf"} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-xl border border-[#e9dfd5] bg-white p-3.5 transition hover:border-[#c6a77f] hover:shadow-sm"><span className="grid h-9 w-9 place-items-center rounded-lg bg-[#f1eee8] text-[#80664c]">▤</span><span className="min-w-0 flex-1"><strong className="block text-xs font-extrabold text-[#43352c]">Website Operational Guide</strong><small className="mt-0.5 block text-[10px] text-[#9b8b7f]">Download the step-by-step website manual (PDF)</small></span><span className="text-[#b59a7d]">↓</span></a></div>
         </div>
       </section>
 

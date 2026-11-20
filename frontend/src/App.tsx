@@ -11,7 +11,7 @@ const Billing = lazy(() => import("./pages/Billing"));
 const Credit = lazy(() => import("./pages/Credit"));
 const Operations = lazy(() => import("./pages/Operations"));
 const Admin = lazy(() => import("./pages/Admin"));
-type NavItem = { to: string; label: string; icon: string; tab?: string };
+type NavItem = { to: string; label: string; icon: string; tab?: string; panel?: string };
 
 const iconPaths: Record<string, string> = {
   overview: "M3 3h7v7H3z M14 3h7v5h-7z M14 12h7v9h-7z M3 14h7v7H3z",
@@ -46,7 +46,9 @@ function Shell({ children }: { children: React.ReactNode }) {
     ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/billing", label: t("Billing & Orders"), icon: "billing" }] : []),
   ];
   const management: NavItem[] = isManager ? [
-    { to: "/admin", label: t("Menu & Customers"), icon: "master" },
+    { to: "/admin?panel=menu", label: t("Menu Management"), icon: "master", panel: "menu" },
+    { to: "/admin?panel=customers", label: t("Customer Management"), icon: "master", panel: "customers" },
+    ...(role === "admin" ? [{ to: "/admin?panel=staff", label: t("Staff Accounts"), icon: "staff", panel: "staff" }] : []),
     { to: "/operations?tab=inventory", label: t("Inventory"), icon: "inventory", tab: "inventory" },
     { to: "/operations?tab=expenses", label: t("Expenses"), icon: "expenses", tab: "expenses" },
     { to: "/operations?tab=controls", label: t("Control Center"), icon: "controls", tab: "controls" },
@@ -58,9 +60,9 @@ function Shell({ children }: { children: React.ReactNode }) {
   ];
   const activeItem = groups.flatMap(group => group.items).find(item =>
     item.to.split("?")[0] === location.pathname &&
-    (item.tab ? item.tab === currentTab : !currentTab)
+    (item.panel ? item.panel === (new URLSearchParams(location.search).get("panel") || "menu") : item.tab ? item.tab === currentTab : !currentTab)
   );
-  const pageTitle = activeItem?.label || (location.pathname === "/admin" ? t("Master Panel") : t("Royal Skye"));
+  const pageTitle = activeItem?.label || (location.pathname === "/admin" ? t("Management") : t("Royal Skye"));
   const initials = (fullName || "RS").split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join("").toUpperCase() || "RS";
 
   return (

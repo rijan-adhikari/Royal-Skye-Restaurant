@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
+import { useSearchParams } from "react-router-dom";
 
 interface Category { id: string; name: string; }
 interface MenuItem { id: string; category_id: string; name: string; description: string; price: string; destination: string; is_available: boolean; }
@@ -29,6 +30,9 @@ const staffRoles = ["admin", "manager", "waiter", "cashier"] as const;
 export default function Admin({ embedded = false }: { embedded?: boolean }) {
   const { t } = useLanguage();
   const { role } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedPanel = searchParams.get("panel") || "menu";
+  const panel = requestedPanel === "staff" && role !== "admin" ? "menu" : requestedPanel;
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [menuEditingId, setMenuEditingId] = useState<string | null>(null);
@@ -241,13 +245,19 @@ export default function Admin({ embedded = false }: { embedded?: boolean }) {
   return (
     <div className="max-w-6xl flex flex-col space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">{t(embedded ? "Menu & customer management" : "Menu & customer management")}</h1>
-        <p className="text-sm text-neutral-500 mt-1">{t("Manage categories, staff, and customers.")}</p>
+        <h1 className="text-2xl font-semibold">{panel === "menu" ? "Menu Management" : panel === "customers" ? "Customer Management" : "Staff Accounts"}</h1>
+        <p className="text-sm text-neutral-500 mt-1">{panel === "menu" ? "Organize categories, dishes, prices and availability." : panel === "customers" ? "Customer records, visit history and spending." : "Create staff logins, assign roles and manage account access."}</p>
+      </div>
+      <nav className="flex flex-wrap gap-2 rounded-2xl border border-[#e8dfd6] bg-white p-2 shadow-sm">
+        <button type="button" onClick={() => setSearchParams({panel:"menu"})} className={"rounded-xl px-4 py-2.5 text-sm font-semibold "+(panel==="menu"?"bg-[#342720] text-white":"text-[#6f6258] hover:bg-[#f7f2ec]")}>Menu Management</button>
+        <button type="button" onClick={() => setSearchParams({panel:"customers"})} className={"rounded-xl px-4 py-2.5 text-sm font-semibold "+(panel==="customers"?"bg-[#342720] text-white":"text-[#6f6258] hover:bg-[#f7f2ec]")}>Customer Management</button>
+        {role==="admin" && <button type="button" onClick={() => setSearchParams({panel:"staff"})} className={"rounded-xl px-4 py-2.5 text-sm font-semibold "+(panel==="staff"?"bg-[#342720] text-white":"text-[#6f6258] hover:bg-[#f7f2ec]")}>Staff Accounts</button>}
+      </nav>
       </div>
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
       </div>
 
-      {role === "admin" && (
+      {role === "admin" && panel === "staff" && (
       <section className="bg-white rounded-xl shadow p-5">
         <h2 className="font-semibold mb-4">{t("Staff accounts")}</h2>
         <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
@@ -271,6 +281,7 @@ export default function Admin({ embedded = false }: { embedded?: boolean }) {
       </section>
       )}
 
+      {panel === "menu" && <>
       <section className="bg-white rounded-xl shadow p-5">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
@@ -321,6 +332,8 @@ export default function Admin({ embedded = false }: { embedded?: boolean }) {
         <div className="mt-2 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">{t("Food")}</th><th>{t("Category")}</th><th>{t("Price")}</th><th>{t("Status")}</th><th>{t("Actions")}</th></tr></thead><tbody>{visibleMenuItems.map((item) => <tr key={item.id} className="border-b last:border-0"><td className="py-2"><div className="font-medium">{item.name}</div>{item.description && <div className="text-xs text-neutral-500">{item.description}</div>}</td><td>{categories.find((category) => category.id === item.category_id)?.name || "—"}</td><td>Rs. {Number(item.price).toFixed(2)}</td><td>{item.is_available ? t("Available") : t("Unavailable")}</td><td><div className="flex gap-3"><button type="button" onClick={() => editMenuItem(item)} className="text-brand">{t("Edit")}</button>{role === "admin" && <button type="button" onClick={() => deleteMenuItem(item)} className="text-red-700">{t("Delete")}</button>}</div></td></tr>)}</tbody></table>{visibleMenuItems.length === 0 && <p className="py-4 text-sm text-neutral-500">{menuSearch || menuCategoryFilter ? t("No food items match your search.") : showUnavailableMenuItems ? t("No food items yet. Add your first dish above.") : t("No available dishes. Use Show unavailable items to view archived dishes.")}</p>}</div>
       </section>
 
+      </>}
+      {panel === "customers" && <>
       <section className="bg-white rounded-xl shadow p-5">
         <h2 className="font-semibold mb-3">{t("Customer records")}</h2>
         <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">{t("Name")}</th><th>{t("Phone")}</th><th>{t("Actions")}</th></tr></thead><tbody>{customers.map((customer) => <tr key={customer.id} className="border-b last:border-0"><td className="py-2">{customer.name}</td><td>{customer.phone || "—"}</td><td>{role === "admin" && <button type="button" onClick={() => deleteCustomer(customer)} className="text-red-700">{t("Delete")}</button>}</td></tr>)}</tbody></table>{customers.length === 0 && <p className="mt-3 text-sm text-neutral-500">{t("No customer records.")}</p>}</div>
@@ -350,6 +363,7 @@ export default function Admin({ embedded = false }: { embedded?: boolean }) {
           {history.length === 0 && <p className="text-sm text-neutral-500">Choose filters and click Search history to view customer visits.</p>}
         </div>
       </section>
+      </>}
     </div>
   );
 }
