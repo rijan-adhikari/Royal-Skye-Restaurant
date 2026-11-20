@@ -1206,3 +1206,23 @@ html[data-theme="dark"] main .billing-page details > summary {
   color:#c8e8dd!important;
 }
 html[data-theme="dark"] main .billing-page details > summary::marker {color:#65e6c2;}
+
+
+/* Match the actual two-column Billing DOM: checkout cards sit inside the grid's left column. */
+html[data-theme="dark"] main .billing-page > div > div > section,
+html[data-theme="dark"] main .billing-page > div > aside > section {
+  background:linear-gradient(145deg,#101c20 0%,#0c171b 100%)!important;
+  border-color:#294744!important;
+  color:#dcece6!important;
+}
+html[data-theme="dark"] main .billing-page > div > div > section > div,
+html[data-theme="dark"] main .billing-page > div > div > section details,
+html[data-theme="dark"] main .billing-page > div > div > section details > div {
+  border-color:#294744!important;
+}
+html[data-theme="dark"] main .billing-page > div > div > section details {
+  background:#111f23!important;
+}
+html[data-theme="dark"] main .billing-page > div > div > section details summary {
+  color:#c8e8dd!important;
+}
