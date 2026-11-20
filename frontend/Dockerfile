@@ -12,8 +12,8 @@ ENV VITE_WS_BASE_URL=${VITE_WS_BASE_URL}
 RUN npm run build
 
 FROM nginx:1.27-alpine AS production
-ENV API_PROXY_TARGET=http://127.0.0.1:8000
-ENV NGINX_ENVSUBST_FILTER=^API_PROXY_TARGET$
+ENV API_PROXY_HOSTPORT=127.0.0.1:8000
+ENV NGINX_ENVSUBST_FILTER=^API_PROXY_HOSTPORT$
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 

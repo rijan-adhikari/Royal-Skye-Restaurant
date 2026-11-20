@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - "feature/**"
+      - "staging/pos-rebuild"
   pull_request:
     branches:
       - main

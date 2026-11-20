@@ -16,7 +16,7 @@ const money = (v: any) => "Rs. " + Number(v || 0).toLocaleString("en-IN", { mini
 
 export default function AdminControl({ visibleTabs, embedded = false, managerView = false }: AdminControlProps) {
   // Managers can use day-to-day operations and loyalty controls, but destructive backup/restore and audit access remain admin-only.
-  const roleTabs = managerView ? tabs.filter((item) => ["cash", "service", "loyalty", "settings"].includes(item.id)) : tabs.filter((item) => !["cash", "suppliers"].includes(item.id));
+  const roleTabs = managerView ? tabs.filter((item) => ["cash", "service", "loyalty"].includes(item.id)) : tabs.filter((item) => !["cash", "suppliers"].includes(item.id));
   const availableTabs = visibleTabs ?? roleTabs.map((item) => item.id);
   const [tab, setTab] = useState<Tab>(availableTabs[0] ?? "cash");
   const [data, setData] = useState<any>({ shifts: [], refunds: [], bills: [], suppliers: [], inventory: [], ledger: [], supplierBalances: [], loyalty: [], serviceOrders: [], audit: [] });
@@ -48,7 +48,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
       ["suppliers", "/api/operations/suppliers"], ["inventory", "/api/operations/inventory"], ["ledger", "/api/admin/suppliers/ledger"], ["supplierBalances", "/api/admin/suppliers/balances"],
       ["serviceOrders", "/api/admin/service-orders"],
       ["loyalty", "/api/admin/loyalty/accounts"], ["loyaltySettings", "/api/admin/loyalty/settings"],
-      ...(!managerView ? ([["audit", "/api/admin/audit"], ["tax", "/api/settings/tax"], ["restaurant", "/api/settings/restaurant"]] as [string, string][]) : [["tax", "/api/settings/tax"], ["restaurant", "/api/settings/restaurant"]] as [string, string][]),
+      ...(!managerView ? ([["audit", "/api/admin/audit"], ["tax", "/api/settings/tax"], ["restaurant", "/api/settings/restaurant"]] as [string, string][]) : []),
     ] as const;
     const results = await Promise.allSettled(requests.map(([, url]) => api.get(url)));
     const next: any = {};
