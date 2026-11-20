@@ -8,6 +8,8 @@ interface Category { id: string; name: string; }
 interface MenuItem { id: string; category_id: string; name: string; description: string; price: string; destination: string; is_available: boolean; }
 interface Staff { id: string; username: string; full_name: string; role: string; is_active: boolean; }
 interface Customer { id: string; name: string; phone?: string | null; }
+interface CreditBalance { id: string; bill_id: string; original_amount: string; remaining_amount: string; created_at: string; }
+interface CreditCustomer { customer_id: string; name: string; phone?: string | null; total_due: string; balances: CreditBalance[]; }
 interface CustomerHistory {
   customer_id: string;
   name: string;
@@ -43,6 +45,10 @@ export default function Admin({ embedded = false, staffOnly = false }: { embedde
   const [menuForm, setMenuForm] = useState({ category_id: "", name: "", description: "", price: "", destination: "kitchen", is_available: true });
   const [staff, setStaff] = useState<Staff[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [creditCustomers, setCreditCustomers] = useState<CreditCustomer[]>([]);
+  const [creditSearch, setCreditSearch] = useState("");
+  const [repayAmounts, setRepayAmounts] = useState<Record<string, string>>({});
+  const [creditMessage, setCreditMessage] = useState("");
   const [history, setHistory] = useState<CustomerHistory[]>([]);
   const [historyCustomerId, setHistoryCustomerId] = useState("");
   const [historyFrom, setHistoryFrom] = useState("");
@@ -88,6 +94,30 @@ export default function Admin({ embedded = false, staffOnly = false }: { embedde
   };
 
   const formatDateTime = (value: string) => new Date(value).toLocaleString();
+
+  const loadCredit = async () => {
+    const response = await api.get(`/api/credit?search=${encodeURIComponent(creditSearch)}`);
+    setCreditCustomers(response.data.filter((customer: CreditCustomer) => Number(customer.total_due) > 0));
+  };
+
+  const repayCredit = async (balanceId: string) => {
+    const amount = Number(repayAmounts[balanceId]);
+    if (!Number.isFinite(amount) || amount <= 0) { setError("Enter a valid repayment amount."); return; }
+    setError("");
+    setCreditMessage("");
+    try {
+      await api.post("/api/outstanding/repay", { customer_balance_id: balanceId, amount });
+      setRepayAmounts((current) => ({ ...current, [balanceId]: "" }));
+      setCreditMessage("Credit repayment recorded successfully.");
+      await loadCredit();
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Could not record credit repayment.");
+    }
+  };
+
+  useEffect(() => {
+    loadCredit().catch(() => setError("Could not load customer credit balances."));
+  }, [creditSearch]);
 
   const addStaff = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -333,6 +363,25 @@ export default function Admin({ embedded = false, staffOnly = false }: { embedde
       <section className="bg-white rounded-xl shadow p-5">
         <h2 className="font-semibold mb-3">{t("Customer records")}</h2>
         <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">{t("Name")}</th><th>{t("Phone")}</th><th>{t("Actions")}</th></tr></thead><tbody>{customers.map((customer) => <tr key={customer.id} className="border-b last:border-0"><td className="py-2">{customer.name}</td><td>{customer.phone || "—"}</td><td>{role === "admin" && <button type="button" onClick={() => deleteCustomer(customer)} className="text-red-700">{t("Delete")}</button>}</td></tr>)}</tbody></table>{customers.length === 0 && <p className="mt-3 text-sm text-neutral-500">{t("No customer records.")}</p>}</div>
+      </section>
+
+      <section className="bg-white rounded-xl shadow p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+          <div><h2 className="font-semibold">Customer credit & outstanding balances</h2><p className="mt-1 text-sm text-neutral-500">Track unpaid bills and record repayments against each customer.</p></div>
+          <div className="rounded-xl bg-[#f8f4ee] px-4 py-2"><p className="text-[10px] font-bold uppercase tracking-wider text-[#8c7561]">Total outstanding</p><p className="text-lg font-extrabold text-[#71352f]">NPR {creditCustomers.reduce((sum, customer) => sum + Number(customer.total_due || 0), 0).toLocaleString("en-NP", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>
+        </div>
+        <input type="search" value={creditSearch} onChange={(e) => setCreditSearch(e.target.value)} placeholder="Search credit customers by name or phone..." className="mb-4 w-full rounded-lg border px-3 py-2 text-sm" />
+        {creditMessage && <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{creditMessage}</p>}
+        <div className="space-y-4">
+          {creditCustomers.map((customer) => <div key={customer.customer_id} className="rounded-xl border border-[#ece4dc] p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><p className="font-semibold">{customer.name}</p><p className="text-xs text-neutral-500">{customer.phone || "No phone number"}</p></div><p className="text-sm font-extrabold text-[#71352f]">Outstanding: NPR {Number(customer.total_due).toLocaleString("en-NP", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>
+            <div className="space-y-3">{customer.balances.map((balance) => <div key={balance.id} className="grid gap-3 border-t border-dashed border-[#e8dfd6] pt-3 md:grid-cols-[minmax(0,1fr)_minmax(220px,.8fr)] md:items-center">
+              <div className="text-sm"><p className="font-semibold">Bill {balance.bill_id}</p><p className="mt-1 text-xs text-neutral-500">{formatDateTime(balance.created_at)}</p><p className="mt-1 text-xs text-neutral-600">Original: NPR {Number(balance.original_amount).toFixed(2)} · Remaining: <strong>NPR {Number(balance.remaining_amount).toFixed(2)}</strong></p></div>
+              <div className="flex gap-2"><input type="number" min="0.01" max={balance.remaining_amount} step="0.01" placeholder="Repayment amount" aria-label={`Repayment amount for bill ${balance.bill_id}`} className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm" value={repayAmounts[balance.id] || ""} onChange={(e) => setRepayAmounts((current) => ({ ...current, [balance.id]: e.target.value }))} /><button type="button" onClick={() => repayCredit(balance.id)} className="shrink-0 rounded-lg bg-[#342923] px-3 py-2 text-xs font-bold text-white">Record payment</button></div>
+            </div>)}</div>
+          </div>)}
+          {creditCustomers.length === 0 && <p className="rounded-lg border border-dashed p-6 text-center text-sm text-neutral-500">No outstanding customer credit found.</p>}
+        </div>
       </section>
 
       <section className="bg-white rounded-xl shadow p-5">
