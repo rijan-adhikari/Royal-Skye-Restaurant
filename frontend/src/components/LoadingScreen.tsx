@@ -27,6 +27,47 @@ export default function LoadingScreen() {
         @keyframes rs-loading-spin {to{transform:rotate(360deg)}}
         @keyframes rs-loading-pulse {0%,100%{opacity:.55;transform:scale(.94)}50%{opacity:1;transform:scale(1.06)}}
         @keyframes rs-loading-progress {0%{transform:translateX(-120%)}100%{transform:translateX(360%)}}
+        /* Astra light loading state: follow the active workspace theme. */
+        html[data-theme="light"] .rs-loading-screen {
+          color:#203a36!important;
+          background:
+            radial-gradient(ellipse at 76% 12%,rgba(35,174,145,.10),transparent 34%),
+            radial-gradient(ellipse at 18% 85%,rgba(190,145,83,.08),transparent 30%),
+            #f5f9f7!important;
+        }
+        html[data-theme="light"] .rs-loading-screen::before {
+          opacity:.42;
+          background-image:linear-gradient(rgba(22,139,120,.055) 1px,transparent 1px),linear-gradient(90deg,rgba(22,139,120,.055) 1px,transparent 1px);
+          mask-image:linear-gradient(to bottom,#000,transparent 92%);
+        }
+        html[data-theme="light"] .rs-loading-screen header {border-color:#dce9e5!important;}
+        html[data-theme="light"] .rs-loading-screen header p:first-child {color:#173d36!important;}
+        html[data-theme="light"] .rs-loading-screen header p:last-child,
+        html[data-theme="light"] .rs-loading-screen .text-\\[\\#78928d\\] {color:#718780!important;}
+        html[data-theme="light"] .rs-loading-screen .text-\\[\\#65e6c2\\] {color:#168b78!important;}
+        html[data-theme="light"] .rs-loading-screen .text-\\[\\#f2b86b\\] {color:#a8793e!important;}
+        html[data-theme="light"] .rs-loading-screen .rs-loading-shimmer {
+          background:linear-gradient(110deg,#edf5f2 0%,#f8fcfa 48%,#edf5f2 100%)!important;
+          border-color:#dce9e5!important;
+        }
+        html[data-theme="light"] .rs-loading-screen .rs-loading-shimmer::after {
+          background:linear-gradient(90deg,transparent,rgba(35,174,145,.18),transparent);
+        }
+        html[data-theme="light"] .rs-loading-screen aside,
+        html[data-theme="light"] .rs-loading-screen main > div,
+        html[data-theme="light"] .rs-loading-screen main section > div {
+          background:rgba(255,255,255,.88)!important;
+          border-color:#dce9e5!important;
+          box-shadow:0 8px 24px rgba(24,74,64,.045);
+        }
+        html[data-theme="light"] .rs-loading-screen .bg-\\[\\#142125\\] {background:#e5efeb!important;}
+        html[data-theme="light"] .rs-loading-screen .rs-loading-progress {
+          background:linear-gradient(90deg,transparent,#168b78,#d2a15e,transparent);
+          box-shadow:0 0 14px rgba(22,139,120,.22);
+        }
+        html[data-theme="light"] .rs-loading-screen .border-\\[\\#65e6c2\\]\\/70 {
+          border-color:#168b78!important;border-top-color:transparent!important;
+        }
         @media(prefers-reduced-motion:reduce){.rs-loading-shimmer::after,.rs-loading-orbit,.rs-loading-core,.rs-loading-progress{animation:none!important}}
       `}</style>
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-[1600px] flex-col">
