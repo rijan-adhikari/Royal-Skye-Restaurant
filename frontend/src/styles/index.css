@@ -556,3 +556,121 @@ img, video, canvas, svg {
     border-color: rgba(101,230,194,.28) !important;
   }
 }
+
+
+/* Astra operations suite: consistent graphite / teal / amber surfaces across core workflows. */
+@media screen {
+  html[data-theme="dark"] .dashboard-page > section:first-child,
+  html[data-theme="dark"] .tables-page > header {
+    background:
+      radial-gradient(circle at 82% 12%, rgba(101,230,194,.13), transparent 32%),
+      linear-gradient(125deg,#0d1b1d 0%,#10191c 55%,#151b1b 100%) !important;
+    border:1px solid rgba(101,230,194,.18);
+    box-shadow:0 22px 60px rgba(0,0,0,.32), inset 0 1px rgba(255,255,255,.035);
+  }
+  html[data-theme="dark"] .dashboard-page > section:first-child [class*="border-white/"] {
+    border-color:rgba(101,230,194,.13)!important;
+  }
+  html[data-theme="dark"] .dashboard-page > section:first-child [class*="text-[#d7b17b]"],
+  html[data-theme="dark"] .tables-page > header [class*="text-[#d7b17b]"] {
+    color:#8cebd0!important;
+  }
+  html[data-theme="dark"] .dashboard-page > section:first-child input,
+  html[data-theme="dark"] .dashboard-page > section:first-child button {
+    border-color:rgba(101,230,194,.22)!important;
+  }
+  html[data-theme="dark"] .dashboard-page > section:first-child button[class*="bg-[#d7b17b]"] {
+    background:#65e6c2!important;color:#07110f!important;
+  }
+  html[data-theme="dark"] .dashboard-page > section:not(:first-child) button,
+  html[data-theme="dark"] .dashboard-page > section:not(:first-child) a,
+  html[data-theme="dark"] .dashboard-page > section:not(:first-child) article,
+  html[data-theme="dark"] .dashboard-page > section:not(:first-child) > div > div {
+    border-color:#294342!important;
+  }
+  html[data-theme="dark"] .dashboard-page > section:not(:first-child) button:hover,
+  html[data-theme="dark"] .dashboard-page > section:not(:first-child) a:hover {
+    border-color:rgba(101,230,194,.48)!important;
+    box-shadow:0 12px 30px rgba(0,0,0,.2),0 0 0 1px rgba(101,230,194,.06);
+  }
+  html[data-theme="dark"] .dashboard-page > section:not(:first-child) [class*="text-[#30251f]"],
+  html[data-theme="dark"] .dashboard-page > section:not(:first-child) [class*="text-[#382d26]"] {
+    color:#e8f2ef!important;
+  }
+
+  html[data-theme="dark"] .pos-page { color:#e8f2ef; }
+  html[data-theme="dark"] .pos-page > div:first-child > div:first-child h1 { color:#e8f2ef!important; }
+  html[data-theme="dark"] .pos-page > div:first-child > div:first-child p { color:#9bb4ad!important; }
+  html[data-theme="dark"] .pos-page > div:first-child > div:first-child p.text-brand { color:#65e6c2!important; }
+  html[data-theme="dark"] .pos-page section,
+  html[data-theme="dark"] .pos-page aside,
+  html[data-theme="dark"] .pos-page [class*="rounded-xl"][class*="border"],
+  html[data-theme="dark"] .pos-page [class*="rounded-2xl"][class*="border"] {
+    border-color:#294342!important;
+  }
+  html[data-theme="dark"] .pos-page [class*="bg-brand"] {
+    background:#176455!important;
+  }
+  html[data-theme="dark"] .pos-page button[class*="bg-brand"]:not(:disabled):hover {
+    background:#1d806c!important;
+  }
+  html[data-theme="dark"] .pos-page button:disabled { opacity:.48; }
+  html[data-theme="dark"] .pos-page input,
+  html[data-theme="dark"] .pos-page select,
+  html[data-theme="dark"] .pos-page textarea {
+    background:#0b1418!important;color:#e8f2ef!important;border-color:#31504c!important;
+  }
+  html[data-theme="dark"] .pos-page [class*="bg-neutral-"] {
+    background:#142125!important;color:#dcebe6!important;
+  }
+  html[data-theme="dark"] .pos-page [class*="text-neutral-"] { color:#9bb4ad!important; }
+  html[data-theme="dark"] .pos-page [class*="text-brand"] { color:#65e6c2!important; }
+  html[data-theme="dark"] .pos-page button:focus-visible,
+  html[data-theme="dark"] .pos-page input:focus-visible { outline:2px solid rgba(101,230,194,.5);outline-offset:2px; }
+
+  html[data-theme="dark"] .tables-page > section:first-of-type button {
+    border-color:#294342!important;
+  }
+  html[data-theme="dark"] .tables-page > section:first-of-type button strong { color:#e8f2ef!important; }
+  html[data-theme="dark"] .tables-page > section:first-of-type button span:not([class*="bg-"]) { color:#9bb4ad!important; }
+  html[data-theme="dark"] .tables-page > section:nth-of-type(2) h2 { color:#e8f2ef!important; }
+  html[data-theme="dark"] .tables-page > section:nth-of-type(2) [class*="border-b"] { border-color:#294342!important; }
+  html[data-theme="dark"] .tables-page > section:nth-of-type(2) [class*="text-[#30251f]"],
+  html[data-theme="dark"] .tables-page > section:nth-of-type(2) [class*="text-[#514238]"] { color:#e8f2ef!important; }
+
+  html[data-theme="dark"] .billing-page > header h1 { color:#e8f2ef!important; }
+  html[data-theme="dark"] .billing-page > header p { color:#9bb4ad!important; }
+  html[data-theme="dark"] .billing-page > header span {
+    background:#142125!important;color:#b5d9cf!important;border-color:#31504c!important;
+  }
+  html[data-theme="dark"] .billing-page section,
+  html[data-theme="dark"] .billing-page aside > section {
+    border-color:#294342!important;
+  }
+  html[data-theme="dark"] .billing-page button[class*="bg-[#342923]"],
+  html[data-theme="dark"] .billing-page button[class*="bg-[#2"] {
+    background:#176455!important;color:#effff9!important;
+  }
+  html[data-theme="dark"] .billing-page button:hover { border-color:rgba(101,230,194,.42)!important; }
+  html[data-theme="dark"] .billing-page [class*="text-[#9b7957]"],
+  html[data-theme="dark"] .billing-page [class*="text-[#8c6b49]"] { color:#f2c98e!important; }
+  html[data-theme="dark"] .billing-page .receipt-print,
+  html[data-theme="dark"] .billing-page .receipt-print * {
+    color:#111!important;border-color:#ddd!important;
+  }
+}
+
+/* Light theme keeps its existing palette; give the same pages consistent spacing and focus cues. */
+.dashboard-page,.pos-page,.tables-page,.billing-page { min-width:0; }
+.dashboard-page button,.pos-page button,.tables-page button,.billing-page button {
+  -webkit-tap-highlight-color:transparent;
+}
+.dashboard-page button:focus-visible,.pos-page button:focus-visible,
+.tables-page button:focus-visible,.billing-page button:focus-visible {
+  outline:2px solid var(--rs-accent);outline-offset:2px;
+}
+@media (max-width:767px) {
+  .dashboard-page,.pos-page,.tables-page,.billing-page { gap:1rem; }
+  .pos-page { grid-template-columns:minmax(0,1fr); }
+  .pos-page > aside { min-width:0; }
+}
