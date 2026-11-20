@@ -45,7 +45,7 @@ services:
         VITE_WS_BASE_URL: ${VITE_WS_BASE_URL:-}
     restart: unless-stopped
     environment:
-      API_PROXY_HOSTPORT: ${API_PROXY_HOSTPORT:-backend:8000}
+      API_PROXY_URL: http://backend:8000
     depends_on:
       backend:
         condition: service_healthy
