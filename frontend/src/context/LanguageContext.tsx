@@ -110,15 +110,12 @@ interface LanguageContextValue {
 const LanguageContext = createContext<LanguageContextValue | undefined>(undefined);
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [language, setLanguageState] = useState<Language>(() => localStorage.getItem("app-language") === "ne" ? "ne" : "en");
-  const setLanguage = (next: Language) => {
-    localStorage.setItem("app-language", next);
-    setLanguageState(next);
-  };
+  const language: Language = "en";
+  const setLanguage = (_next: Language) => {};
   const value = useMemo(() => ({
     language,
     setLanguage,
-    t: (value: string) => language === "ne" ? (translations[value] || value) : value
+    t: (value: string) => value
   }), [language]);
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }

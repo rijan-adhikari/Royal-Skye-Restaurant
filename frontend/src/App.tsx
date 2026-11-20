@@ -35,7 +35,7 @@ function NavGlyph({ name, active }: { name: string; active: boolean }) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   const { fullName, role, logout } = useAuth();
-  const { language, setLanguage, t } = useLanguage();
+  const { t } = useLanguage();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const currentTab = new URLSearchParams(location.search).get("tab") || "";
@@ -110,7 +110,7 @@ function Shell({ children }: { children: React.ReactNode }) {
               <div className="min-w-0"><p className="truncate text-[9px] font-bold uppercase tracking-[.2em] text-[#a08f81]">ROYAL SKYE <span className="px-1 text-[#c7b9ac]">/</span> {pageTitle.toUpperCase()}</p><h1 className="mt-1 truncate text-lg font-extrabold tracking-tight text-[#302722] md:text-xl">{pageTitle}</h1></div>
             </div>
             <div className="flex shrink-0 items-center gap-2 md:gap-3">
-              <label className="flex items-center gap-2 rounded-xl border border-[#e8e1da] bg-white px-3 py-2 text-[11px] font-semibold text-[#82756b] shadow-sm"><span className="hidden sm:inline">{t("Language")}</span><select aria-label="Select language" className="max-w-[74px] bg-transparent font-bold text-[#40352e] outline-none" value={language} onChange={(event) => setLanguage(event.target.value as "en" | "ne")}><option value="en">English</option><option value="ne">नेपाली</option></select></label>
+              
               <div className="hidden h-9 w-px bg-[#e8e1da] sm:block"/>
               <div className="grid h-9 w-9 place-items-center rounded-full border border-[#d9c5ad] bg-[#efe3d5] text-xs font-black text-[#6a4932]">{initials}</div>
               <div className="hidden sm:block"><p className="max-w-36 truncate text-xs font-bold text-[#3c312b]">{fullName}</p><p className="text-[10px] capitalize text-[#95867b]">{role}</p></div>

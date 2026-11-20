@@ -19,7 +19,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const roleTabs = managerView ? tabs.filter((item) => ["cash", "service", "loyalty"].includes(item.id)) : tabs;
   const availableTabs = visibleTabs ?? roleTabs.map((item) => item.id);
   const [tab, setTab] = useState<Tab>(initialTab && availableTabs.includes(initialTab as Tab) ? initialTab as Tab : (availableTabs[0] ?? "cash"));
-  const [data, setData] = useState<any>({ shifts: [], refunds: [], bills: [], suppliers: [], inventory: [], ledger: [], supplierBalances: [], loyalty: [], serviceOrders: [], audit: [], salesSummary: null });
+  const [data, setData] = useState<any>({ shifts: [], refunds: [], bills: [], suppliers: [], inventory: [], ledger: [], supplierBalances: [], loyalty: [], serviceOrders: [], audit: [], salesSummary: null, monthlySales: [], yearlySales: [] });
   const [shift, setShift] = useState<any>(null);
   const [tax, setTax] = useState<any>({ tax_enabled: true, tax_percent: "14", service_charge_enabled: false, service_charge_percent: "0" });
   const [loyaltySettings, setLoyaltySettings] = useState<any>({ enabled: true, spend_per_point: "100", point_value: "1" });
@@ -44,7 +44,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const load = async () => {
     const requests = [
       ["current", "/api/admin/cash-shifts/current"], ["shifts", "/api/admin/cash-shifts"],
-      ...(!managerView ? ([["sales", "/api/admin/sales"], ["salesSummary", "/api/dashboard/summary"]] as [string, string][]) : []),
+      ...(!managerView ? ([["sales", "/api/admin/sales"], ["salesSummary", "/api/dashboard/summary"], ["monthlySales", "/api/dashboard/monthly-sales"], ["yearlySales", "/api/dashboard/yearly-sales"]] as [string, string][]) : []),
       ["suppliers", "/api/operations/suppliers"], ["inventory", "/api/operations/inventory"], ["ledger", "/api/admin/suppliers/ledger"], ["supplierBalances", "/api/admin/suppliers/balances"],
       ["serviceOrders", "/api/admin/service-orders"],
       ["loyalty", "/api/admin/loyalty/accounts"], ["loyaltySettings", "/api/admin/loyalty/settings"],
@@ -62,6 +62,12 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     if (next.loyaltySettings) setLoyaltySettings(next.loyaltySettings);
   };
 
+  const openPeriodSales = async (period: "monthly" | "yearly") => {
+    setBusy(true); setError("");
+    try { const response = await api.get(`/api/dashboard/${period}-sales`); setData((old: any) => ({ ...old, [period === "monthly" ? "monthlySales" : "yearlySales"]: response.data })); }
+    catch (e: any) { setError(apiErrorMessage(e, `Could not load ${period} sales details.`)); }
+    finally { setBusy(false); }
+  };
   useEffect(() => { load().catch(() => setError("Could not load administration data.")); }, []);
   useEffect(() => { if (!availableTabs.includes(tab)) setTab(availableTabs[0] ?? "cash"); }, [availableTabs.join(","), tab]);
   useEffect(() => { if (initialTab && availableTabs.includes(initialTab as Tab)) setTab(initialTab as Tab); }, [initialTab, availableTabs.join(",")]);
@@ -304,9 +310,16 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
 
     {tab === "sales" && <section className={panel}>
       <div className="mb-5 grid gap-3 sm:grid-cols-2">
-        <div className="rounded-xl border border-[#e8dfd6] bg-[#faf7f3] p-4"><p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-[#92775e]">Monthly sales · current month</p><p className="mt-2 text-2xl font-extrabold tracking-tight text-[#3c3029]">{money(data.salesSummary?.monthly_sales)}</p></div>
-        <div className="rounded-xl border border-[#e8dfd6] bg-[#faf7f3] p-4"><p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-[#92775e]">Yearly sales · current year</p><p className="mt-2 text-2xl font-extrabold tracking-tight text-[#3c3029]">{money(data.salesSummary?.yearly_sales)}</p></div>
+        <button type="button" onClick={() => openPeriodSales("monthly")} className="rounded-xl border border-[#e8dfd6] bg-[#faf7f3] p-4 text-left transition hover:border-[#b99a78]"><p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-[#92775e]">Monthly sales · current month</p><p className="mt-2 text-2xl font-extrabold tracking-tight text-[#3c3029]">{money(data.salesSummary?.monthly_sales)}</p><p className="mt-2 text-xs font-semibold text-[#92775e]">View bills and items ↗</p></button>
+        <button type="button" onClick={() => openPeriodSales("yearly")} className="rounded-xl border border-[#e8dfd6] bg-[#faf7f3] p-4 text-left transition hover:border-[#b99a78]"><p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-[#92775e]">Yearly sales · current year</p><p className="mt-2 text-2xl font-extrabold tracking-tight text-[#3c3029]">{money(data.salesSummary?.yearly_sales)}</p><p className="mt-2 text-xs font-semibold text-[#92775e]">View bills and items ↗</p></button>
       </div>
+      {(["monthly","yearly"] as const).map(period => { const rows = data[period === "monthly" ? "monthlySales" : "yearlySales"] || []; return <div key={period} className="mb-5 rounded-xl border border-neutral-200 p-3">
+        <div className="mb-3 flex items-center justify-between"><h3 className="font-semibold">{period === "monthly" ? "Monthly sales details" : "Yearly sales details"}</h3><span className="text-xs text-neutral-500">{rows.length} bills</span></div>
+        {rows.length === 0 ? <p className="py-4 text-center text-sm text-neutral-400">Click the sales summary above to load bills and items.</p> : <div className="space-y-3">{rows.map((bill: any) => <article key={bill.id} className="rounded-lg border border-neutral-200 p-3">
+          <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-semibold">{bill.bill_number} · {bill.customer_name || "Walk-in"}</p><p className="text-xs text-neutral-500">{bill.business_date || new Date(bill.created_at).toLocaleDateString()} · {bill.table_name || bill.service_type}</p></div><p className="font-bold">{money(bill.grand_total)}</p></div>
+          <div className="mt-2 border-t border-neutral-100 pt-2">{(bill.items || []).map((item: any, index: number) => <div key={index} className="flex justify-between gap-3 py-1 text-xs"><span>{item.name} × {item.quantity}</span><span>{money(item.total)}</span></div>)}</div>
+        </article>)}</div>}
+      </div>; })}
       <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-semibold text-lg">Manage individual sales</h2><p className="text-sm text-neutral-500">Void a sale to retain its audit record, or permanently delete its bill and order. Cash-drawer entries remain for reconciliation; record a refund separately if money was returned.</p></div><button className="rounded-lg border px-3 py-2 text-sm" onClick={() => load().catch(() => setError("Could not refresh sales."))}>Refresh</button></div>
       <div className="mt-4 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Bill / customer</th><th>Business date</th><th>Created</th><th>Table / service</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody>
         {(data.sales || []).map((s: any) => <tr key={s.id} className="border-b align-top"><td className="py-2"><span className="font-semibold">{s.bill_number}</span><p className="text-xs text-neutral-500">{s.customer_name}</p></td><td>{s.business_date}</td><td className="whitespace-nowrap">{new Date(s.created_at).toLocaleString()}</td><td>{s.table_name}</td><td>{money(s.grand_total)}</td><td><span className={s.sale_status === "voided" ? "rounded-full bg-amber-100 px-2 py-1 text-xs text-amber-800" : "rounded-full bg-emerald-100 px-2 py-1 text-xs text-emerald-800"}>{s.sale_status}{s.void_reason ? <span className="block max-w-40 text-xs">{s.void_reason}</span> : null}</span></td><td><div className="flex flex-wrap gap-2">{s.sale_status === "active" && <button disabled={busy} onClick={() => voidSale(s)} className="rounded-lg border border-amber-500 px-2 py-1 text-xs font-semibold text-amber-700">Void</button>}<button disabled={busy} onClick={() => permanentlyDeleteSale(s)} className="rounded-lg bg-red-700 px-2 py-1 text-xs font-semibold text-white">Permanently delete</button></div></td></tr>)}
