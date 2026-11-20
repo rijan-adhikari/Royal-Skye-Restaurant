@@ -11,6 +11,7 @@ const Billing = lazy(() => import("./pages/Billing"));
 const Credit = lazy(() => import("./pages/Credit"));
 const Operations = lazy(() => import("./pages/Operations"));
 const Admin = lazy(() => import("./pages/Admin"));
+const AdminControls = lazy(() => import("./pages/AdminControls"));
 type NavItem = { to: string; label: string; icon: string; tab?: string; panel?: string };
 
 const iconPaths: Record<string, string> = {
@@ -48,11 +49,10 @@ function Shell({ children }: { children: React.ReactNode }) {
   const management: NavItem[] = isManager ? [
     { to: "/admin?panel=menu", label: t("Menu Management"), icon: "master", panel: "menu" },
     { to: "/admin?panel=customers", label: t("Customer Management"), icon: "master", panel: "customers" },
-    ...(role === "admin" ? [{ to: "/admin?panel=staff", label: t("Staff Accounts"), icon: "staff", panel: "staff" }] : []),
     { to: "/operations?tab=inventory", label: t("Inventory"), icon: "inventory", tab: "inventory" },
     { to: "/operations?tab=expenses", label: t("Expenses"), icon: "expenses", tab: "expenses" },
     { to: "/operations?tab=controls", label: t("Control Center"), icon: "controls", tab: "controls" },
-    { to: "/operations?tab=controls&control=cash", label: t("Cash Drawer"), icon: "cash", tab: "controls" },
+    ...(role === "admin" ? [{ to: "/admin-controls", label: t("Admin Controls"), icon: "controls" }] : []),
   ] : [];
   const groups = [
     { label: t("Workspace"), items: workspace },
@@ -181,6 +181,10 @@ export default function App() {
         }
       />
 
+      <Route
+        path="/admin-controls"
+        element={<ProtectedRoute allowedRoles={["admin"]}><Shell><AdminControls /></Shell></ProtectedRoute>}
+      />
       <Route
         path="/operations"
         element={
