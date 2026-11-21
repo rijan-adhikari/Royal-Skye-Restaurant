@@ -7,7 +7,7 @@ import AdminControl from "./AdminControl";
 
 type Tab = "cash" | "expenses" | "inventory" | "reservations" | "controls" | "reports" | "payroll" | "staff";
 const tabs: Tab[] = ["expenses", "inventory", "reservations", "controls", "payroll", "reports", "staff"];
-const units = ["kg", "g", "litre", "ml", "dozen", "pcs", "bottle", "packet", "box"];
+const units = ["kg", "g", "litre", "ml", "dozen", "pcs", "bottle", "packet", "box", "case"];
 const field = "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm";
 const button = "rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white";
 const money = (n: any) => "Rs. " + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
@@ -24,7 +24,7 @@ export default function Operations() {
     const requested = searchParams.get("tab") as Tab | null;
     if (requested && visibleTabs.includes(requested)) setTab(requested);
   }, [searchParams, role]);
-  const [data, setData] = useState<any>({ inventory: [], categories: [], expenses: [], staff: [], attendance: [], payroll: [], payrollStaff: [], reservations: [], tables: [] });
+  const [data, setData] = useState<any>({ inventory: [], categories: [], menuItems: [], recipes: [], expenses: [], staff: [], attendance: [], payroll: [], payrollStaff: [], reservations: [], tables: [] });
   const [report, setReport] = useState<any>(null);
   const [start, setStart] = useState(today().slice(0, 7) + "-01");
   const [end, setEnd] = useState(today());
@@ -33,6 +33,8 @@ export default function Operations() {
   const [busy, setBusy] = useState(false);
   const [stock, setStock] = useState({ name: "", category: "General", unit: "kg", quantity: "0", reorder_level: "0", unit_price: "0", expiry_date: "" });
   const [categoryName, setCategoryName] = useState("");
+  const [recipeDraft, setRecipeDraft] = useState({ menu_item_id: "", yield_quantity: "1", instructions: "" });
+  const [recipeLines, setRecipeLines] = useState<any[]>([{ item_id: "", quantity: "1", case_pack_size: "" }]);
   const [expense, setExpense] = useState({ description: "", amount: "" });
   const [reservation, setReservation] = useState({ customer_name: "", phone: "", party_size: "2", reserved_for: "", table_id: "", notes: "" });
   const [movement, setMovement] = useState({ item_id: "", movement_type: "waste", quantity: "", notes: "" });
@@ -41,6 +43,7 @@ export default function Operations() {
   const load = async () => {
     const requests: [string, string][] = [
       ["inventory", "/api/operations/inventory"], ["categories", "/api/operations/inventory/categories"],
+      ["menuItems", "/api/menu-items"], ["recipes", "/api/operations/recipes"],
       ["expenses", "/api/operations/expenses"], ["reservations", "/api/operations/reservations"],
       ["tables", "/api/tables"],
       ...(role === "admin" ? ([["staff", "/api/users"], ["attendance", "/api/operations/staff/attendance"]] as [string, string][]) : []),
