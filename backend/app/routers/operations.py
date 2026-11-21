@@ -27,6 +27,15 @@ UNITS = {"kg": ("weight", Decimal("1000")), "g": ("weight", Decimal("1")),
          "box": ("box", Decimal("1")), "case": ("case", Decimal("1"))}
 
 
+def item_requires_expiry(name: str, category: str) -> bool:
+    text_value = f"{name} {category}".lower()
+    non_perishable = ("beer", "soft drink", "soda", "water", "juice", "canned", "packaged", "bottle", "bar")
+    if any(word in text_value for word in non_perishable):
+        return False
+    perishable = ("kitchen", "ingredient", "food", "vegetable", "fruit", "meat", "dairy", "perishable", "produce", "herb")
+    return any(word in text_value for word in perishable)
+
+
 def decimal_value(value: Any, label: str = "value") -> Decimal:
     try:
         result = Decimal(str(value))
@@ -65,6 +74,7 @@ class MovementCreate(BaseModel):
     movement_type: str
     quantity: Decimal
     unit_cost: Decimal = Decimal("0")
+    expiry_date: date | None = None
     reference: str | None = None
     notes: str | None = None
 
@@ -212,11 +222,14 @@ def create_inventory(payload: InventoryCreate, db: Session = Depends(get_db), us
         raise HTTPException(422, "Unsupported unit")
     if payload.quantity < 0 or payload.reorder_level < 0 or payload.average_cost < 0:
         raise HTTPException(422, "Stock, reorder level and cost cannot be negative")
+    expiry = payload.expiry_date if item_requires_expiry(payload.name, payload.category) else None
+    if item_requires_expiry(payload.name, payload.category) and payload.quantity > 0 and expiry is None:
+        raise HTTPException(422, "Expiry date is required for perishable kitchen stock")
     row = db.execute(text("""INSERT INTO inventory_items(name,sku,category,unit,quantity,reorder_level,average_cost,supplier_id,expiry_date)
         VALUES(:name,:sku,:category,:unit,:quantity,:reorder,:cost,:supplier,:expiry) RETURNING *"""),
         {"name": payload.name.strip(), "sku": payload.sku.strip() or None if payload.sku else None, "category": payload.category,
          "unit": payload.unit, "quantity": payload.quantity, "reorder": payload.reorder_level,
-         "cost": payload.average_cost, "supplier": payload.supplier_id, "expiry": payload.expiry_date}).mappings().first()
+         "cost": payload.average_cost, "supplier": payload.supplier_id, "expiry": expiry}).mappings().first()
     if payload.quantity:
         db.execute(text("""INSERT INTO stock_movements(item_id,movement_type,quantity,unit_cost,notes,created_by)
             VALUES(:id,'opening',:qty,:cost,'Opening stock',:user)"""),
@@ -231,6 +244,9 @@ def update_inventory_item(item_id: str, payload: InventoryCreate, db: Session = 
         raise HTTPException(422, "Unsupported unit")
     if payload.quantity < 0 or payload.reorder_level < 0 or payload.average_cost < 0:
         raise HTTPException(422, "Stock, reorder level and cost cannot be negative")
+    expiry = payload.expiry_date if item_requires_expiry(payload.name, payload.category) else None
+    if item_requires_expiry(payload.name, payload.category) and payload.quantity > 0 and expiry is None:
+        raise HTTPException(422, "Expiry date is required for perishable kitchen stock")
     item = db.execute(text("SELECT * FROM inventory_items WHERE id=:id AND is_active=TRUE FOR UPDATE"), {"id": item_id}).mappings().first()
     if not item:
         raise HTTPException(404, "Inventory item not found")
@@ -245,7 +261,7 @@ def update_inventory_item(item_id: str, payload: InventoryCreate, db: Session = 
         WHERE id=:id RETURNING *"""),
         {"id": item_id, "name": payload.name.strip(), "sku": payload.sku.strip() or None if payload.sku else None,
          "category": payload.category, "unit": payload.unit, "reorder": payload.reorder_level,
-         "cost": payload.average_cost, "supplier": payload.supplier_id, "expiry": payload.expiry_date}).mappings().first()
+         "cost": payload.average_cost, "supplier": payload.supplier_id, "expiry": expiry}).mappings().first()
     db.commit()
     return dict(row)
 
@@ -280,11 +296,13 @@ def stock_movement(item_id: str, payload: MovementCreate, db: Session = Depends(
     if new_qty < 0:
         raise HTTPException(409, "Insufficient stock")
     if payload.movement_type == "purchase":
+        if item_requires_expiry(item["name"], item["category"]) and payload.expiry_date is None:
+            raise HTTPException(422, "Expiry date is required when receiving perishable kitchen stock")
         old_qty = Decimal(str(item["quantity"]))
         old_value = old_qty * Decimal(str(item["average_cost"]))
         new_average = (old_value + qty * payload.unit_cost) / new_qty if new_qty else payload.unit_cost
-        db.execute(text("UPDATE inventory_items SET quantity=:qty,average_cost=:cost,updated_at=NOW() WHERE id=:id"),
-                   {"qty": new_qty, "cost": new_average, "id": item_id})
+        db.execute(text("UPDATE inventory_items SET quantity=:qty,average_cost=:cost,expiry_date=:expiry,updated_at=NOW() WHERE id=:id"),
+                   {"qty": new_qty, "cost": new_average, "expiry": payload.expiry_date if item_requires_expiry(item["name"], item["category"]) else None, "id": item_id})
     else:
         db.execute(text("UPDATE inventory_items SET quantity=:qty,updated_at=NOW() WHERE id=:id"), {"qty": new_qty, "id": item_id})
     db.execute(text("""INSERT INTO stock_movements(item_id,movement_type,quantity,unit_cost,reference,notes,created_by)
