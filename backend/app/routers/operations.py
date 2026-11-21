@@ -24,7 +24,7 @@ UNITS = {"kg": ("weight", Decimal("1000")), "g": ("weight", Decimal("1")),
          "litre": ("volume", Decimal("1000")), "ml": ("volume", Decimal("1")),
          "dozen": ("count", Decimal("12")), "pcs": ("count", Decimal("1")),
          "bottle": ("pack", Decimal("1")), "packet": ("pack", Decimal("1")),
-         "box": ("pack", Decimal("1"))}
+         "box": ("pack", Decimal("1")), "case": ("pack", Decimal("1"))}
 
 
 def decimal_value(value: Any, label: str = "value") -> Decimal:
@@ -55,6 +55,10 @@ class InventoryCreate(BaseModel):
     average_cost: Decimal = Decimal("0")
     supplier_id: str | None = None
     expiry_date: date | None = None
+
+
+class InventoryCategoryCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
 
 
 class MovementCreate(BaseModel):
@@ -151,6 +155,47 @@ class ReservationCreate(BaseModel):
 @router.get("/units")
 def units(user=Depends(require_roles(*MANAGERS))):
     return {"units": list(UNITS), "conversions": ["kg<->g", "litre<->ml", "dozen<->pcs"]}
+
+
+@router.get("/inventory/categories")
+def list_inventory_categories(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    # Backfill category names already present on stock records without changing those records.
+    db.execute(text("""INSERT INTO inventory_categories(name)
+        SELECT DISTINCT COALESCE(NULLIF(BTRIM(category), ''), 'General')
+        FROM inventory_items
+        ON CONFLICT (lower(name)) DO NOTHING"""))
+    db.commit()
+    rows = db.execute(text("SELECT id,name,created_at FROM inventory_categories WHERE is_active=TRUE ORDER BY name")).mappings().all()
+    return [dict(row) for row in rows]
+
+
+@router.post("/inventory/categories")
+def create_inventory_category(payload: InventoryCategoryCreate, db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(422, "Category name is required")
+    try:
+        row = db.execute(text("INSERT INTO inventory_categories(name) VALUES(:name) RETURNING id,name,created_at"), {"name": name}).mappings().first()
+        db.commit()
+        return dict(row)
+    except Exception as exc:
+        db.rollback()
+        if "unique" in str(exc).lower():
+            raise HTTPException(409, "This inventory category already exists")
+        raise
+
+
+@router.delete("/inventory/categories/{category_id}")
+def delete_inventory_category(category_id: str, db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    category = db.execute(text("SELECT * FROM inventory_categories WHERE id=:id AND is_active=TRUE FOR UPDATE"), {"id": category_id}).mappings().first()
+    if not category:
+        raise HTTPException(404, "Inventory category not found")
+    used = db.execute(text("SELECT COUNT(*) FROM inventory_items WHERE is_active=TRUE AND lower(category)=lower(:name)"), {"name": category["name"]}).scalar_one()
+    if used:
+        raise HTTPException(409, f"Cannot delete {category['name']}: {used} stock item(s) are assigned to it")
+    db.execute(text("DELETE FROM inventory_categories WHERE id=:id"), {"id": category_id})
+    db.commit()
+    return {"ok": True, "deleted_id": category_id}
 
 
 @router.get("/inventory")
