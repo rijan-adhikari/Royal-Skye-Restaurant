@@ -365,7 +365,8 @@ def export_sales_pdf(start: date, end: date, db: Session = Depends(get_db),
                      user=Depends(require_roles(*ADMIN))):
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
     summary, refunds, payments, items, staff = _report_data(start, end, db)
     output = BytesIO()
