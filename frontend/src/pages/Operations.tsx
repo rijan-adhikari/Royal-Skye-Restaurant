@@ -31,7 +31,7 @@ export default function Operations() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [stock, setStock] = useState({ name: "", category: "General", unit: "kg", quantity: "0", reorder_level: "0", unit_price: "0", expiry_date: "" });
+  const [stock, setStock] = useState({ name: "", category: "General", unit: "kg", quantity: "0", reorder_level: "1", unit_price: "0", expiry_date: "" });
   const [categoryName, setCategoryName] = useState("");
   const [recipeDraft, setRecipeDraft] = useState({ menu_item_id: "", yield_quantity: "1", instructions: "" });
   const [recipeLines, setRecipeLines] = useState<any[]>([{ item_id: "", quantity: "1", case_pack_size: "" }]);
