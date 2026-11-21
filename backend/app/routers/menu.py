@@ -91,7 +91,8 @@ def delete_menu_item(item_id: str, db: Session = Depends(get_db),
 def export_food_menu_pdf(db: Session = Depends(get_db), user=Depends(get_current_user)):
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
     categories = db.query(models.Category).filter(models.Category.is_active.is_(True)).order_by(models.Category.sort_order, models.Category.name).all()
