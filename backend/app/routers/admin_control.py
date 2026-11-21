@@ -369,10 +369,22 @@ def export_sales_pdf(start: date, end: date, db: Session = Depends(get_db),
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
     summary, refunds, payments, items, staff = _report_data(start, end, db)
     output = BytesIO()
-    document = SimpleDocTemplate(output, pagesize=A4, title="Royal Skye Sales Report")
+    document = SimpleDocTemplate(output, pagesize=A4, title="Royal Skye Sales Report",
+        rightMargin=16, leftMargin=16, topMargin=22, bottomMargin=24, author="Royal Skye Restaurant POS")
     styles = getSampleStyleSheet()
-    story = [Paragraph("Royal Skye · Sales Report", styles["Title"]),
-             Paragraph(f"Period: {start} to {end}", styles["Normal"]), Spacer(1, 14)]
+    ink=colors.HexColor("#080A0D"); crimson=colors.HexColor("#C8102E")
+    silver=colors.HexColor("#68717D"); paper=colors.HexColor("#F3F5F7")
+    styles.add(ParagraphStyle(name="ReportTitle",parent=styles["Title"],fontName="Helvetica-Bold",
+        fontSize=22,leading=26,textColor=colors.white,alignment=1))
+    styles.add(ParagraphStyle(name="ReportMeta",parent=styles["Normal"],fontSize=8,
+        textColor=colors.HexColor("#C6CDD5"),alignment=1))
+    styles.add(ParagraphStyle(name="ReportSection",parent=styles["Heading2"],fontName="Helvetica-Bold",
+        fontSize=12,textColor=crimson,spaceBefore=12,spaceAfter=6))
+    masthead=Table([[Paragraph("ROYAL SKYE  /  SALES INTELLIGENCE",styles["ReportTitle"])],
+        [Paragraph(f"REPORTING PERIOD  {start}  —  {end}",styles["ReportMeta"])]],colWidths=[178*mm])
+    masthead.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),ink),("BOX",(0,0),(-1,-1),1,crimson),
+        ("LINEBELOW",(0,0),(-1,0),2,crimson),("TOPPADDING",(0,0),(-1,-1),10),("BOTTOMPADDING",(0,0),(-1,-1),10)]))
+    story = [masthead, Spacer(1, 8)]
     net_sales = Decimal(str(summary["gross_sales"])) - Decimal(str(summary["discounts"])) - refunds
     summary_rows = [["Metric", "Amount / Count"], ["Bills", str(summary["bill_count"])],
         ["Gross sales", f"NPR {summary['gross_sales']}"], ["Discounts", f"NPR {summary['discounts']}"],
@@ -384,17 +396,26 @@ def export_sales_pdf(start: date, end: date, db: Session = Depends(get_db),
         ("Top selling items", [["Item", "Quantity", "Gross"]] + [[r["name"], str(r["quantity"]), str(r["gross_amount"])] for r in items[:20]]),
         ("Staff performance", [["Staff", "Bills", "Billed", "Received"]] + [[r["full_name"], str(r["bills"]), str(r["billed_total"]), str(r["received"])] for r in staff]),
     ]:
-        story.append(Paragraph(title, styles["Heading2"]))
+        story.append(Paragraph(title, styles["ReportSection"]))
         table = Table(rows, repeatRows=1, hAlign="LEFT")
         table.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#5e1010")),
+            ("BACKGROUND", (0,0), (-1,0), ink),
             ("TEXTCOLOR", (0,0), (-1,0), colors.white),
-            ("GRID", (0,0), (-1,-1), 0.35, colors.HexColor("#dddddd")),
-            ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, colors.HexColor("#f7f7f7")]),
+            ("GRID", (0,0), (-1,-1), 0.35, colors.HexColor("#D9DEE5")),
+            ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, paper]),
             ("FONTSIZE", (0,0), (-1,-1), 8), ("PADDING", (0,0), (-1,-1), 5),
         ]))
         story.extend([table, Spacer(1, 12)])
-    document.build(story)
+    def report_footer(canvas, doc):
+        canvas.saveState()
+        width, _ = A4
+        canvas.setFillColor(ink); canvas.rect(0,0,width,15,fill=1,stroke=0)
+        canvas.setStrokeColor(crimson); canvas.setLineWidth(1.2); canvas.line(16,15,width-16,15)
+        canvas.setFont("Helvetica-Bold",7); canvas.setFillColor(colors.white)
+        canvas.drawString(16,6,"ROYAL SKYE  /  CONFIDENTIAL")
+        canvas.setFillColor(colors.HexColor("#B9C1CB")); canvas.drawRightString(width-16,6,f"PAGE {doc.page}")
+        canvas.restoreState()
+    document.build(story, onFirstPage=report_footer, onLaterPages=report_footer)
     output.seek(0)
     return StreamingResponse(output, media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=royal-skye-sales-{start}-{end}.pdf"})
