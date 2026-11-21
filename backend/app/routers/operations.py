@@ -32,7 +32,7 @@ def item_requires_expiry(name: str, category: str) -> bool:
     non_perishable = ("beer", "soft drink", "soda", "water", "juice", "canned", "packaged", "bottle", "bar")
     if any(word in text_value for word in non_perishable):
         return False
-    perishable = ("kitchen", "ingredient", "food", "vegetable", "fruit", "meat", "dairy", "perishable", "produce", "herb")
+    perishable = ("kitchen", "ingredient", "food", "vegetable", "fruit", "meat", "dairy", "perishable", "produce", "herb", "dhaniya", "coriander", "onion", "pyaj", "garlic", "tomato", "potato", "ginger", "chicken")
     return any(word in text_value for word in perishable)
 
 
@@ -169,6 +169,8 @@ def units(user=Depends(require_roles(*MANAGERS))):
 
 @router.get("/inventory/categories")
 def list_inventory_categories(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    # Ensure a dedicated kitchen category is available for perishable ingredients.
+    db.execute(text("INSERT INTO inventory_categories(name) VALUES ('Kitchen') ON CONFLICT (lower(name)) DO NOTHING"))
     # Backfill category names already present on stock records without changing those records.
     db.execute(text("""INSERT INTO inventory_categories(name)
         SELECT DISTINCT COALESCE(NULLIF(BTRIM(category), ''), 'General')
