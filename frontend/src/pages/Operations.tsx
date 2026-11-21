@@ -31,7 +31,7 @@ export default function Operations() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [stock, setStock] = useState({ name: "", category: "General", unit: "kg", quantity: "0", reorder_level: "0", total_cost: "0", expiry_date: "" });
+  const [stock, setStock] = useState({ name: "", category: "General", unit: "kg", quantity: "0", reorder_level: "0", unit_price: "0", expiry_date: "" });
   const [categoryName, setCategoryName] = useState("");
   const [expense, setExpense] = useState({ description: "", amount: "" });
   const [reservation, setReservation] = useState({ customer_name: "", phone: "", party_size: "2", reserved_for: "", table_id: "", notes: "" });
@@ -104,11 +104,11 @@ export default function Operations() {
         <div className="flex flex-wrap gap-2">{data.categories.map((category: any) => <div key={category.id} className="flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-semibold"><span>{category.name}</span><button type="button" title={t("Delete category")} aria-label={t("Delete category")} className="font-bold text-red-600" disabled={busy} onClick={() => { if (!window.confirm(t("Delete this category? Categories assigned to stock items cannot be deleted."))) return; run(() => api.delete("/api/operations/inventory/categories/" + category.id), "Inventory category deleted."); }}>×</button></div>)}</div>
       </section>
       <div className="grid min-w-0 gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
-      <section className={panel}>{heading("Add stock item", "Enter the item, expiry, cost and stock quantity.")}<form className="space-y-3" onSubmit={(e) => {
+      <section className={panel}>{heading("Add stock item", "Enter the price for one unit and quantity; total cost is calculated automatically.")}<form className="space-y-3" onSubmit={(e) => {
         e.preventDefault();
         const quantity = Number(stock.quantity);
-        const totalCost = Number(stock.total_cost);
-        if (quantity === 0 && totalCost > 0) {
+        const unitPrice = Number(stock.unit_price);
+        if (quantity === 0 && unitPrice > 0) {
           setError(t("Enter a quantity greater than zero when total cost is provided."));
           return;
         }
@@ -120,7 +120,7 @@ export default function Operations() {
             unit: stock.unit,
             quantity,
             reorder_level: Number(stock.reorder_level),
-            average_cost: quantity > 0 ? totalCost / quantity : 0,
+            average_cost: unitPrice,
             supplier_id: null,
             expiry_date: stock.expiry_date || null,
           });
@@ -129,7 +129,8 @@ export default function Operations() {
         {input("Item name", stock.name, (v) => setStock({ ...stock, name: v }))}
         <label className="block text-xs font-medium text-neutral-600">{t("Category")}<select className={field + " mt-1"} required value={stock.category} onChange={(e) => setStock({ ...stock, category: e.target.value })}>{data.categories.map((category: any) => <option key={category.id} value={category.name}>{category.name}</option>)}</select></label>
         {input("Expiry date", stock.expiry_date, (v) => setStock({ ...stock, expiry_date: v }), "date", false)}
-        <label className="block text-xs font-medium text-neutral-600">{t("Total cost (NPR)")}<input className={field + " mt-1"} type="number" min="0" step="0.01" required value={stock.total_cost} onChange={(e) => setStock({ ...stock, total_cost: e.target.value })} /></label>
+        <label className="block text-xs font-medium text-neutral-600">{t("Price per unit (NPR)")}<input className={field + " mt-1"} type="number" min="0" step="0.01" required value={stock.unit_price} onChange={(e) => setStock({ ...stock, unit_price: e.target.value })} /></label>
+        <div className="rounded-xl border border-brand/20 bg-brand/5 p-3"><p className="text-xs font-semibold text-neutral-500">{t("Calculated total cost")}</p><p className="mt-1 text-xl font-bold text-brand">{money(Math.max(0, Number(stock.quantity) || 0) * Math.max(0, Number(stock.unit_price) || 0))}</p><p className="mt-1 text-[11px] text-neutral-500">{Number(stock.quantity) || 0} × {money(Math.max(0, Number(stock.unit_price) || 0))}</p></div>
         <div className="grid grid-cols-2 gap-2"><label className="block text-xs font-medium text-neutral-600">{t("Unit")}<select className={field + " mt-1"} value={stock.unit} onChange={(e) => setStock({ ...stock, unit: e.target.value })}><option value="kg">kg</option><option value="g">{t("Gram (g)")}</option><option value="litre">{t("Litre")}</option><option value="pcs">{t("Pieces (pcs)")}</option><option value="case">{t("Case")}</option></select></label><label className="block text-xs font-medium text-neutral-600">{t("Quantity")}<input className={field + " mt-1"} type="number" min="0" step="any" required value={stock.quantity} onChange={(e) => setStock({ ...stock, quantity: e.target.value })} /></label></div>
         <label className="block text-xs font-medium text-neutral-600">{t("Reorder level")}<input className={field + " mt-1"} type="number" min="0" step="any" required value={stock.reorder_level} onChange={(e) => setStock({ ...stock, reorder_level: e.target.value })} /></label>
         <button className={button} disabled={busy}>{t("Add item")}</button>
