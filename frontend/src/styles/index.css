@@ -1659,7 +1659,7 @@ html[data-theme="light"] main.rs-login [class*="bg-[#65e6c2]"] {background-color
     font-size:13px!important;line-height:1;
   }
 }
-html[data-theme="dark"] .dashboard-financial-card .bg-\\[\\#fdfbf8\\] {
+html[data-theme="dark"] .dashboard-financial-card > div:nth-child(2) > div:not(.hidden) {
   background:#142328!important;border-color:#294744!important;
 }
 html[data-theme="dark"] .dashboard-quick-access {
@@ -1672,6 +1672,6 @@ html[data-theme="dark"] .dashboard-quick-access .dashboard-quick-link {
 html[data-theme="dark"] .dashboard-quick-access .dashboard-quick-link > span:first-child {
   background:#1b3936!important;color:#9debd4!important;
 }
-html[data-theme="light"] .dashboard-financial-card .bg-\\[\\#fdfbf8\\] {
+html[data-theme="light"] .dashboard-financial-card > div:nth-child(2) > div:not(.hidden) {
   background:#f5faf8!important;border-color:#e0ece7!important;
 }
