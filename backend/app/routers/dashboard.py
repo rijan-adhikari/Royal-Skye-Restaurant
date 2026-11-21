@@ -270,55 +270,64 @@ def dashboard_summary_pdf(report_date: date | None = None, db: Session = Depends
     doc=SimpleDocTemplate(output,pagesize=landscape(A4),rightMargin=13*mm,leftMargin=13*mm,topMargin=20*mm,bottomMargin=18*mm,
         title=f"Royal Skye Management Report {target.year}",author="Royal Skye Restaurant POS")
     styles=getSampleStyleSheet()
-    styles.add(ParagraphStyle(name="BrandTitle",parent=styles["Title"],fontSize=23,leading=27,textColor=colors.HexColor("#33241f"),alignment=1,spaceAfter=4))
-    styles.add(ParagraphStyle(name="Subtle",parent=styles["Normal"],fontSize=8,textColor=colors.HexColor("#78685e"),alignment=1))
-    styles.add(ParagraphStyle(name="Section",parent=styles["Heading2"],fontSize=12,leading=15,textColor=colors.HexColor("#762d2b"),spaceBefore=12,spaceAfter=7))
-    styles.add(ParagraphStyle(name="SmallCell",parent=styles["BodyText"],fontSize=7,leading=9))
+    ink=colors.HexColor("#080A0D"); crimson=colors.HexColor("#C8102E"); silver=colors.HexColor("#66707D")
+    paper=colors.HexColor("#F3F5F7"); grid=colors.HexColor("#D9DEE5")
+    styles.add(ParagraphStyle(name="BrandTitle",parent=styles["Title"],fontName="Helvetica-Bold",fontSize=25,leading=29,textColor=colors.white,alignment=1,spaceAfter=4))
+    styles.add(ParagraphStyle(name="Subtle",parent=styles["Normal"],fontSize=8,textColor=silver,alignment=1))
+    styles.add(ParagraphStyle(name="Section",parent=styles["Heading2"],fontSize=12,leading=15,textColor=crimson,spaceBefore=12,spaceAfter=7,fontName="Helvetica-Bold"))
+    styles.add(ParagraphStyle(name="SmallCell",parent=styles["BodyText"],fontSize=7,leading=9,textColor=ink))
     def money(v): return "NPR "+format(float(v or 0),",.2f")
     def footer(canvas,document):
-        canvas.saveState(); w,h=landscape(A4); canvas.setStrokeColor(colors.HexColor("#d8c7b5"))
-        canvas.line(13*mm,13*mm,w-13*mm,13*mm); canvas.setFont("Helvetica",7); canvas.setFillColor(colors.HexColor("#78685e"))
-        canvas.drawString(13*mm,8*mm,"ROYAL SKYE  |  CONFIDENTIAL MANAGEMENT REPORT")
-        canvas.drawRightString(w-13*mm,8*mm,f"Page {document.page}"); canvas.restoreState()
-    story=[Paragraph("ROYAL SKYE",styles["BrandTitle"]),Paragraph("RESTAURANT MANAGEMENT & FINANCIAL REPORT",styles["Subtle"]),
-        Paragraph(f"Selected date: {target.isoformat()}  ·  Financial year: {target.year}",styles["Subtle"]),Spacer(1,8*mm),
-        Paragraph("Executive overview",styles["Section"])]
+        canvas.saveState(); w,h=landscape(A4)
+        canvas.setFillColor(ink); canvas.rect(0,0,w,17*mm,fill=1,stroke=0)
+        canvas.setStrokeColor(crimson); canvas.setLineWidth(1.4); canvas.line(13*mm,17*mm,w-13*mm,17*mm)
+        canvas.setFont("Helvetica-Bold",7); canvas.setFillColor(colors.white)
+        canvas.drawString(13*mm,8*mm,"ROYAL SKYE  /  CONFIDENTIAL MANAGEMENT REPORT")
+        canvas.setFillColor(colors.HexColor("#B9C1CB")); canvas.drawRightString(w-13*mm,8*mm,f"PAGE {document.page}")
+        canvas.restoreState()
+    masthead=Table([[Paragraph("ROYAL SKYE",styles["BrandTitle"])],
+        [Paragraph("RESTAURANT MANAGEMENT  /  FINANCIAL INTELLIGENCE",styles["Subtle"])],
+        [Paragraph(f"REPORT DATE  {target.isoformat()}     ·     FINANCIAL YEAR  {target.year}",styles["Subtle"])]],
+        colWidths=[260*mm])
+    masthead.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),ink),("BOX",(0,0),(-1,-1),1,crimson),
+        ("LINEBELOW",(0,0),(-1,0),2,crimson),("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8)]))
+    story=[masthead,Spacer(1,7*mm),Paragraph("Executive overview",styles["Section"])]
     overview=[["PERIOD","NET SALES","EXPENSES + PAYROLL","EST. COGS","EST. PROFIT / LOSS"],
         ["Selected day",money(summary["daily_sales"]),money(summary["daily_expenses"]),money(summary["daily_estimated_cogs"]),money(summary["daily_profit"])],
         ["Selected month",money(summary["monthly_sales"]),money(summary["monthly_expenses"]),money(summary["monthly_estimated_cogs"]),money(summary["monthly_profit"])],
         [str(target.year),money(summary["yearly_sales"]),money(summary["yearly_expenses"]),money(summary["yearly_estimated_cogs"]),money(summary["yearly_profit"])]]
     t=Table(overview,colWidths=[32*mm,43*mm,48*mm,40*mm,48*mm],repeatRows=1)
-    t.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#482c27")),("TEXTCOLOR",(0,0),(-1,0),colors.white),
-        ("BACKGROUND",(0,1),(-1,-1),colors.HexColor("#fbf7f1")),("GRID",(0,0),(-1,-1),.35,colors.HexColor("#e2d7cb")),
+    t.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),ink),("TEXTCOLOR",(0,0),(-1,0),colors.white),
+        ("BACKGROUND",(0,1),(-1,-1),paper),("GRID",(0,0),(-1,-1),.35,grid),
         ("FONTSIZE",(0,0),(-1,-1),8),("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),("ALIGN",(1,1),(-1,-1),"RIGHT"),("PADDING",(0,0),(-1,-1),7)]))
     story += [t,Spacer(1,4*mm),Paragraph("Operating indicators",styles["Section"])]
     extra=[["INDICATOR","VALUE"],["Outstanding customer credit",money(summary["outstanding"])],
         ["Occupied tables on selected date",str(summary["occupied_tables"])],["Active bills in financial year",str(len(bills))]]
     et=Table(extra,colWidths=[75*mm,45*mm])
-    et.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#8a5b3d")),("TEXTCOLOR",(0,0),(-1,0),colors.white),
-        ("GRID",(0,0),(-1,-1),.35,colors.HexColor("#e2d7cb")),("FONTSIZE",(0,0),(-1,-1),8),("PADDING",(0,0),(-1,-1),6)]))
+    et.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),crimson),("TEXTCOLOR",(0,0),(-1,0),colors.white),
+        ("GRID",(0,0),(-1,-1),.35,grid),("FONTSIZE",(0,0),(-1,-1),8),("PADDING",(0,0),(-1,-1),6)]))
     story += [et,Paragraph("Monthly performance · full financial year",styles["Section"])]
     mr=[["MONTH","NET SALES","EXPENSES + PAYROLL","EST. COGS","EST. PROFIT / LOSS","BILLS"]]
     mr += [[r[0],money(r[1]),money(r[2]),money(r[3]),money(r[4]),str(r[5])] for r in monthly_rows]
     mt=Table(mr,colWidths=[25*mm,42*mm,48*mm,38*mm,48*mm,18*mm],repeatRows=1)
-    mt.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#482c27")),("TEXTCOLOR",(0,0),(-1,0),colors.white),
-        ("GRID",(0,0),(-1,-1),.3,colors.HexColor("#e2d7cb")),("ROWBACKGROUNDS",(0,1),(-1,-1),[colors.white,colors.HexColor("#faf6f0")]),
+    mt.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),ink),("TEXTCOLOR",(0,0),(-1,0),colors.white),
+        ("GRID",(0,0),(-1,-1),.3,grid),("ROWBACKGROUNDS",(0,1),(-1,-1),[colors.white,colors.white]),
         ("FONTSIZE",(0,0),(-1,-1),7),("ALIGN",(1,1),(-1,-1),"RIGHT"),("PADDING",(0,0),(-1,-1),5)]))
     story += [mt,Paragraph("Annual bill register · active bills only",styles["Section"])]
     br=[["BILL","DATE","CUSTOMER","SUBTOTAL","DISCOUNT","TAX","SERVICE","GRAND TOTAL","PAID","DUE"]]
     br += [[str(v) if i<3 else money(v) for i,v in enumerate(row)] for row in bill_rows]
     if len(br)==1: br.append(["—","—","No active bills","","","","","","",""])
     bt=Table(br,colWidths=[24*mm,22*mm,34*mm,27*mm,23*mm,22*mm,23*mm,28*mm,25*mm,23*mm],repeatRows=1)
-    bt.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#482c27")),("TEXTCOLOR",(0,0),(-1,0),colors.white),
-        ("GRID",(0,0),(-1,-1),.25,colors.HexColor("#e2d7cb")),("ROWBACKGROUNDS",(0,1),(-1,-1),[colors.white,colors.HexColor("#faf6f0")]),
+    bt.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),ink),("TEXTCOLOR",(0,0),(-1,0),colors.white),
+        ("GRID",(0,0),(-1,-1),.25,grid),("ROWBACKGROUNDS",(0,1),(-1,-1),[colors.white,colors.white]),
         ("FONTSIZE",(0,0),(-1,-1),6.5),("ALIGN",(3,1),(-1,-1),"RIGHT"),("PADDING",(0,0),(-1,-1),4)]))
     story += [bt,Paragraph("Expense register · selected financial year",styles["Section"])]
     er=[["DATE","CATEGORY","DESCRIPTION","AMOUNT"]]
     er += [[e.expense_date.strftime("%Y-%m-%d"),e.category,Paragraph(escape(e.description or ""),styles["SmallCell"]),money(e.amount)] for e in expenses]
     if len(er)==1: er.append(["—","—","No expenses recorded","NPR 0.00"])
     rt=Table(er,colWidths=[30*mm,42*mm,155*mm,34*mm],repeatRows=1)
-    rt.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#762d2b")),("TEXTCOLOR",(0,0),(-1,0),colors.white),
-        ("GRID",(0,0),(-1,-1),.3,colors.HexColor("#e2d7cb")),("ROWBACKGROUNDS",(0,1),(-1,-1),[colors.white,colors.HexColor("#faf6f0")]),
+    rt.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),crimson),("TEXTCOLOR",(0,0),(-1,0),colors.white),
+        ("GRID",(0,0),(-1,-1),.3,grid),("ROWBACKGROUNDS",(0,1),(-1,-1),[colors.white,colors.white]),
         ("FONTSIZE",(0,0),(-1,-1),7),("ALIGN",(-1,1),(-1,-1),"RIGHT"),("PADDING",(0,0),(-1,-1),5)]))
     story += [rt,Spacer(1,5),Paragraph("Methodology: net sales exclude tax and service-charge collections. Discounts are already reflected in bill totals and are not deducted twice. Estimated profit/loss uses recipe-linked COGS plus recorded operating expenses and payroll. Menu items without complete recipe/cost data may not be fully represented.",styles["Subtle"])]
     doc.build(story,onFirstPage=footer,onLaterPages=footer); output.seek(0)
@@ -419,7 +428,7 @@ def website_operations_guide(user=Depends(require_roles(models.RoleName.admin,mo
     styles=getSampleStyleSheet()
     styles.add(ParagraphStyle(name="GuideTitle",parent=styles["Title"],fontSize=26,leading=31,textColor=colors.HexColor("#34251f"),alignment=1,spaceAfter=8))
     styles.add(ParagraphStyle(name="GuideSub",parent=styles["Normal"],fontSize=9,textColor=colors.HexColor("#92775e"),alignment=1,leading=14))
-    styles.add(ParagraphStyle(name="GuideH",parent=styles["Heading2"],fontSize=13,leading=17,textColor=colors.HexColor("#762d2b"),spaceBefore=12,spaceAfter=5))
+    styles.add(ParagraphStyle(name="GuideH",parent=styles["Heading2"],fontSize=13,leading=17,textColor=crimson,spaceBefore=12,spaceAfter=5))
     styles.add(ParagraphStyle(name="GuideBody",parent=styles["BodyText"],fontSize=9,leading=14,textColor=colors.HexColor("#443831"),spaceAfter=5))
     styles.add(ParagraphStyle(name="GuideSmall",parent=styles["BodyText"],fontSize=7.5,leading=11,textColor=colors.HexColor("#75675d")))
     def p(value,style="GuideBody"): return Paragraph(value,styles[style])
