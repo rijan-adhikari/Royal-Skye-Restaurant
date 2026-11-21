@@ -202,6 +202,27 @@ def dashboard_low_stock(db: Session = Depends(get_db), user=Depends(require_role
     return [dict(row) for row in rows]
 
 
+@router.get("/last-seven-days-sales")
+def manager_last_seven_days_sales(db: Session = Depends(get_db),
+                                  user=Depends(require_roles(models.RoleName.manager))):
+    """Daily collected sales for the manager dashboard only; includes today and six prior business days."""
+    today = datetime.now(BUSINESS_TIMEZONE).date()
+    rows = []
+    total = Decimal("0")
+    for offset in range(6, -1, -1):
+        day = today - timedelta(days=offset)
+        start, end = _business_window(day, day + timedelta(days=1))
+        amount = _net_collection_sales(db, start, end)
+        collected = _collection_amounts(db, start, end)
+        total += Decimal(str(amount or 0))
+        rows.append({
+            "date": day.isoformat(),
+            "sales": str(amount or 0),
+            "transactions": len(collected),
+        })
+    return {"days": rows, "total_sales": str(total), "transaction_count": sum(row["transactions"] for row in rows)}
+
+
 @router.get("/daily-sales")
 def daily_sales_details(report_date: date | None = None, db: Session = Depends(get_db),
                         user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager))):
