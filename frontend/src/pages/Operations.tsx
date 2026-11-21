@@ -32,7 +32,7 @@ export default function Operations() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [stock, setStock] = useState({ name: "", category: "Kitchen", unit: "kg", quantity: "0", reorder_level: "1", unit_price: "0", expiry_date: "" });
-  const needsExpiry = (name: string, category: string) => { const value = (name + " " + category).toLowerCase(); if (/(beer|soft drink|soda|water|juice|canned|packaged|bottle|bar)/.test(value)) return false; return /(kitchen|ingredient|food|vegetable|fruit|meat|dairy|perishable|produce|herb)/.test(value); };
+  const needsExpiry = (name: string, category: string) => { const value = (name + " " + category).toLowerCase(); if (/(beer|soft drink|soda|water|juice|canned|packaged|bottle|bar)/.test(value)) return false; return /(kitchen|ingredient|food|vegetable|fruit|meat|dairy|perishable|produce|herb|dhaniya|coriander|onion|pyaj|garlic|tomato|potato|ginger|chicken)/.test(value); };
   const [categoryName, setCategoryName] = useState("");
   const [editingInventory, setEditingInventory] = useState<any>(null);
   const [recipeDraft, setRecipeDraft] = useState({ menu_item_id: "", yield_quantity: "1", instructions: "" });
