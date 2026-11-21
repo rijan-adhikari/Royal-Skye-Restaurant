@@ -23,8 +23,8 @@ MANAGERS = (models.RoleName.admin, models.RoleName.manager)
 UNITS = {"kg": ("weight", Decimal("1000")), "g": ("weight", Decimal("1")),
          "litre": ("volume", Decimal("1000")), "ml": ("volume", Decimal("1")),
          "dozen": ("count", Decimal("12")), "pcs": ("count", Decimal("1")),
-         "bottle": ("pack", Decimal("1")), "packet": ("pack", Decimal("1")),
-         "box": ("pack", Decimal("1")), "case": ("pack", Decimal("1"))}
+         "bottle": ("bottle", Decimal("1")), "packet": ("packet", Decimal("1")),
+         "box": ("box", Decimal("1")), "case": ("case", Decimal("1"))}
 
 
 def decimal_value(value: Any, label: str = "value") -> Decimal:
