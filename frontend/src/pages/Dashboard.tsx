@@ -62,6 +62,9 @@ export default function Dashboard() {
   const [yearlySales, setYearlySales] = useState<any[]>([]);
   const [showYearlySales, setShowYearlySales] = useState(false);
   const [yearlySalesLoading, setYearlySalesLoading] = useState(false);
+  const [lastSevenDays, setLastSevenDays] = useState<{days: {date:string;sales:string;transactions:number}[];total_sales:string;transaction_count:number}>({days:[],total_sales:"0",transaction_count:0});
+  const [showLastSevenDays, setShowLastSevenDays] = useState(false);
+  const [lastSevenDaysLoading, setLastSevenDaysLoading] = useState(false);
   const [profitPeriod, setProfitPeriod] = useState<"monthly" | "yearly" | null>(null);
   const [settingsQuery, setSettingsQuery] = useState("");
   const [settingsSearchOpen, setSettingsSearchOpen] = useState(false);
@@ -112,6 +115,20 @@ export default function Dashboard() {
       setError(e?.response?.data?.detail || "Could not load yearly sales details.");
     } finally {
       setYearlySalesLoading(false);
+    }
+  };
+
+  const openLastSevenDays = async () => {
+    setShowLastSevenDays(true);
+    setLastSevenDaysLoading(true);
+    try {
+      const response = await api.get("/api/dashboard/last-seven-days-sales");
+      setLastSevenDays(response.data);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Could not load last seven days sales.");
+      setShowLastSevenDays(false);
+    } finally {
+      setLastSevenDaysLoading(false);
     }
   };
 
@@ -192,6 +209,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">{t("Today's sales")}</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#f5eee5] text-[#8d6542]">↗</span></div>
             <p className="mt-4 text-[25px] font-extrabold tracking-[-.045em] text-[#30251f]">{money(summary.daily_sales)}</p><p className="mt-2 text-[10px] font-bold text-[#9a7652] group-hover:text-[#7d1e1e]">{t("View today's bills")} <span className="ml-1">→</span></p>
           </button>
+          {role === "manager" && <button type="button" onClick={openLastSevenDays} className="group rounded-2xl border border-[#e9dfd5] bg-white p-5 text-left shadow-[0_5px_18px_rgba(45,30,22,.035)] transition hover:-translate-y-1 hover:border-[#c6a77f] hover:shadow-[0_14px_28px_rgba(45,30,22,.08)]"><div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">Last 7 days sales</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#edf2ee] text-[#52765b]">↗</span></div><p className="mt-4 text-[25px] font-extrabold tracking-[-.045em] text-[#30251f]">View report</p><p className="mt-2 text-[10px] font-bold text-[#9a7652]">Daily sales breakdown →</p></button>}
           {role === "admin" && <button type="button" onClick={openMonthlySales} className="group rounded-2xl border border-[#e9dfd5] bg-white p-5 text-left shadow-[0_5px_18px_rgba(45,30,22,.035)] transition hover:-translate-y-1 hover:border-[#c6a77f] hover:shadow-[0_14px_28px_rgba(45,30,22,.08)]"><div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">Monthly sales</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#f5eee5] text-[#8d6542]">↗</span></div><p className="mt-4 text-[25px] font-extrabold tracking-[-.045em] text-[#30251f]">{money(summary.monthly_sales)}</p><p className="mt-2 text-[10px] font-bold text-[#9a7652]">View this month's bills →</p></button>}
           {role === "admin" && <button type="button" onClick={openYearlySales} className="group rounded-2xl border border-[#e9dfd5] bg-white p-5 text-left shadow-[0_5px_18px_rgba(45,30,22,.035)] transition hover:-translate-y-1 hover:border-[#c6a77f] hover:shadow-[0_14px_28px_rgba(45,30,22,.08)]"><div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">Yearly sales</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#edf2ee] text-[#52765b]">↗</span></div><p className="mt-4 text-[25px] font-extrabold tracking-[-.045em] text-[#30251f]">{money(summary.yearly_sales)}</p><p className="mt-2 text-[10px] font-bold text-[#9a7652]">View this year's bills →</p></button>}
           <Link to="/operations?tab=expenses" className="group rounded-2xl border border-[#e9dfd5] bg-white p-5 shadow-[0_5px_18px_rgba(45,30,22,.035)] transition hover:-translate-y-1 hover:border-[#c6a77f] hover:shadow-[0_14px_28px_rgba(45,30,22,.08)]">
@@ -279,6 +297,31 @@ export default function Dashboard() {
         <section className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold">Yearly sales details</h2><p className="text-sm text-neutral-500">{reportDate.slice(0, 4)}</p></div><button type="button" onClick={() => setShowYearlySales(false)} className="rounded-lg border px-3 py-2">Close</button></div>
           {yearlySalesLoading ? <div className="space-y-3 py-5">{Array.from({length:3},(_,i)=><div key={i} className="rounded-xl border p-4"><div className="bg-[#eee9e3] h-4 w-40 rounded"/><div className="bg-[#eee9e3] mt-3 h-3 w-64 max-w-full rounded"/><div className="bg-[#eee9e3] mt-5 h-16 w-full rounded-lg"/></div>)}</div> : yearlySales.length === 0 ? <p className="py-8 text-center text-sm text-neutral-500">No sales recorded for this year.</p> : <div className="mt-4 space-y-4">{yearlySales.map((bill) => <article key={bill.id} className="rounded-xl border p-4"><div className="flex flex-wrap justify-between gap-2"><div><p className="font-semibold">{bill.bill_number} · {bill.customer_name}</p><p className="text-xs text-neutral-500">{bill.customer_phone || "No phone"} · {bill.table_name} · {new Date(bill.created_at).toLocaleString()}</p></div><div className="text-right text-sm"><p className="font-semibold">Received: Rs. {bill.collected_amount}</p><p className="text-neutral-500">Collected in selected period · Outstanding now: Rs. {bill.outstanding_amount}</p></div></div><div className="mt-3 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">Item</th><th>Quantity</th><th>Price</th><th>Total</th></tr></thead><tbody>{(bill.items || []).map((item: any, index: number) => <tr key={index} className="border-b last:border-0"><td className="py-2">{item.name}</td><td>{item.quantity}</td><td>Rs. {item.unit_price}</td><td>Rs. {item.total}</td></tr>)}</tbody></table></div></article>)}</div>}
+        </section>
+      </div>}
+      {showLastSevenDays && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" onClick={() => setShowLastSevenDays(false)}>
+        <section className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-[#e9dfd5] bg-white p-4 shadow-2xl sm:p-6" onClick={(event) => event.stopPropagation()}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div><p className="text-[10px] font-extrabold uppercase tracking-[.16em] text-[#9b7957]">Manager insights</p><h2 className="mt-1 text-xl font-extrabold text-[#30251f]">Last 7 days sales</h2><p className="mt-1 text-xs text-neutral-500">Collected sales · Today and previous six business days</p></div>
+            <button type="button" onClick={() => setShowLastSevenDays(false)} className="rounded-lg border border-[#e9dfd5] px-3 py-2 text-xs font-bold">Close</button>
+          </div>
+          {lastSevenDaysLoading ? <div className="py-12 text-center text-sm text-neutral-500">Loading sales activity…</div> : <>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-[#e9dfd5] bg-[#f8f4ef] p-4"><p className="text-[9px] font-extrabold uppercase tracking-wider text-[#958477]">Total collected</p><p className="mt-2 break-words text-xl font-extrabold text-[#30251f]">{money(lastSevenDays.total_sales)}</p></div>
+              <div className="rounded-xl border border-[#e9dfd5] bg-[#f8f4ef] p-4"><p className="text-[9px] font-extrabold uppercase tracking-wider text-[#958477]">Transactions</p><p className="mt-2 text-xl font-extrabold text-[#30251f]">{lastSevenDays.transaction_count}</p></div>
+            </div>
+            <div className="mt-5 space-y-3">
+              {lastSevenDays.days.map((day) => {
+                const maximum = Math.max(1, ...lastSevenDays.days.map((item) => Number(item.sales || 0)));
+                const width = Math.max(0, Math.min(100, Number(day.sales || 0) / maximum * 100));
+                return <div key={day.date} className="rounded-xl border border-[#eee7df] p-3">
+                  <div className="flex items-center justify-between gap-3"><span className="text-xs font-bold text-[#514238]">{new Date(day.date + "T12:00:00").toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"})}</span><span className="text-right text-xs font-extrabold tabular-nums text-[#3f5946]">{money(day.sales)}</span></div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#f0ece6]"><div className="h-full rounded-full bg-[#8b3c42] transition-all" style={{width: width + "%"}} /></div>
+                  <p className="mt-1 text-[10px] text-[#9b8b7f]">{day.transactions} {day.transactions === 1 ? "transaction" : "transactions"}</p>
+                </div>;
+              })}
+            </div>
+          </>}
         </section>
       </div>}
       {showDailySales && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" onClick={() => setShowDailySales(false)}>
