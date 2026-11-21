@@ -368,6 +368,11 @@ def list_recipes(db: Session = Depends(get_db), user=Depends(require_roles(*MANA
 
 @router.post("/recipes")
 def save_recipe(payload: RecipeUpdate, db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    if not payload.yield_quantity.is_finite() or payload.yield_quantity <= 0:
+        raise HTTPException(422, "Recipe yield must be a positive finite number")
+    for line in payload.items:
+        if not line.quantity.is_finite() or line.quantity <= 0:
+            raise HTTPException(422, "Ingredient quantities must be positive finite numbers")
     if not db.execute(text("SELECT id FROM menu_items WHERE id=:id"), {"id": payload.menu_item_id}).first():
         raise HTTPException(404, "Menu item not found")
     for line in payload.items:
