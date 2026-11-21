@@ -159,33 +159,58 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
     if order.table:
         order.table.status = models.TableStatus.available
 
-    # Deduct recipe ingredients atomically with bill creation. Orders without recipes remain billable.
+    # POS orders consume recipe stock when items are added. Copy that immutable cost record
+    # into the bill; only legacy open orders without an order-time ledger use the old fallback.
     for order_item in order.items:
         if order_item.is_cancelled:
             continue
+        consumed = db.execute(text("""SELECT c.inventory_item_id,c.quantity,c.unit_cost
+            FROM order_item_stock_consumptions c
+            WHERE c.order_item_id=:order_item AND c.restored_at IS NULL"""),
+            {"order_item": order_item.id}).mappings().all()
+        if consumed:
+            for ingredient in consumed:
+                db.execute(text("""INSERT INTO bill_cost_snapshots
+                    (bill_id,order_item_id,inventory_item_id,quantity,unit_cost,total_cost)
+                    VALUES(:bill,:order_item,:inventory,:quantity,:unit_cost,:total_cost)"""),
+                    {"bill": bill.id, "order_item": order_item.id, "inventory": ingredient["inventory_item_id"],
+                     "quantity": ingredient["quantity"], "unit_cost": ingredient["unit_cost"],
+                     "total_cost": Decimal(str(ingredient["quantity"])) * Decimal(str(ingredient["unit_cost"]))})
+            continue
+
+        # Backward compatibility for open orders created before order-time stock tracking was deployed.
         recipe = db.execute(text("SELECT id,yield_quantity FROM recipes WHERE menu_item_id=:menu_id"),
                             {"menu_id": order_item.menu_item_id}).mappings().first()
         if not recipe:
             continue
         ingredients = db.execute(text("""SELECT ri.item_id,ri.quantity,i.name,i.unit,i.quantity stock_quantity,
             i.average_cost FROM recipe_items ri JOIN inventory_items i ON i.id=ri.item_id
-            WHERE ri.recipe_id=:recipe_id FOR UPDATE OF i"""), {"recipe_id": recipe["id"]}).mappings().all()
+            WHERE ri.recipe_id=:recipe_id AND i.is_active=TRUE ORDER BY i.id FOR UPDATE OF i"""),
+            {"recipe_id": recipe["id"]}).mappings().all()
         for ingredient in ingredients:
             used = Decimal(str(ingredient["quantity"])) * order_item.quantity / Decimal(str(recipe["yield_quantity"]))
             available = Decimal(str(ingredient["stock_quantity"]))
             if available < used:
-                raise HTTPException(status_code=409, detail="Insufficient stock for " + ingredient["name"] + ": need " + str(used) + " " + ingredient["unit"] + ", have " + str(available))
-            db.execute(text("""INSERT INTO bill_cost_snapshots(bill_id,order_item_id,inventory_item_id,quantity,unit_cost,total_cost)
+                raise HTTPException(status_code=409, detail="Insufficient stock for " + ingredient["name"] +
+                    ": need " + str(used) + " " + ingredient["unit"] + ", have " + str(available))
+            db.execute(text("UPDATE inventory_items SET quantity=quantity-:used,updated_at=NOW() WHERE id=:id"),
+                       {"used": used, "id": ingredient["item_id"]})
+            db.execute(text("""INSERT INTO order_item_stock_consumptions
+                (order_item_id,inventory_item_id,quantity,unit_cost)
+                VALUES(:order_item,:inventory,:quantity,:cost)"""),
+                {"order_item": order_item.id, "inventory": ingredient["item_id"],
+                 "quantity": used, "cost": ingredient["average_cost"]})
+            db.execute(text("""INSERT INTO stock_movements(item_id,movement_type,quantity,unit_cost,reference,notes,created_by)
+                VALUES(:item,'consumption',:qty,:cost,:reference,:notes,:user)"""),
+                {"item": ingredient["item_id"], "qty": used, "cost": ingredient["average_cost"],
+                 "reference": bill.bill_number, "notes": "Legacy order recipe consumption on bill " + bill.bill_number,
+                 "user": user.id})
+            db.execute(text("""INSERT INTO bill_cost_snapshots
+                (bill_id,order_item_id,inventory_item_id,quantity,unit_cost,total_cost)
                 VALUES(:bill,:order_item,:inventory,:quantity,:unit_cost,:total_cost)"""),
                 {"bill": bill.id, "order_item": order_item.id, "inventory": ingredient["item_id"],
                  "quantity": used, "unit_cost": ingredient["average_cost"],
                  "total_cost": used * Decimal(str(ingredient["average_cost"]))})
-            db.execute(text("UPDATE inventory_items SET quantity=quantity-:used,updated_at=NOW() WHERE id=:id"),
-                       {"used": used, "id": ingredient["item_id"]})
-            db.execute(text("""INSERT INTO stock_movements(item_id,movement_type,quantity,unit_cost,reference,notes,created_by)
-                VALUES(:item,'consumption',:qty,:cost,:reference,:notes,:user)"""),
-                {"item": ingredient["item_id"], "qty": used, "cost": ingredient["average_cost"],
-                 "reference": bill.bill_number, "notes": "Recipe consumption on bill " + bill.bill_number, "user": user.id})
 
     db.commit()
     db.refresh(bill)
