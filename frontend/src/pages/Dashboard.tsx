@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api/client";
@@ -296,20 +297,20 @@ export default function Dashboard() {
           <p className="mt-4 text-[11px] text-neutral-500">Estimate based on collected sales, recipe-based ingredient costs and recorded expenses/payroll.</p>
         </section>
       </div>}
-      {showMonthlySales && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" onClick={() => setShowMonthlySales(false)}>
-        <section className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+      {showMonthlySales && createPortal(<div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-3 pt-6 sm:pt-8" onClick={() => setShowMonthlySales(false)}>
+        <section className="max-h-[calc(100dvh-3rem)] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold">{t("Monthly sales details")}</h2><p className="text-sm text-neutral-500">{reportDate.slice(0, 7)}</p></div><button type="button" onClick={() => setShowMonthlySales(false)} className="rounded-lg border px-3 py-2">{t("Close")}</button></div>
           {monthlySalesLoading ? <div className="space-y-3 py-5">{Array.from({length:3},(_,i)=><div key={i} className="rounded-xl border p-4"><div className="bg-[#eee9e3] h-4 w-40 rounded"/><div className="bg-[#eee9e3] mt-3 h-3 w-64 max-w-full rounded"/><div className="bg-[#eee9e3] mt-5 h-16 w-full rounded-lg"/></div>)}</div> : monthlySales.length === 0 ? <p className="py-8 text-center text-sm text-neutral-500">{t("No sales recorded for this month.")}</p> : <div className="mt-4 space-y-4">{monthlySales.map((bill) => <article key={bill.id} className="rounded-xl border p-4"><div className="flex flex-wrap justify-between gap-2"><div><p className="font-semibold">{bill.bill_number} · {bill.customer_name}</p><p className="text-xs text-neutral-500">{bill.customer_phone || t("No phone")} · {bill.table_name} · {new Date(bill.created_at).toLocaleString()}</p></div><div className="text-right text-sm"><p className="font-semibold">Received: Rs. {bill.collected_amount}</p><p className="text-neutral-500">Collected in selected period · Outstanding now: Rs. {bill.outstanding_amount}</p></div></div><div className="mt-3 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">{t("Food")}</th><th>{t("Quantity")}</th><th>{t("Price")}</th><th>{t("Total")}</th></tr></thead><tbody>{bill.items.map((item: any, index: number) => <tr key={index} className="border-b last:border-0"><td className="py-2">{item.name}</td><td>{item.quantity}</td><td>Rs. {item.unit_price}</td><td>Rs. {item.total}</td></tr>)}</tbody></table></div></article>)}</div>}
         </section>
-      </div>}
-      {showYearlySales && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" onClick={() => setShowYearlySales(false)}>
-        <section className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+      </div>, document.body)}
+      {showYearlySales && createPortal(<div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-3 pt-6 sm:pt-8" onClick={() => setShowYearlySales(false)}>
+        <section className="max-h-[calc(100dvh-3rem)] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold">Yearly sales details</h2><p className="text-sm text-neutral-500">{reportDate.slice(0, 4)}</p></div><button type="button" onClick={() => setShowYearlySales(false)} className="rounded-lg border px-3 py-2">Close</button></div>
           {yearlySalesLoading ? <div className="space-y-3 py-5">{Array.from({length:3},(_,i)=><div key={i} className="rounded-xl border p-4"><div className="bg-[#eee9e3] h-4 w-40 rounded"/><div className="bg-[#eee9e3] mt-3 h-3 w-64 max-w-full rounded"/><div className="bg-[#eee9e3] mt-5 h-16 w-full rounded-lg"/></div>)}</div> : yearlySales.length === 0 ? <p className="py-8 text-center text-sm text-neutral-500">No sales recorded for this year.</p> : <div className="mt-4 space-y-4">{yearlySales.map((bill) => <article key={bill.id} className="rounded-xl border p-4"><div className="flex flex-wrap justify-between gap-2"><div><p className="font-semibold">{bill.bill_number} · {bill.customer_name}</p><p className="text-xs text-neutral-500">{bill.customer_phone || "No phone"} · {bill.table_name} · {new Date(bill.created_at).toLocaleString()}</p></div><div className="text-right text-sm"><p className="font-semibold">Received: Rs. {bill.collected_amount}</p><p className="text-neutral-500">Collected in selected period · Outstanding now: Rs. {bill.outstanding_amount}</p></div></div><div className="mt-3 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">Item</th><th>Quantity</th><th>Price</th><th>Total</th></tr></thead><tbody>{(bill.items || []).map((item: any, index: number) => <tr key={index} className="border-b last:border-0"><td className="py-2">{item.name}</td><td>{item.quantity}</td><td>Rs. {item.unit_price}</td><td>Rs. {item.total}</td></tr>)}</tbody></table></div></article>)}</div>}
         </section>
-      </div>}
-      {showLastSevenDays && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" onClick={() => setShowLastSevenDays(false)}>
-        <section className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-[#e9dfd5] bg-white p-4 shadow-2xl sm:p-6" onClick={(event) => event.stopPropagation()}>
+      </div>, document.body)}
+      {showLastSevenDays && createPortal(<div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-3 pt-6 sm:pt-8" onClick={() => setShowLastSevenDays(false)}>
+        <section className="max-h-[calc(100dvh-3rem)] w-full max-w-3xl overflow-y-auto rounded-2xl border border-[#e9dfd5] bg-white p-4 shadow-2xl sm:p-6" onClick={(event) => event.stopPropagation()}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div><p className="text-[10px] font-extrabold uppercase tracking-[.16em] text-[#9b7957]">Manager insights</p><h2 className="mt-1 text-xl font-extrabold text-[#30251f]">Last 7 days sales</h2><p className="mt-1 text-xs text-neutral-500">Collected sales · Today and previous six business days</p></div>
             <button type="button" onClick={() => setShowLastSevenDays(false)} className="rounded-lg border border-[#e9dfd5] px-3 py-2 text-xs font-bold">Close</button>
@@ -332,13 +333,13 @@ export default function Dashboard() {
             </div>
           </>}
         </section>
-      </div>}
-      {showDailySales && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" onClick={() => setShowDailySales(false)}>
-        <section className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+      </div>, document.body)}
+      {showDailySales && createPortal(<div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-3 pt-6 sm:pt-8" onClick={() => setShowDailySales(false)}>
+        <section className="max-h-[calc(100dvh-3rem)] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold">{t("Daily sales details")}</h2><p className="text-sm text-neutral-500">{reportDate}</p></div><button type="button" onClick={() => setShowDailySales(false)} className="rounded-lg border px-3 py-2">{t("Close")}</button></div>
           {salesLoading ? <div className="space-y-3 py-5">{Array.from({length:3},(_,i)=><div key={i} className="rounded-xl border p-4"><div className="bg-[#eee9e3] h-4 w-40 rounded"/><div className="bg-[#eee9e3] mt-3 h-3 w-64 max-w-full rounded"/><div className="bg-[#eee9e3] mt-5 h-16 w-full rounded-lg"/></div>)}</div> : dailySales.length === 0 ? <p className="py-8 text-center text-sm text-neutral-500">{t("No sales recorded for this date.")}</p> : <div className="mt-4 space-y-4">{dailySales.map((bill) => <article key={bill.id} className="rounded-xl border p-4"><div className="flex flex-wrap justify-between gap-2"><div><p className="font-semibold">{bill.bill_number} · {bill.customer_name}</p><p className="text-xs text-neutral-500">{bill.customer_phone || t("No phone")} · {bill.table_name} · {new Date(bill.created_at).toLocaleString()}</p></div><div className="text-right text-sm"><p className="font-semibold">Received: Rs. {bill.collected_amount}</p><p className="text-neutral-500">Collected in selected period · Outstanding now: Rs. {bill.outstanding_amount}</p></div></div><div className="mt-3 overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-2">{t("Food")}</th><th>{t("Quantity")}</th><th>{t("Price")}</th><th>{t("Total")}</th></tr></thead><tbody>{bill.items.map((item: any, index: number) => <tr key={index} className="border-b last:border-0"><td className="py-2">{item.name}</td><td>{item.quantity}</td><td>Rs. {item.unit_price}</td><td>Rs. {item.total}</td></tr>)}</tbody></table></div></article>)}</div>}
         </section>
-      </div>}
+      </div>, document.body)}
       {role === "admin" && <section id="daily-savings" className="pt-3"><div className="mb-3"><p className="text-[10px] font-extrabold uppercase tracking-[.2em] text-[#9b7957]">Reserve & cash discipline</p><h2 className="mt-1 text-xl font-extrabold tracking-tight">Daily savings</h2><p className="mt-1 text-xs text-neutral-500">A running record of cash transferred from the drawer into the savings reserve.</p></div><DailySavings embedded /></section>}
     </div>
   );
