@@ -23,6 +23,55 @@ def _next_number(prefix: str) -> str:
     suffix = "".join(random.choices(string.digits, k=4))
     return f"{prefix}-{stamp}-{suffix}"
 
+def _consume_recipe_for_order_item(db: Session, order_item: models.OrderItem, order_number: str, user_id: str) -> None:
+    recipe = db.execute(text("SELECT id,yield_quantity FROM recipes WHERE menu_item_id=:menu_id"),
+                        {"menu_id": order_item.menu_item_id}).mappings().first()
+    if not recipe:
+        return
+    ingredients = db.execute(text("""SELECT ri.item_id,ri.quantity,i.name,i.unit,i.quantity stock_quantity,i.average_cost
+        FROM recipe_items ri JOIN inventory_items i ON i.id=ri.item_id
+        WHERE ri.recipe_id=:recipe_id AND i.is_active=TRUE ORDER BY i.id FOR UPDATE OF i"""),
+        {"recipe_id": recipe["id"]}).mappings().all()
+    for ingredient in ingredients:
+        used = (Decimal(str(ingredient["quantity"])) * order_item.quantity /
+                Decimal(str(recipe["yield_quantity"])))
+        available = Decimal(str(ingredient["stock_quantity"]))
+        if available < used:
+            raise HTTPException(status_code=409, detail=(
+                f"Insufficient stock for {ingredient['name']}: need {used} {ingredient['unit']}, "
+                f"have {available} {ingredient['unit']}. Add stock before sending this order."
+            ))
+        db.execute(text("UPDATE inventory_items SET quantity=quantity-:used,updated_at=NOW() WHERE id=:id"),
+                   {"used": used, "id": ingredient["item_id"]})
+        db.execute(text("""INSERT INTO order_item_stock_consumptions
+            (order_item_id,inventory_item_id,quantity,unit_cost)
+            VALUES(:order_item,:inventory,:quantity,:cost)"""),
+            {"order_item": order_item.id, "inventory": ingredient["item_id"],
+             "quantity": used, "cost": ingredient["average_cost"]})
+        db.execute(text("""INSERT INTO stock_movements(item_id,movement_type,quantity,unit_cost,reference,notes,created_by)
+            VALUES(:item,'consumption',:qty,:cost,:reference,:notes,:user)"""),
+            {"item": ingredient["item_id"], "qty": used, "cost": ingredient["average_cost"],
+             "reference": order_number, "notes": "POS order consumption: " + order_number + " / " + order_item.menu_item.name,
+             "user": user_id})
+
+
+def _restore_order_item_stock(db: Session, order_item: models.OrderItem, order_number: str, user_id: str, reason: str) -> None:
+    rows = db.execute(text("""SELECT c.id,c.inventory_item_id,c.quantity,i.name,i.average_cost
+        FROM order_item_stock_consumptions c JOIN inventory_items i ON i.id=c.inventory_item_id
+        WHERE c.order_item_id=:order_item AND c.restored_at IS NULL
+        FOR UPDATE OF c,i"""), {"order_item": order_item.id}).mappings().all()
+    for row in rows:
+        db.execute(text("UPDATE inventory_items SET quantity=quantity+:qty,updated_at=NOW() WHERE id=:id"),
+                   {"qty": row["quantity"], "id": row["inventory_item_id"]})
+        db.execute(text("""INSERT INTO stock_movements(item_id,movement_type,quantity,unit_cost,reference,notes,created_by)
+            VALUES(:item,'return',:qty,:cost,:reference,:notes,:user)"""),
+            {"item": row["inventory_item_id"], "qty": row["quantity"], "cost": row["average_cost"],
+             "reference": order_number, "notes": "Restored POS stock: " + reason + " / " + order_number,
+             "user": user_id})
+        db.execute(text("UPDATE order_item_stock_consumptions SET restored_at=NOW() WHERE id=:id"),
+                   {"id": row["id"]})
+
+
 
 @router.post("/orders", response_model=schemas.OrderOut)
 async def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_db),
@@ -96,6 +145,7 @@ async def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_d
                                        quantity=line.quantity, unit_price=unit_price, notes=line.notes)
         db.add(order_item)
         db.flush()
+        _consume_recipe_for_order_item(db, order_item, order.order_number, user.id)
         kitchen_items.append((order_item, line.quantity, line.notes))
 
     for station, lines in ((models.RouteDestination.kitchen, kitchen_items),):
@@ -234,6 +284,8 @@ def cancel_order(order_id: str, db: Session = Depends(get_db),
         raise HTTPException(status_code=400, detail="Only open orders can be cancelled")
     order.status = models.OrderStatus.cancelled
     for item in order.items:
+        if not item.is_cancelled:
+            _restore_order_item_stock(db, item, order.order_number, user.id, "order cancelled")
         item.is_cancelled = True
     for kot in order.kots:
         if kot.status not in (models.KOTStatus.served, models.KOTStatus.cancelled):
@@ -260,6 +312,7 @@ async def remove_order_item(order_id: str, item_id: str, db: Session = Depends(g
     if not item or item.is_cancelled:
         raise HTTPException(status_code=404, detail="Active order item not found")
 
+    _restore_order_item_stock(db, item, order.order_number, user.id, "order item removed")
     item.is_cancelled = True
     # Remove the item from KOTs that are still in progress. Served KOT history is retained.
     active_kots = db.query(models.KOT).filter(
