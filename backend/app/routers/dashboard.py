@@ -426,16 +426,25 @@ def website_operations_guide(user=Depends(require_roles(models.RoleName.admin,mo
     doc=SimpleDocTemplate(output,pagesize=A4,rightMargin=19*mm,leftMargin=19*mm,topMargin=22*mm,bottomMargin=19*mm,
         title="Royal Skye Website Operational Guide",author="Royal Skye Restaurant")
     styles=getSampleStyleSheet()
-    styles.add(ParagraphStyle(name="GuideTitle",parent=styles["Title"],fontSize=26,leading=31,textColor=colors.HexColor("#34251f"),alignment=1,spaceAfter=8))
-    styles.add(ParagraphStyle(name="GuideSub",parent=styles["Normal"],fontSize=9,textColor=colors.HexColor("#92775e"),alignment=1,leading=14))
-    styles.add(ParagraphStyle(name="GuideH",parent=styles["Heading2"],fontSize=13,leading=17,textColor=crimson,spaceBefore=12,spaceAfter=5))
-    styles.add(ParagraphStyle(name="GuideBody",parent=styles["BodyText"],fontSize=9,leading=14,textColor=colors.HexColor("#443831"),spaceAfter=5))
-    styles.add(ParagraphStyle(name="GuideSmall",parent=styles["BodyText"],fontSize=7.5,leading=11,textColor=colors.HexColor("#75675d")))
+    ink=colors.HexColor("#080A0D"); crimson=colors.HexColor("#C8102E")
+    silver=colors.HexColor("#68717D")
+    styles.add(ParagraphStyle(name="GuideTitle",parent=styles["Title"],fontName="Helvetica-Bold",fontSize=27,leading=32,textColor=colors.white,alignment=1,spaceAfter=5))
+    styles.add(ParagraphStyle(name="GuideSub",parent=styles["Normal"],fontSize=9,textColor=colors.HexColor("#C6CDD5"),alignment=1,leading=14))
+    styles.add(ParagraphStyle(name="GuideH",parent=styles["Heading2"],fontName="Helvetica-Bold",fontSize=13,leading=17,textColor=crimson,spaceBefore=12,spaceAfter=5))
+    styles.add(ParagraphStyle(name="GuideBody",parent=styles["BodyText"],fontSize=9,leading=14,textColor=colors.HexColor("#252A31"),spaceAfter=5))
+    styles.add(ParagraphStyle(name="GuideSmall",parent=styles["BodyText"],fontSize=7.5,leading=11,textColor=silver))
+    styles.add(ParagraphStyle(name="GuideCover",parent=styles["BodyText"],fontSize=9,leading=15,textColor=colors.white))
     def p(value,style="GuideBody"): return Paragraph(value,styles[style])
-    story=[Spacer(1,28*mm),p("ROYAL SKYE","GuideTitle"),p("RESTAURANT POS · WEBSITE OPERATIONAL GUIDE","GuideSub"),
-        Spacer(1,10*mm),p("A practical handbook for daily restaurant service, management and reporting.","GuideSub"),Spacer(1,20*mm)]
-    cover=Table([[p("<b>WHAT THIS GUIDE COVERS</b><br/>Login and role access · Dashboard · Tables and POS · Billing and payments · Menu and customers · Inventory and expenses · Cash drawer · Control Center · Business settings and settings search · Staff and payroll · Reports · Backup and restore")]],colWidths=[165*mm])
-    cover.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),colors.HexColor("#F7F1E9")),("BOX",(0,0),(-1,-1),.8,colors.HexColor("#D8C7B5")),("PADDING",(0,0),(-1,-1),14)]))
+    masthead=Table([[p("ROYAL SKYE","GuideTitle")],
+        [p("RESTAURANT POS  /  SYSTEM OPERATIONS MANUAL","GuideSub")],
+        [p("FIELD GUIDE  ·  STAFF WORKFLOWS  ·  FINANCIAL CONTROL","GuideSub")]],colWidths=[165*mm])
+    masthead.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),ink),("BOX",(0,0),(-1,-1),1,crimson),
+        ("LINEBELOW",(0,0),(-1,0),2,crimson),("TOPPADDING",(0,0),(-1,-1),10),("BOTTOMPADDING",(0,0),(-1,-1),10)]))
+    story=[Spacer(1,12*mm),masthead,Spacer(1,10*mm),
+        p("A practical handbook for daily restaurant service, management and reporting.","GuideSub"),Spacer(1,14*mm)]
+    cover=Table([[p("<b>WHAT THIS GUIDE COVERS</b><br/>Login and role access · Dashboard · Tables and POS · Billing and payments · Menu and customers · Inventory and expenses · Cash drawer · Control Center · Business settings and settings search · Staff and payroll · Reports · Backup and restore","GuideCover")]],colWidths=[165*mm])
+    cover.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),ink),("BOX",(0,0),(-1,-1),1,crimson),
+        ("LINEBEFORE",(0,0),(0,-1),3,crimson),("PADDING",(0,0),(-1,-1),14)]))
     story += [cover,Spacer(1,18*mm),p("Prepared for the Royal Skye Restaurant website. Screen names may change as the system is updated; follow the labels shown in your live account.","GuideSmall"),PageBreak()]
     sections=[
     ("1. Sign in and role access",["Sign in with the username and password issued by the administrator. Never share credentials or leave an authenticated terminal unattended.","Access is role-based. Admins have full management access. Managers do not see Staff Accounts or admin-only backup controls. Cashiers and waiters see service functions assigned to their roles.","If access is denied, ask an administrator to confirm that the account is active and the role is correct."]),
@@ -457,8 +466,12 @@ def website_operations_guide(user=Depends(require_roles(models.RoleName.admin,mo
         for item in items: story.append(p("• "+item))
     story += [Spacer(1,8),p("SECURITY REMINDER: Protect customer information, employee accounts, financial reports and database backups. Use only the access assigned to you.","GuideSmall")]
     def footer(canvas,document):
-        canvas.saveState(); w,h=A4; canvas.setStrokeColor(colors.HexColor("#D8C7B5")); canvas.line(19*mm,13*mm,w-19*mm,13*mm)
-        canvas.setFont("Helvetica",7); canvas.setFillColor(colors.HexColor("#78685E")); canvas.drawString(19*mm,8*mm,"ROYAL SKYE · WEBSITE OPERATIONAL GUIDE")
-        canvas.drawRightString(w-19*mm,8*mm,f"Page {document.page}"); canvas.restoreState()
+        canvas.saveState(); w,h=A4
+        canvas.setFillColor(ink); canvas.rect(0,0,w,17*mm,fill=1,stroke=0)
+        canvas.setStrokeColor(crimson); canvas.setLineWidth(1.3); canvas.line(19*mm,17*mm,w-19*mm,17*mm)
+        canvas.setFont("Helvetica-Bold",7); canvas.setFillColor(colors.white)
+        canvas.drawString(19*mm,8*mm,"ROYAL SKYE  /  WEBSITE OPERATIONS")
+        canvas.setFillColor(colors.HexColor("#C6CDD5")); canvas.drawRightString(w-19*mm,8*mm,f"PAGE {document.page}")
+        canvas.restoreState()
     doc.build(story,onFirstPage=footer,onLaterPages=footer); output.seek(0)
     return StreamingResponse(output,media_type="application/pdf",headers={"Content-Disposition":"attachment; filename=royal-skye-website-operational-guide.pdf"})
