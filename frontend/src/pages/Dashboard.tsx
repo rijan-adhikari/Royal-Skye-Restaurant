@@ -79,6 +79,15 @@ export default function Dashboard() {
     api.get("/api/dashboard/low-stock").then((response) => setLowStockItems(response.data)).catch(() => setLowStockItems([]));
   }, [reportDate, role]);
 
+  // Populate the manager's seven-day sales card immediately, rather than waiting
+  // for the report modal to be opened.
+  useEffect(() => {
+    if (role !== "manager") return;
+    api.get("/api/dashboard/last-seven-days-sales")
+      .then((response) => setLastSevenDays(response.data))
+      .catch(() => setLastSevenDays({days:[], total_sales:"0", transaction_count:0}));
+  }, [role]);
+
   const openDailySales = async () => {
     setShowDailySales(true);
     setSalesLoading(true);
@@ -209,7 +218,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">{t("Today's sales")}</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#f5eee5] text-[#8d6542]">↗</span></div>
             <p className="mt-4 text-[25px] font-extrabold tracking-[-.045em] text-[#30251f]">{money(summary.daily_sales)}</p><p className="mt-2 text-[10px] font-bold text-[#9a7652] group-hover:text-[#7d1e1e]">{t("View today's bills")} <span className="ml-1">→</span></p>
           </button>
-          {role === "manager" && <button type="button" onClick={openLastSevenDays} className="group rounded-2xl border border-[#e9dfd5] bg-white p-5 text-left shadow-[0_5px_18px_rgba(45,30,22,.035)] transition hover:-translate-y-1 hover:border-[#c6a77f] hover:shadow-[0_14px_28px_rgba(45,30,22,.08)]"><div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">Last 7 days sales</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#edf2ee] text-[#52765b]">↗</span></div><p className="mt-4 text-[25px] font-extrabold tracking-[-.045em] text-[#30251f]">View report</p><p className="mt-2 text-[10px] font-bold text-[#9a7652]">Daily sales breakdown →</p></button>}
+          {role === "manager" && <button type="button" onClick={openLastSevenDays} className="group rounded-2xl border border-[#e9dfd5] bg-white p-5 text-left shadow-[0_5px_18px_rgba(45,30,22,.035)] transition hover:-translate-y-1 hover:border-[#c6a77f] hover:shadow-[0_14px_28px_rgba(45,30,22,.08)]"><div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">Last 7 days sales</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#edf2ee] text-[#52765b]">↗</span></div><p className="mt-4 break-words text-[25px] font-extrabold tracking-[-.045em] tabular-nums text-[#30251f]">{money(lastSevenDays.total_sales)}</p><p className="mt-2 text-[10px] font-bold text-[#9a7652]">Last 7 days · View breakdown →</p></button>}
           {role === "admin" && <button type="button" onClick={openMonthlySales} className="group rounded-2xl border border-[#e9dfd5] bg-white p-5 text-left shadow-[0_5px_18px_rgba(45,30,22,.035)] transition hover:-translate-y-1 hover:border-[#c6a77f] hover:shadow-[0_14px_28px_rgba(45,30,22,.08)]"><div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">Monthly sales</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#f5eee5] text-[#8d6542]">↗</span></div><p className="mt-4 text-[25px] font-extrabold tracking-[-.045em] text-[#30251f]">{money(summary.monthly_sales)}</p><p className="mt-2 text-[10px] font-bold text-[#9a7652]">View this month's bills →</p></button>}
           {role === "admin" && <button type="button" onClick={openYearlySales} className="group rounded-2xl border border-[#e9dfd5] bg-white p-5 text-left shadow-[0_5px_18px_rgba(45,30,22,.035)] transition hover:-translate-y-1 hover:border-[#c6a77f] hover:shadow-[0_14px_28px_rgba(45,30,22,.08)]"><div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">Yearly sales</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#edf2ee] text-[#52765b]">↗</span></div><p className="mt-4 text-[25px] font-extrabold tracking-[-.045em] text-[#30251f]">{money(summary.yearly_sales)}</p><p className="mt-2 text-[10px] font-bold text-[#9a7652]">View this year's bills →</p></button>}
           <Link to="/operations?tab=expenses" className="group rounded-2xl border border-[#e9dfd5] bg-white p-5 shadow-[0_5px_18px_rgba(45,30,22,.035)] transition hover:-translate-y-1 hover:border-[#c6a77f] hover:shadow-[0_14px_28px_rgba(45,30,22,.08)]">
