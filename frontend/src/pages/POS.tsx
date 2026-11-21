@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { api } from "../api/client";
+import { api, apiErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
 interface Category { id: string; name: string; }
@@ -122,8 +122,8 @@ export default function POS() {
         setSentOrderItems(openOrder?.items || []);
       }
       setMessage("KOT sent to kitchen/bar.");
-    } catch {
-      setMessage("Failed to send KOT.");
+    } catch (error: any) {
+      setMessage(apiErrorMessage(error, "Failed to send KOT."));
     } finally {
       setSending(false);
     }
