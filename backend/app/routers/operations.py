@@ -28,12 +28,9 @@ UNITS = {"kg": ("weight", Decimal("1000")), "g": ("weight", Decimal("1")),
 
 
 def item_requires_expiry(name: str, category: str) -> bool:
-    text_value = f"{name} {category}".lower()
-    non_perishable = ("beer", "soft drink", "soda", "water", "juice", "canned", "packaged", "bottle", "bar")
-    if any(word in text_value for word in non_perishable):
-        return False
-    perishable = ("kitchen", "ingredient", "food", "vegetable", "fruit", "meat", "dairy", "perishable", "produce", "herb", "dhaniya", "coriander", "onion", "pyaj", "garlic", "tomato", "potato", "ginger", "chicken")
-    return any(word in text_value for word in perishable)
+    # Expiry policy is determined strictly by the restaurant's inventory category.
+    # Perishable: Kitchen, KITCHEN ITEMS, MEAT. All other current categories are non-expiring.
+    return category.strip().casefold() in {"kitchen", "kitchen items", "meat"}
 
 
 def decimal_value(value: Any, label: str = "value") -> Decimal:
