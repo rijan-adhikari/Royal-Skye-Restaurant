@@ -1675,3 +1675,44 @@ html[data-theme="dark"] .dashboard-quick-access .dashboard-quick-link > span:fir
 html[data-theme="light"] .dashboard-financial-card > div:nth-child(2) > div:not(.hidden) {
   background:#f5faf8!important;border-color:#e0ece7!important;
 }
+
+
+/* Billing theme refinement: complete, consistent checkout surfaces. */
+.billing-page{--bp:#fff;--bs:#faf8f5;--bi:#fff;--bt:#29231e;--bm:#756b63;--bl:#e8dfd6;color:var(--bt)}
+.billing-page section{min-width:0;border-color:var(--bl)!important;color:var(--bt)}
+.billing-page section h2,.billing-page aside h2{color:var(--bt)!important}
+.billing-page section p,.billing-page section label,.billing-page section summary{color:var(--bm)}
+.billing-page input:not([type=checkbox]):not([type=radio]),.billing-page select,.billing-page textarea{min-width:0;background:var(--bi)!important;color:var(--bt)!important;border:1px solid var(--bl)!important;border-radius:12px}
+.billing-page input::placeholder,.billing-page textarea::placeholder{color:var(--bm)!important;opacity:.75}
+.billing-page input:focus,.billing-page select:focus,.billing-page textarea:focus{border-color:#299d85!important;outline:3px solid rgba(41,157,133,.13)!important}
+.billing-page option{background:var(--bp);color:var(--bt)}
+.billing-page details,.billing-page details>div,.billing-page .border-t,.billing-page .border-b{border-color:var(--bl)!important}
+.billing-page button:focus-visible,.billing-page summary:focus-visible{outline:3px solid rgba(41,157,133,.35);outline-offset:2px}
+.billing-page aside{min-width:0}
+.billing-page aside>section:first-child{background:var(--bs)!important}
+.billing-page aside>section:first-child h2{color:var(--bt)!important}
+.billing-page .receipt-print{width:100%;max-width:420px;margin:0 auto;background:#fff!important;color:#171717!important;border-color:#ddd!important}
+.billing-page .receipt-print *:not(button){color:#171717!important;border-color:#ddd!important;box-shadow:none!important}
+.billing-page .receipt-print button{background:#342923!important;color:#fff!important}
+html[data-theme=light] .billing-page{--bp:#fff;--bs:#f3f8f6;--bi:#fff;--bt:#203a36;--bm:#718780;--bl:#dfeae7}
+html[data-theme=light] .billing-page section{background:#fff!important;border-color:#dfeae7!important;box-shadow:0 8px 24px rgba(23,65,57,.045)!important}
+html[data-theme=light] .billing-page section h2,html[data-theme=light] .billing-page aside h2{color:#203a36!important}
+html[data-theme=light] .billing-page section p,html[data-theme=light] .billing-page section label,html[data-theme=light] .billing-page section summary{color:#718780!important}
+html[data-theme=light] .billing-page [class*="bg-[#"],html[data-theme=light] .billing-page [class*="bg-white"]{background:#f3f8f6!important;color:#203a36!important;border-color:#dfeae7!important}
+html[data-theme=light] .billing-page button[class*="bg-[#"],html[data-theme=light] .billing-page aside>section:first-child button{background:linear-gradient(110deg,#167d6b,#229b83)!important;border-color:#168b78!important;color:#fff!important}
+html[data-theme=light] .billing-page button[class*="border-[#"]{background:#f4faf7!important;border-color:#cfe5de!important;color:#176d60!important}
+html[data-theme=light] .billing-page .receipt-print{background:#fff!important}
+html[data-theme=dark] .billing-page{--bp:#101c20;--bs:#0d191d;--bi:#091316;--bt:#e7f3ef;--bm:#9bb4ac;--bl:#294744}
+html[data-theme=dark] .billing-page section{background:linear-gradient(145deg,#101c20,#0b171b)!important;border-color:#294744!important;color:#e7f3ef!important;box-shadow:0 14px 36px rgba(0,0,0,.2)!important}
+html[data-theme=dark] .billing-page section h2,html[data-theme=dark] .billing-page aside h2{color:#eaf7f2!important}
+html[data-theme=dark] .billing-page section p,html[data-theme=dark] .billing-page section label,html[data-theme=dark] .billing-page section summary,html[data-theme=dark] .billing-page [class*="text-neutral-"]{color:#9bb4ac!important}
+html[data-theme=dark] .billing-page [class*="bg-[#"],html[data-theme=dark] .billing-page [class*="bg-white"],html[data-theme=dark] .billing-page details,html[data-theme=dark] .billing-page details>div{background:#142328!important;color:#dcece6!important;border-color:#294744!important}
+html[data-theme=dark] .billing-page input:not([type=checkbox]):not([type=radio]),html[data-theme=dark] .billing-page select,html[data-theme=dark] .billing-page textarea{background:#091316!important;color:#e8f4ef!important;border-color:#355650!important;color-scheme:dark}
+html[data-theme=dark] .billing-page input::placeholder,html[data-theme=dark] .billing-page textarea::placeholder{color:#77928a!important}
+html[data-theme=dark] .billing-page button[class*="bg-[#"],html[data-theme=dark] .billing-page aside>section:first-child button{background:linear-gradient(105deg,#167866,#2dbb9b)!important;border-color:rgba(101,230,194,.5)!important;color:#041411!important}
+html[data-theme=dark] .billing-page button[class*="border-[#"]{background:#142b2a!important;border-color:#31534d!important;color:#baf8e5!important}
+html[data-theme=dark] .billing-page aside>section:first-child{background:linear-gradient(145deg,#101c20,#0b171b)!important}
+html[data-theme=dark] .billing-page .receipt-print{background:#fff!important;color:#171717!important}
+html[data-theme=dark] .billing-page .receipt-print *:not(button){background:transparent!important;color:#171717!important;border-color:#ddd!important}
+html[data-theme=dark] .billing-page .receipt-print button{background:#342923!important;color:#fff!important}
+@media(max-width:767px){.billing-page{padding-left:12px;padding-right:12px}.billing-page>header{align-items:flex-start!important}.billing-page>header h1{font-size:1.65rem!important}.billing-page section{padding:14px!important;border-radius:16px!important}.billing-page aside{position:static!important;top:auto!important}.billing-page aside>section:first-child{padding:16px!important}.billing-page .receipt-print{max-width:100%;padding:16px!important}}
