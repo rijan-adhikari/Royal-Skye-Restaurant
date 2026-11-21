@@ -225,6 +225,42 @@ def create_inventory(payload: InventoryCreate, db: Session = Depends(get_db), us
     return dict(row)
 
 
+@router.patch("/inventory/{item_id}")
+def update_inventory_item(item_id: str, payload: InventoryCreate, db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
+    if payload.unit not in UNITS:
+        raise HTTPException(422, "Unsupported unit")
+    if payload.quantity < 0 or payload.reorder_level < 0 or payload.average_cost < 0:
+        raise HTTPException(422, "Stock, reorder level and cost cannot be negative")
+    item = db.execute(text("SELECT * FROM inventory_items WHERE id=:id AND is_active=TRUE FOR UPDATE"), {"id": item_id}).mappings().first()
+    if not item:
+        raise HTTPException(404, "Inventory item not found")
+    if payload.unit != item["unit"]:
+        used = db.execute(text("SELECT COUNT(*) FROM recipe_items WHERE item_id=:id"), {"id": item_id}).scalar_one()
+        if used:
+            raise HTTPException(409, "Cannot change the unit while this item is used in menu recipes")
+    if payload.quantity != Decimal(str(item["quantity"])):
+        raise HTTPException(422, "Use a stock adjustment movement to change quantity so the stock ledger stays accurate")
+    row = db.execute(text("""UPDATE inventory_items SET name=:name,sku=:sku,category=:category,unit=:unit,
+        reorder_level=:reorder,average_cost=:cost,supplier_id=:supplier,expiry_date=:expiry,updated_at=NOW()
+        WHERE id=:id RETURNING *"""),
+        {"id": item_id, "name": payload.name.strip(), "sku": payload.sku.strip() or None if payload.sku else None,
+         "category": payload.category, "unit": payload.unit, "reorder": payload.reorder_level,
+         "cost": payload.average_cost, "supplier": payload.supplier_id, "expiry": payload.expiry_date}).mappings().first()
+    db.commit()
+    return dict(row)
+
+
+@router.delete("/inventory/{item_id}")
+def delete_inventory_item(item_id: str, db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
+    item = db.execute(text("SELECT id,name FROM inventory_items WHERE id=:id AND is_active=TRUE FOR UPDATE"), {"id": item_id}).mappings().first()
+    if not item:
+        raise HTTPException(404, "Inventory item not found")
+    # Archive instead of hard-delete: retain movements, recipe links and bill audit history.
+    db.execute(text("UPDATE inventory_items SET is_active=FALSE,updated_at=NOW() WHERE id=:id"), {"id": item_id})
+    db.commit()
+    return {"ok": True, "archived_id": item_id, "name": item["name"]}
+
+
 @router.post("/inventory/{item_id}/movements")
 def stock_movement(item_id: str, payload: MovementCreate, db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
     if payload.movement_type not in {"purchase", "consumption", "waste", "adjustment", "return"}:
