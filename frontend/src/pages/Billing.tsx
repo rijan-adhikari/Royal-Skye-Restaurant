@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api/client";
+import { useAuth } from "../context/AuthContext";
 
 interface OpenOrder { id: string; order_number: string; table_id?: string; table_name: string; subtotal: string; grand_total: string; tax_amount: string; tax_percent: string; service_charge_amount: string; service_charge_percent: string; cabin_fee?: string; service_type?: string; customer_name?: string | null; phone?: string | null; delivery_address?: string | null; delivery_fee?: string; items: Array<{ name: string; quantity: number; unit_price: string; total: string }>; }
 interface Customer { id: string; name: string; phone?: string | null; }
@@ -7,6 +8,14 @@ interface Customer { id: string; name: string; phone?: string | null; }
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 export default function Billing() {
+  const { role } = useAuth();
+  const canCorrectPayments = role === "admin" || role === "manager";
+  const [correctionBillNumber, setCorrectionBillNumber] = useState("");
+  const [correctionCustomerId, setCorrectionCustomerId] = useState("");
+  const [correctionReason, setCorrectionReason] = useState("");
+  const [confirmNoCash, setConfirmNoCash] = useState(false);
+  const [correctionBusy, setCorrectionBusy] = useState(false);
+  const [correctionResult, setCorrectionResult] = useState("");
   const [orders, setOrders] = useState<OpenOrder[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [orderId, setOrderId] = useState("");
@@ -228,6 +237,34 @@ export default function Billing() {
     setCustomerId(exact ? exact.id : "");
   };
 
+  const correctCashToCredit = async () => {
+    setError("");
+    setCorrectionResult("");
+    if (!correctionBillNumber.trim() || !correctionCustomerId || !correctionReason.trim() || !confirmNoCash) {
+      setError("Enter the bill number, select a customer, provide a reason and confirm that no cash was received.");
+      return;
+    }
+    if (!window.confirm("Convert this fully Cash-settled bill to customer Credit? This will reverse its cash-drawer sale entry and create an outstanding customer balance.")) return;
+    setCorrectionBusy(true);
+    try {
+      const response = await api.post("/api/bills/reclassify-credit", {
+        bill_number: correctionBillNumber.trim(),
+        customer_id: correctionCustomerId,
+        reason: correctionReason.trim(),
+        confirm_no_cash_received: confirmNoCash,
+      });
+      setCorrectionResult(`${response.data.bill_number} converted to Credit for ${response.data.customer_name}. Outstanding: NPR ${response.data.outstanding_amount}`);
+      setCorrectionBillNumber("");
+      setCorrectionCustomerId("");
+      setCorrectionReason("");
+      setConfirmNoCash(false);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Could not correct this bill.");
+    } finally {
+      setCorrectionBusy(false);
+    }
+  };
+
   const printBill = () => window.print();
 
   return (
@@ -236,6 +273,17 @@ export default function Billing() {
         <div><p className="text-[10px] font-extrabold uppercase tracking-[.2em] text-[#9b7957]">Front of house / Checkout</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight">Billing</h1><p className="mt-1 text-sm text-neutral-500">Select an order, take payment and issue a clean receipt.</p></div>
         <span className="rounded-full border border-[#e7ded4] bg-white px-3 py-2 text-xs font-bold text-[#75665a]">{orders.length} open orders</span>
       </header>
+      {canCorrectPayments && <section className="rounded-2xl border border-[#e5c9a8] bg-[#fffaf4] p-5 shadow-sm">
+        <div className="mb-3"><p className="text-[10px] font-extrabold uppercase tracking-widest text-[#9b7957]">Manager / Admin tool</p><h2 className="mt-1 text-base font-extrabold text-[#342923]">Correct settled payment · Cash to Credit</h2><p className="mt-1 text-xs text-neutral-600">Use only when a bill was marked Cash by mistake and no cash was actually received. The original bill number is preserved and the correction is audited.</p></div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="text-xs font-bold text-neutral-700">Bill number<input value={correctionBillNumber} onChange={e=>setCorrectionBillNumber(e.target.value)} placeholder="e.g. BILL-261122-1234" className="mt-1.5 w-full rounded-xl border px-3 py-3 text-sm"/></label>
+          <label className="text-xs font-bold text-neutral-700">Customer<select value={correctionCustomerId} onChange={e=>setCorrectionCustomerId(e.target.value)} className="mt-1.5 w-full rounded-xl border px-3 py-3 text-sm"><option value="">Select customer</option>{customers.map(customer=><option key={customer.id} value={customer.id}>{customer.name}{customer.phone?" · "+customer.phone:""}</option>)}</select></label>
+          <label className="text-xs font-bold text-neutral-700 sm:col-span-2">Reason<input value={correctionReason} onChange={e=>setCorrectionReason(e.target.value)} placeholder="Payment method selected incorrectly; no cash received" className="mt-1.5 w-full rounded-xl border px-3 py-3 text-sm"/></label>
+        </div>
+        <label className="mt-3 flex items-start gap-2 text-xs font-semibold text-[#7a332b]"><input type="checkbox" checked={confirmNoCash} onChange={e=>setConfirmNoCash(e.target.checked)} className="mt-0.5"/> I confirm that no cash was physically received for this bill.</label>
+        <button type="button" onClick={correctCashToCredit} disabled={correctionBusy} className="mt-3 rounded-xl bg-[#7b2926] px-4 py-3 text-xs font-extrabold text-white disabled:opacity-50">{correctionBusy?"Correcting…":"Convert Cash to Credit"}</button>
+        {correctionResult&&<p role="status" className="mt-3 rounded-lg bg-green-50 p-3 text-xs font-bold text-green-800">{correctionResult}</p>}
+      </section>}
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,.85fr)]">
         <div className="space-y-4">
           <section className="rounded-2xl border border-[#e9dfd5] bg-white p-5 shadow-sm">
