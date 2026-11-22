@@ -29,7 +29,7 @@ def _net_collection_sales(db: Session, start: datetime, end: datetime):
     value = db.execute(text("""SELECT COALESCE(SUM(x.amount *
         (b.grand_total - b.tax_amount - b.service_charge_amount) / NULLIF(b.grand_total,0)),0)
         FROM (
-          SELECT p.bill_id,p.amount FROM payments p WHERE p.created_at >= :start AND p.created_at < :end
+          SELECT p.bill_id,p.amount FROM payments p WHERE p.method <> 'credit' AND p.created_at >= :start AND p.created_at < :end
           UNION ALL
           SELECT cb.bill_id,bt.amount FROM balance_transactions bt
           JOIN customer_balances cb ON cb.id=bt.customer_balance_id
@@ -42,7 +42,7 @@ def _net_collection_sales(db: Session, start: datetime, end: datetime):
 def _collection_amounts(db: Session, start: datetime, end: datetime):
     rows = db.execute(text("""SELECT x.bill_id,SUM(x.amount) AS collected_amount
         FROM (
-          SELECT p.bill_id,p.amount FROM payments p WHERE p.created_at >= :start AND p.created_at < :end
+          SELECT p.bill_id,p.amount FROM payments p WHERE p.method <> 'credit' AND p.created_at >= :start AND p.created_at < :end
           UNION ALL
           SELECT cb.bill_id,bt.amount FROM balance_transactions bt
           JOIN customer_balances cb ON cb.id=bt.customer_balance_id
