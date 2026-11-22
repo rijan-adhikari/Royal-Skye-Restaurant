@@ -46,7 +46,7 @@ def on_startup():
     migration_config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
     command.upgrade(migration_config, "head")
 
-    # Replace G8 with staff dining tables without deleting historical references.
+    # Keep all existing dining tables, including G8, and add the two staff tables.
     db = SessionLocal()
     try:
         ground_floor = db.query(models.Floor).filter(
@@ -56,11 +56,13 @@ def on_startup():
             dining_tables = db.query(models.DiningTable).filter(
                 models.DiningTable.floor_id == ground_floor.id
             ).all()
+            existing_names = set()
             for dining_table in dining_tables:
-                if dining_table.name.strip().casefold() in {"g8", "g8 table"}:
-                    dining_table.is_active = False
+                normalized_name = dining_table.name.strip().casefold()
+                existing_names.add(normalized_name)
+                if normalized_name in {"g8", "g8 table"}:
+                    dining_table.is_active = True
 
-            existing_names = {table.name.strip().casefold() for table in dining_tables if table.is_active}
             next_order = max((table.sort_order or 0 for table in dining_tables), default=0) + 1
             for table_name in ("Staff Table 1", "Staff Table 2"):
                 if table_name.casefold() not in existing_names:
