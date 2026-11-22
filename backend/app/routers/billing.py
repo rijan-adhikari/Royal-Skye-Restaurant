@@ -269,6 +269,70 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
     }
 
 
+
+
+@router.post("/bills/reclassify-credit")
+def reclassify_bill_as_credit(payload: schemas.BillCreditCorrection, db: Session = Depends(get_db),
+                              user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager))):
+    if not payload.confirm_no_cash_received:
+        raise HTTPException(status_code=400, detail="Confirm that no cash was received before correcting this bill")
+    bill = db.query(models.Bill).filter(
+        models.Bill.bill_number == payload.bill_number.strip()
+    ).with_for_update().first()
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    if bill.sale_status != "active":
+        raise HTTPException(status_code=409, detail="Only active bills can be corrected")
+    customer = db.query(models.Customer).filter(models.Customer.id == payload.customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=400, detail="Select a valid customer for this credit bill")
+    payments = db.query(models.Payment).filter(models.Payment.bill_id == bill.id).with_for_update().all()
+    if not payments or any(p.method != models.PaymentMethod.cash for p in payments):
+        raise HTTPException(status_code=409, detail="This correction only supports bills recorded entirely as Cash")
+    if sum((Decimal(p.amount) for p in payments), Decimal("0")) != Decimal(bill.grand_total):
+        raise HTTPException(status_code=409, detail="Only fully cash-settled bills can be converted")
+    balance = db.query(models.CustomerBalance).filter(
+        models.CustomerBalance.bill_id == bill.id
+    ).with_for_update().first()
+    if balance:
+        transactions = db.query(models.BalanceTransaction).filter(
+            models.BalanceTransaction.customer_balance_id == balance.id
+        ).count()
+        if transactions:
+            raise HTTPException(status_code=409, detail="This bill already has credit repayments and cannot be reclassified")
+        balance.customer_id = customer.id
+        balance.original_amount = bill.grand_total
+        balance.remaining_amount = bill.grand_total
+    else:
+        balance = models.CustomerBalance(
+            customer_id=customer.id, bill_id=bill.id,
+            original_amount=bill.grand_total, remaining_amount=bill.grand_total,
+        )
+        db.add(balance)
+    previous_customer_id = bill.customer_id
+    bill.customer_id = customer.id
+    bill.amount_paid = Decimal("0.00")
+    bill.outstanding_amount = bill.grand_total
+    for payment in payments:
+        payment.method = models.PaymentMethod.credit
+    # Keep the original drawer row for traceability, but neutralise the mistaken cash sale.
+    db.execute(text("""UPDATE cash_drawer_entries
+        SET amount=0, notes=COALESCE(notes,'') || :suffix
+        WHERE reference=:reference AND entry_type='sale'"""),
+        {"reference": bill.bill_number,
+         "suffix": ' | Reclassified to customer credit; no cash received.'})
+    db.add(models.AuditLog(
+        user_id=user.id, action="bill.payment_method.corrected",
+        details=(f"Bill {bill.bill_number}: Cash -> Credit; NPR {bill.grand_total}; "
+                 f"customer {customer.name}; previous customer {previous_customer_id or 'none'}; "
+                 f"reason: {payload.reason.strip()}"),
+    ))
+    db.commit()
+    return {"bill_number": bill.bill_number, "customer_name": customer.name,
+            "grand_total": str(bill.grand_total), "amount_paid": "0.00",
+            "outstanding_amount": str(bill.grand_total), "payment_method": "credit"}
+
+
 @router.post("/outstanding/repay")
 def repay_balance(payload: schemas.RepaymentCreate, db: Session = Depends(get_db),
                    user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager,
