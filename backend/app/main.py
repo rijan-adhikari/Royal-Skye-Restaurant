@@ -46,6 +46,36 @@ def on_startup():
     migration_config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
     command.upgrade(migration_config, "head")
 
+    # Replace G8 with staff dining tables without deleting historical references.
+    db = SessionLocal()
+    try:
+        ground_floor = db.query(models.Floor).filter(
+            models.Floor.name.ilike("Ground Floor"), models.Floor.is_active.is_(True)
+        ).first()
+        if ground_floor:
+            dining_tables = db.query(models.DiningTable).filter(
+                models.DiningTable.floor_id == ground_floor.id
+            ).all()
+            for dining_table in dining_tables:
+                if dining_table.name.strip().casefold() in {"g8", "g8 table"}:
+                    dining_table.is_active = False
+
+            existing_names = {table.name.strip().casefold() for table in dining_tables if table.is_active}
+            next_order = max((table.sort_order or 0 for table in dining_tables), default=0) + 1
+            for table_name in ("Staff Table 1", "Staff Table 2"):
+                if table_name.casefold() not in existing_names:
+                    db.add(models.DiningTable(
+                        floor_id=ground_floor.id,
+                        name=table_name,
+                        capacity=4,
+                        sort_order=next_order,
+                        is_active=True,
+                    ))
+                    next_order += 1
+            db.commit()
+    finally:
+        db.close()
+
     # Bootstrap exactly one administrator only on a genuinely empty database.
     # The password is supplied through a Render secret; the administrator can rotate it after signing in.
     if settings.INITIAL_ADMIN_PASSWORD:
