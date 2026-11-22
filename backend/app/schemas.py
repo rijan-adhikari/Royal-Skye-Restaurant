@@ -184,6 +184,15 @@ class BillCreate(BaseModel):
     payments: List[PaymentCreate] = []
 
 
+
+
+class BillCreditCorrection(BaseModel):
+    bill_number: str
+    customer_id: str
+    reason: str
+    confirm_no_cash_received: bool
+
+
 class RepaymentCreate(BaseModel):
     customer_balance_id: str
     amount: Decimal
