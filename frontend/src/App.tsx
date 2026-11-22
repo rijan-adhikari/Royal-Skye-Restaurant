@@ -50,6 +50,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   const management: NavItem[] = isManager ? [
     { to: "/admin?panel=menu", label: t("Menu Management"), icon: "master", panel: "menu" },
     { to: "/admin?panel=customers", label: t("Customer Management"), icon: "master", panel: "customers" },
+    ...(role === "admin" ? [{ to: "/admin?panel=staff", label: t("Staff Management"), icon: "staff", panel: "staff" }] : []),
     { to: "/operations?tab=inventory", label: t("Inventory"), icon: "inventory", tab: "inventory" },
     { to: "/operations?tab=expenses", label: t("Expenses"), icon: "expenses", tab: "expenses" },
     { to: "/operations?tab=controls", label: t("Control Center"), icon: "controls", tab: "controls" },
