@@ -10,7 +10,7 @@ router = APIRouter(prefix="/api", tags=["floors-tables"])
 
 @router.get("/floors", response_model=list[schemas.FloorOut])
 def list_floors(db: Session = Depends(get_db), user=Depends(get_current_user)):
-    return db.query(models.Floor).order_by(models.Floor.sort_order).all()
+    return db.query(models.Floor).filter(models.Floor.is_active.is_(True)).order_by(models.Floor.sort_order).all()
 
 
 @router.post("/floors", response_model=schemas.FloorOut)
@@ -25,7 +25,7 @@ def create_floor(payload: schemas.FloorCreate, db: Session = Depends(get_db),
 
 @router.get("/tables", response_model=list[schemas.TableOut])
 def list_tables(db: Session = Depends(get_db), user=Depends(get_current_user)):
-    return db.query(models.DiningTable).order_by(models.DiningTable.sort_order).all()
+    return db.query(models.DiningTable).filter(models.DiningTable.is_active.is_(True)).order_by(models.DiningTable.sort_order).all()
 
 
 @router.post("/tables", response_model=schemas.TableOut)
