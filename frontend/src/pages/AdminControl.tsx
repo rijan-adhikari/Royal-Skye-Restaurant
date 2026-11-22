@@ -33,6 +33,12 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const [editingCashEntry, setEditingCashEntry] = useState<string | null>(null);
   const [cashEntryEdit, setCashEntryEdit] = useState({ entry_type: "cash_in", amount: "", reference: "", notes: "" });
   const [refund, setRefund] = useState({ bill_id: "", amount: "", reason: "", method: "cash" });
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [correctionBillNumber, setCorrectionBillNumber] = useState("");
+  const [correctionCustomerId, setCorrectionCustomerId] = useState("");
+  const [correctionReason, setCorrectionReason] = useState("");
+  const [confirmNoCash, setConfirmNoCash] = useState(false);
+  const [correctionBusy, setCorrectionBusy] = useState(false);
   const [supplierEntry, setSupplierEntry] = useState({ supplier_id: "", entry_type: "payment", amount: "", reference: "", notes: "" });
   const [supplierReturn, setSupplierReturn] = useState({ supplier_id: "", item_id: "", quantity: "", unit_cost: "", reference: "", notes: "" });
   const [adjustment, setAdjustment] = useState({ customer_id: "", points: "", notes: "" });
@@ -51,6 +57,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     const requests = [
       ["current", "/api/admin/cash-shifts/current"], ["shifts", "/api/admin/cash-shifts"],
       ...(!managerView ? ([["sales", "/api/admin/sales"], ["salesSummary", "/api/dashboard/summary"], ["monthlySales", "/api/dashboard/monthly-sales"], ["yearlySales", "/api/dashboard/yearly-sales"]] as [string, string][]) : []),
+      ...(!managerView ? ([["customers", "/api/customers"]] as [string, string][]) : []),
       ["suppliers", "/api/operations/suppliers"], ["inventory", "/api/operations/inventory"], ["ledger", "/api/admin/suppliers/ledger"], ["supplierBalances", "/api/admin/suppliers/balances"],
       ["serviceOrders", "/api/admin/service-orders"],
       ["loyalty", "/api/admin/loyalty/accounts"], ["loyaltySettings", "/api/admin/loyalty/settings"],
@@ -66,6 +73,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
       const previousClosed = next.shifts.find((item: any) => item.status === "closed");
       if (previousClosed) setOpenFloat(String(previousClosed.counted_cash ?? previousClosed.expected_cash ?? previousClosed.opening_float ?? "0"));
     }
+    if (next.customers) setCustomers(next.customers);
     setData((old: any) => ({ ...old, ...next }));
     if (next.tax) setTax(next.tax);
     if (next.restaurant) setRestaurant(next.restaurant);
@@ -164,6 +172,28 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
       ...supplierReturn, quantity: Number(supplierReturn.quantity), unit_cost: Number(supplierReturn.unit_cost),
     }), "Supplier return posted; stock and supplier ledger updated.");
     setSupplierReturn({ supplier_id: "", item_id: "", quantity: "", unit_cost: "", reference: "", notes: "" });
+  };
+  const correctCashToCredit = async () => {
+    setError(""); setMessage("");
+    if (!correctionBillNumber.trim() || !correctionCustomerId || !correctionReason.trim() || !confirmNoCash) {
+      setError("Enter the bill number, select a customer, provide a reason and confirm that no cash was received.");
+      return;
+    }
+    if (!window.confirm("Convert this fully Cash-settled bill to customer Credit? This reverses the mistaken cash-drawer sale entry and creates an outstanding customer balance.")) return;
+    setCorrectionBusy(true);
+    try {
+      const response = await api.post("/api/bills/reclassify-credit", {
+        bill_number: correctionBillNumber.trim(),
+        customer_id: correctionCustomerId,
+        reason: correctionReason.trim(),
+        confirm_no_cash_received: confirmNoCash,
+      });
+      setMessage(`${response.data.bill_number} converted to Credit for ${response.data.customer_name}. Outstanding: NPR ${response.data.outstanding_amount}`);
+      setCorrectionBillNumber(""); setCorrectionCustomerId(""); setCorrectionReason(""); setConfirmNoCash(false);
+      await load();
+    } catch (e: any) {
+      setError(apiErrorMessage(e, "Could not correct this bill."));
+    } finally { setCorrectionBusy(false); }
   };
   const voidSale = async (sale: any) => {
     const reason = window.prompt(`Reason for voiding ${sale.bill_number}:`);
@@ -331,6 +361,16 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     </div>}
 
     {tab === "sales" && <section className={panel}>
+      <section className="mb-4 rounded-xl border border-[#e5c9a8] bg-[#fffaf4] p-4">
+        <div className="mb-3"><p className="text-[10px] font-extrabold uppercase tracking-widest text-[#9b7957]">Admin tool</p><h2 className="mt-1 text-base font-extrabold text-[#342923]">Correct settled payment · Cash to Credit</h2><p className="mt-1 text-xs text-neutral-600">Use only when a bill was marked Cash by mistake and no cash was actually received. The original bill number is preserved and the correction is audited. Fully cash-settled bills only.</p></div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="text-xs font-bold text-neutral-700">Bill number<input value={correctionBillNumber} onChange={e=>setCorrectionBillNumber(e.target.value)} placeholder="Enter bill number" className={field + " mt-1.5"}/></label>
+          <label className="text-xs font-bold text-neutral-700">Customer<select value={correctionCustomerId} onChange={e=>setCorrectionCustomerId(e.target.value)} className={field + " mt-1.5"}><option value="">Select customer</option>{customers.map(customer=><option key={customer.id} value={customer.id}>{customer.name}{customer.phone?" · "+customer.phone:""}</option>)}</select></label>
+          <label className="text-xs font-bold text-neutral-700 sm:col-span-2">Reason<input value={correctionReason} onChange={e=>setCorrectionReason(e.target.value)} placeholder="Payment method selected incorrectly; no cash received" className={field + " mt-1.5"}/></label>
+        </div>
+        <label className="mt-3 flex items-start gap-2 text-xs font-semibold text-[#7a332b]"><input type="checkbox" checked={confirmNoCash} onChange={e=>setConfirmNoCash(e.target.checked)} className="mt-0.5"/> I confirm that no cash was physically received for this bill.</label>
+        <button type="button" onClick={correctCashToCredit} disabled={correctionBusy||busy} className="mt-3 rounded-lg bg-[#7b2926] px-4 py-2 text-xs font-extrabold text-white disabled:opacity-50">{correctionBusy?"Correcting…":"Convert Cash to Credit"}</button>
+      </section>
       <div className="mb-4 grid gap-3 sm:grid-cols-2">
         <button type="button" onClick={() => openPeriodSales("monthly")} className="rounded-xl border border-[#e8dfd6] bg-[#faf7f3] p-4 text-left transition hover:border-[#b99a78]"><p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-[#92775e]">Monthly sales · current month</p><p className="mt-2 text-2xl font-extrabold tracking-tight text-[#3c3029]">{money(data.salesSummary?.monthly_sales)}</p><p className="mt-2 text-xs font-semibold text-[#92775e]">Load / refresh bills ↗</p></button>
         <button type="button" onClick={() => openPeriodSales("yearly")} className="rounded-xl border border-[#e8dfd6] bg-[#faf7f3] p-4 text-left transition hover:border-[#b99a78]"><p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-[#92775e]">Yearly sales · current year</p><p className="mt-2 text-2xl font-extrabold tracking-tight text-[#3c3029]">{money(data.salesSummary?.yearly_sales)}</p><p className="mt-2 text-xs font-semibold text-[#92775e]">Load / refresh bills ↗</p></button>
@@ -338,12 +378,12 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
       {(["monthly","yearly"] as const).map(period => { const rows = data[period === "monthly" ? "monthlySales" : "yearlySales"] || []; const isOpen = salesDetailsOpen[period]; return <div key={period} className="mb-3 rounded-xl border border-neutral-200 p-3">
         <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold">{period === "monthly" ? "Monthly sales details" : "Yearly sales details"}</h3><p className="text-xs text-neutral-500">{rows.length} bills loaded</p></div><button type="button" aria-expanded={isOpen} onClick={() => setSalesDetailsOpen(old => ({ ...old, [period]: !old[period] }))} className="rounded-lg border px-3 py-2 text-xs font-semibold">{isOpen ? "Hide details" : "Show details"}</button></div>
         {isOpen && (rows.length === 0 ? <p className="py-4 text-center text-sm text-neutral-400">Click the sales summary above to load bills and items.</p> : <div className="mt-3 space-y-3">{rows.map((bill: any) => <article key={bill.id} className="rounded-lg border border-neutral-200 p-3">
-          <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-semibold">{bill.bill_number} · {bill.customer_name || "Walk-in"}</p><p className="text-xs text-neutral-500">{bill.business_date || new Date(bill.created_at).toLocaleDateString()} · {bill.table_name || bill.service_type}</p></div><p className="font-bold">{money(bill.grand_total)}</p></div>
+          <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-semibold">{bill.bill_number} · {bill.customer_name || "Walk-in"}</p><p className="text-xs text-neutral-500">{bill.business_date || new Date(bill.created_at).toLocaleDateString()} · {bill.table_name || bill.service_type}</p></div><div className="flex items-center gap-2"><p className="font-bold">{money(bill.grand_total)}</p><button type="button" disabled={busy} onClick={() => permanentlyDeleteSale(bill)} className="rounded-lg bg-red-700 px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Delete bill</button></div></div>
           <div className="mt-2 border-t border-neutral-100 pt-2">{(bill.items || []).map((item: any, index: number) => <div key={index} className="flex justify-between gap-3 py-1 text-xs"><span>{item.name} × {item.quantity}</span><span>{money(item.total)}</span></div>)}</div>
         </article>)}</div>)}
       </div>; })}
       <section className="mt-4 rounded-xl border border-neutral-200 p-3 sm:p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-semibold text-lg">Manage individual sales</h2><p className="text-sm text-neutral-500">Filter bills by business date, then expand the register when you need to edit a sale.</p></div><button type="button" aria-expanded={salesDetailsOpen.individual} onClick={() => setSalesDetailsOpen(old => ({ ...old, individual: !old.individual }))} className="rounded-lg border px-3 py-2 text-sm font-semibold">{salesDetailsOpen.individual ? "Hide sales" : "Show sales"}</button></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-semibold text-lg">Manage individual sales</h2><p className="text-sm text-neutral-500">Filter bills by business date, then open the register to view, void or permanently delete a sale.</p></div><button type="button" aria-expanded={salesDetailsOpen.individual} onClick={() => setSalesDetailsOpen(old => ({ ...old, individual: !old.individual }))} className="rounded-lg border px-3 py-2 text-sm font-semibold">{salesDetailsOpen.individual ? "Hide sales" : "Show sales"}</button></div>
         <form className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]" onSubmit={e => { e.preventDefault(); if (!saleDateDraft || selectedSaleDates.includes(saleDateDraft)) return; setSelectedSaleDates(old => [...old, saleDateDraft].sort()); setSaleDateDraft(""); }}>
           <label className="block text-xs font-medium text-neutral-600">Add business date<input type="date" className={field + " mt-1"} value={saleDateDraft} onChange={e => setSaleDateDraft(e.target.value)} /></label>
           <button type="submit" disabled={!saleDateDraft || selectedSaleDates.includes(saleDateDraft)} className={primary + " self-end min-h-10"}>Add date</button>
