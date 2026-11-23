@@ -7,6 +7,7 @@ BUSINESS_TZ = ZoneInfo("Asia/Kathmandu")
 
 
 def ensure_register(db):
+    db.execute(text("ALTER TABLE balance_transactions ADD COLUMN IF NOT EXISTS method VARCHAR(24) NOT NULL DEFAULT 'legacy_unclassified'"))
     db.execute(text("""
         CREATE TABLE IF NOT EXISTS daily_transaction_register (
             id BIGSERIAL PRIMARY KEY,
