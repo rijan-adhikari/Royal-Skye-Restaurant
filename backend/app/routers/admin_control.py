@@ -1044,9 +1044,19 @@ def unassigned_cash_payments(db: Session = Depends(get_db), user=Depends(require
         WHERE bt.method='cash' AND b.sale_status='active'
           AND NOT EXISTS (SELECT 1 FROM cash_repayment_links l WHERE l.transaction_id=bt.id)
         ORDER BY created_at ASC LIMIT 3000""")).mappings().all()
+    count, total = db.execute(text("""SELECT COUNT(*),COALESCE(SUM(amount),0) FROM (
+        SELECT p.amount FROM payments p JOIN bills b ON b.id=p.bill_id
+        WHERE p.method='cash' AND b.sale_status='active'
+          AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.payment_id=p.id)
+        UNION ALL
+        SELECT bt.amount FROM balance_transactions bt
+        JOIN customer_balances cb ON cb.id=bt.customer_balance_id JOIN bills b ON b.id=cb.bill_id
+        WHERE bt.method='cash' AND b.sale_status='active'
+          AND NOT EXISTS (SELECT 1 FROM cash_repayment_links l WHERE l.transaction_id=bt.id)
+    ) unassigned""")).one()
     db.commit()
-    total = sum((Decimal(str(row["amount"])) for row in rows), Decimal("0"))
-    return {"count": len(rows), "total": str(total), "payments": [dict(row) for row in rows]}
+    return {"count": int(count), "total": str(total), "payments": [dict(row) for row in rows],
+            "list_truncated": int(count) > len(rows)}
 
 
 class CashPaymentAssign(BaseModel):
