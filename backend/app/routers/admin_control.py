@@ -1051,7 +1051,10 @@ def unassigned_cash_payments(db: Session = Depends(get_db), user=Depends(require
         drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
         linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
     )"""))
-    _backfill_unambiguous_cash_links(db)
+    legacy_linked = _backfill_unambiguous_cash_links(db)
+    if legacy_linked:
+        audit(db, user.id, "cash_payment.legacy_links_created",
+              f"Safely linked {legacy_linked} one-to-one legacy cash drawer rows")
     rows = db.execute(text("""SELECT p.id payment_id,'payment' source_type,b.id bill_id,b.bill_number,b.business_date,
         p.created_at,p.amount,c.name customer_name,u.full_name received_by_name,
         (SELECT COUNT(*) FROM cash_drawer_entries e
@@ -1224,6 +1227,9 @@ def payment_reconciliation(db: Session = Depends(get_db), user=Depends(require_r
         linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
     )"""))
     linked_legacy = _backfill_unambiguous_cash_links(db)
+    if linked_legacy:
+        audit(db, user.id, "cash_payment.legacy_links_created",
+              f"Safely linked {linked_legacy} one-to-one legacy cash drawer rows")
     payment_totals = db.execute(text("""SELECT method,COUNT(*) transactions,COALESCE(SUM(amount),0) amount FROM (
         SELECT p.method::text method,p.amount FROM payments p JOIN bills b ON b.id=p.bill_id WHERE b.sale_status='active'
         UNION ALL
