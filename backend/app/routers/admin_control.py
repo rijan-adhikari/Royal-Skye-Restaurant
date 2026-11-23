@@ -1262,6 +1262,26 @@ def payment_reconciliation(db: Session = Depends(get_db), user=Depends(require_r
         WHERE ABS(cb.remaining_amount - GREATEST(cb.original_amount -
           COALESCE((SELECT SUM(bt.amount) FROM balance_transactions bt WHERE bt.customer_balance_id=cb.id),0),0)) > 0.01
            OR ABS(cb.remaining_amount-b.outstanding_amount)>0.01""")).scalar_one()
+    bill_mismatch_rows = db.execute(text("""SELECT b.id,b.bill_number,b.amount_paid,
+        COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.bill_id=b.id),0) +
+        COALESCE((SELECT SUM(bt.amount) FROM balance_transactions bt
+          JOIN customer_balances cb ON cb.id=bt.customer_balance_id WHERE cb.bill_id=b.id),0) calculated_paid,
+        b.outstanding_amount
+        FROM bills b WHERE b.sale_status='active' AND ABS(b.amount_paid -
+          (COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.bill_id=b.id),0) +
+           COALESCE((SELECT SUM(bt.amount) FROM balance_transactions bt
+             JOIN customer_balances cb ON cb.id=bt.customer_balance_id WHERE cb.bill_id=b.id),0))) > 0.01
+        ORDER BY b.business_date DESC LIMIT 200""")).mappings().all()
+    credit_mismatch_rows = db.execute(text("""SELECT cb.id,b.bill_number,cb.original_amount,
+        cb.remaining_amount,b.outstanding_amount,
+        COALESCE((SELECT SUM(bt.amount) FROM balance_transactions bt WHERE bt.customer_balance_id=cb.id),0) repaid,
+        GREATEST(cb.original_amount-COALESCE((SELECT SUM(bt.amount) FROM balance_transactions bt
+          WHERE bt.customer_balance_id=cb.id),0),0) calculated_remaining
+        FROM customer_balances cb JOIN bills b ON b.id=cb.bill_id
+        WHERE ABS(cb.remaining_amount-GREATEST(cb.original_amount-
+          COALESCE((SELECT SUM(bt.amount) FROM balance_transactions bt WHERE bt.customer_balance_id=cb.id),0),0))>0.01
+           OR ABS(cb.remaining_amount-b.outstanding_amount)>0.01
+        ORDER BY b.business_date DESC LIMIT 200""")).mappings().all()
     qr_refunds = db.execute(text("SELECT COALESCE(SUM(amount),0) FROM bill_refunds WHERE method='qr'")).scalar_one()
     result = {"legacy_drawer_rows_linked": linked_legacy,
         "payment_methods": [dict(row) for row in payment_totals],
@@ -1269,6 +1289,8 @@ def payment_reconciliation(db: Session = Depends(get_db), user=Depends(require_r
         "unassigned_cash_refund_count": int(missing_cash_refunds[0]),
         "unassigned_cash_refund_total": str(missing_cash_refunds[1]),
         "bill_payment_mismatches": int(bill_mismatches), "credit_balance_mismatches": int(credit_mismatches),
+        "bill_payment_mismatch_rows": [dict(row) for row in bill_mismatch_rows],
+        "credit_balance_mismatch_rows": [dict(row) for row in credit_mismatch_rows],
         "qr_refunds_total": str(qr_refunds)}
     db.commit()
     return result
