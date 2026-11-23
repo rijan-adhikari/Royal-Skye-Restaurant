@@ -272,7 +272,7 @@ def daily_sales_details(report_date: date | None = None, db: Session = Depends(g
 @router.get("/monthly-sales")
 def monthly_sales_details(report_date: date | None = None, db: Session = Depends(get_db),
                           user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager, models.RoleName.cashier))):
-    target = report_date or datetime.utcnow().date()
+    target = report_date or datetime.now(BUSINESS_TIMEZONE).date()
     month_start = target.replace(day=1)
     month_end = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
     start, end = _business_window(month_start, month_end)
@@ -282,7 +282,7 @@ def monthly_sales_details(report_date: date | None = None, db: Session = Depends
 @router.get("/yearly-sales")
 def yearly_sales_details(report_date: date | None = None, db: Session = Depends(get_db),
                          user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager, models.RoleName.cashier))):
-    target = report_date or datetime.utcnow().date()
+    target = report_date or datetime.now(BUSINESS_TIMEZONE).date()
     start, end = _business_window(date(target.year, 1, 1), date(target.year + 1, 1, 1))
     return _sales_details_for_period(db, start, end)
 
