@@ -1295,6 +1295,22 @@ def payment_reconciliation(db: Session = Depends(get_db), user=Depends(require_r
            OR ABS(cb.remaining_amount-b.outstanding_amount)>0.01
         ORDER BY b.business_date DESC LIMIT 200""")).mappings().all()
     qr_refunds = db.execute(text("SELECT COALESCE(SUM(amount),0) FROM bill_refunds WHERE method='qr'")).scalar_one()
+    qr_drawer_overlaps = db.execute(text("""SELECT COUNT(*) FROM cash_drawer_entries e
+        JOIN bills b ON b.bill_number=e.reference
+        WHERE e.entry_type='sale' AND e.amount>0
+          AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount)
+          AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount)""")).scalar_one()
+    unclassified_count = db.execute(text("""SELECT COUNT(*) FROM (
+        SELECT id FROM payments WHERE method='legacy_unclassified'
+        UNION ALL SELECT id FROM balance_transactions WHERE method='legacy_unclassified'
+        UNION ALL SELECT id FROM bill_refunds WHERE method='legacy_unclassified'
+    ) legacy""")).scalar_one()
+    no_shift_assignments = db.execute(text("""SELECT COUNT(*) FROM cash_drawer_entries e
+        WHERE e.shift_id IS NULL AND (
+          EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.drawer_entry_id=e.id)
+          OR EXISTS (SELECT 1 FROM cash_repayment_links l WHERE l.drawer_entry_id=e.id)
+          OR EXISTS (SELECT 1 FROM cash_refund_links l WHERE l.drawer_entry_id=e.id)
+        )""")).scalar_one()
     result = {"legacy_drawer_rows_linked": linked_legacy,
         "payment_methods": [dict(row) for row in payment_totals],
         "unassigned_cash_count": int(missing_cash[0]), "unassigned_cash_total": str(missing_cash[1]),
@@ -1303,6 +1319,9 @@ def payment_reconciliation(db: Session = Depends(get_db), user=Depends(require_r
         "bill_payment_mismatches": int(bill_mismatches), "credit_balance_mismatches": int(credit_mismatches),
         "bill_payment_mismatch_rows": [dict(row) for row in bill_mismatch_rows],
         "credit_balance_mismatch_rows": [dict(row) for row in credit_mismatch_rows],
-        "qr_refunds_total": str(qr_refunds)}
+        "qr_refunds_total": str(qr_refunds),
+        "qr_drawer_overlaps": int(qr_drawer_overlaps),
+        "unclassified_payment_count": int(unclassified_count),
+        "no_shift_cash_assignments": int(no_shift_assignments)}
     db.commit()
     return result
