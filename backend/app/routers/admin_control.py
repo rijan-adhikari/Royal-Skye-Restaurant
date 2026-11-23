@@ -1006,7 +1006,7 @@ def qr_received_payments(start: date | None = None, end: date | None = None,
         p.created_at,p.amount,p.method,c.name customer_name,u.full_name received_by_name
         FROM payments p JOIN bills b ON b.id=p.bill_id
         LEFT JOIN customers c ON c.id=b.customer_id LEFT JOIN users u ON u.id=p.received_by
-        WHERE p.method='qr' AND TRUE
+        WHERE p.method='qr'
           AND (:start IS NULL OR p.created_at::date>=:start)
           AND (:end IS NULL OR p.created_at::date<=:end)
         UNION ALL
@@ -1015,7 +1015,7 @@ def qr_received_payments(start: date | None = None, end: date | None = None,
         FROM balance_transactions bt JOIN customer_balances cb ON cb.id=bt.customer_balance_id
         JOIN bills b ON b.id=cb.bill_id LEFT JOIN customers c ON c.id=cb.customer_id
         LEFT JOIN users u ON u.id=bt.received_by
-        WHERE bt.method='qr' AND TRUE
+        WHERE bt.method='qr'
           AND (:start IS NULL OR bt.created_at::date>=:start)
           AND (:end IS NULL OR bt.created_at::date<=:end)
         ORDER BY created_at DESC"""), {"start": start, "end": end}).mappings().all()
@@ -1023,22 +1023,22 @@ def qr_received_payments(start: date | None = None, end: date | None = None,
         r.amount,r.method,r.reason,u.full_name received_by_name
         FROM bill_refunds r JOIN bills b ON b.id=r.bill_id
         LEFT JOIN users u ON u.id=r.created_by
-        WHERE r.method='qr' AND TRUE
+        WHERE r.method='qr'
           AND (:start IS NULL OR r.created_at::date>=:start)
           AND (:end IS NULL OR r.created_at::date<=:end)
         ORDER BY r.created_at DESC"""), {"start": start, "end": end}).mappings().all()
     received, payment_count = db.execute(text("""SELECT COALESCE(SUM(amount),0),COUNT(*) FROM (
         SELECT p.amount,p.created_at FROM payments p JOIN bills b ON b.id=p.bill_id
-        WHERE p.method='qr' AND TRUE
+        WHERE p.method='qr'
         UNION ALL
         SELECT bt.amount,bt.created_at FROM balance_transactions bt
         JOIN customer_balances cb ON cb.id=bt.customer_balance_id JOIN bills b ON b.id=cb.bill_id
-        WHERE bt.method='qr' AND TRUE
+        WHERE bt.method='qr'
     ) qr_receipts WHERE (:start IS NULL OR created_at::date>=:start)
       AND (:end IS NULL OR created_at::date<=:end)"""),
         {"start": start, "end": end}).one()
     refunded = db.execute(text("""SELECT COALESCE(SUM(r.amount),0) FROM bill_refunds r
-        JOIN bills b ON b.id=r.bill_id WHERE r.method='qr' AND TRUE
+        JOIN bills b ON b.id=r.bill_id WHERE r.method='qr'
           AND (:start IS NULL OR r.created_at::date>=:start)
           AND (:end IS NULL OR r.created_at::date<=:end)"""),
         {"start": start, "end": end}).scalar_one()
