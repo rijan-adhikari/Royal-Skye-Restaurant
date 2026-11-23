@@ -196,6 +196,7 @@ class BillCreditCorrection(BaseModel):
 class RepaymentCreate(BaseModel):
     customer_balance_id: str
     amount: Decimal
+    method: Literal["cash", "qr", "card", "bank_transfer"] = "cash"
 
 
 class CustomerCreate(BaseModel):
