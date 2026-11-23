@@ -1200,6 +1200,11 @@ def payment_reconciliation(db: Session = Depends(get_db), user=Depends(require_r
         drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
         linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
     )"""))
+    db.execute(text("""CREATE TABLE IF NOT EXISTS cash_refund_links (
+        refund_id UUID PRIMARY KEY REFERENCES bill_refunds(id) ON DELETE CASCADE,
+        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+        linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )"""))
     linked_legacy = _backfill_unambiguous_cash_links(db)
     payment_totals = db.execute(text("""SELECT method,COUNT(*) transactions,COALESCE(SUM(amount),0) amount FROM (
         SELECT p.method,p.amount FROM payments p JOIN bills b ON b.id=p.bill_id WHERE b.sale_status='active'
@@ -1207,6 +1212,12 @@ def payment_reconciliation(db: Session = Depends(get_db), user=Depends(require_r
         SELECT bt.method,bt.amount FROM balance_transactions bt
         JOIN customer_balances cb ON cb.id=bt.customer_balance_id
         JOIN bills b ON b.id=cb.bill_id WHERE b.sale_status='active'
+        UNION ALL
+        SELECT 'customer_credit_balance',cb.remaining_amount FROM customer_balances cb
+        JOIN bills b ON b.id=cb.bill_id WHERE b.sale_status='active' AND cb.remaining_amount>0
+        UNION ALL
+        SELECT 'refund_' || r.method,-r.amount FROM bill_refunds r
+        JOIN bills b ON b.id=r.bill_id WHERE b.sale_status='active'
     ) tender GROUP BY method ORDER BY method""")).mappings().all()
     missing_cash = db.execute(text("""SELECT COUNT(*),COALESCE(SUM(amount),0) FROM (
         SELECT p.id receipt_id,p.amount FROM payments p JOIN bills b ON b.id=p.bill_id
@@ -1219,6 +1230,10 @@ def payment_reconciliation(db: Session = Depends(get_db), user=Depends(require_r
         WHERE bt.method='cash' AND b.sale_status='active'
           AND NOT EXISTS (SELECT 1 FROM cash_repayment_links l WHERE l.transaction_id=bt.id)
     ) unassigned""")).first()
+    missing_cash_refunds = db.execute(text("""SELECT COUNT(*),COALESCE(SUM(r.amount),0)
+        FROM bill_refunds r JOIN bills b ON b.id=r.bill_id
+        WHERE r.method='cash' AND b.sale_status='active'
+          AND NOT EXISTS (SELECT 1 FROM cash_refund_links l WHERE l.refund_id=r.id)""")).first()
     bill_mismatches = db.execute(text("""SELECT COUNT(*) FROM bills b
         WHERE b.sale_status='active' AND ABS(b.amount_paid -
           (COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.bill_id=b.id),0) +
@@ -1233,6 +1248,8 @@ def payment_reconciliation(db: Session = Depends(get_db), user=Depends(require_r
     result = {"legacy_drawer_rows_linked": linked_legacy,
         "payment_methods": [dict(row) for row in payment_totals],
         "unassigned_cash_count": int(missing_cash[0]), "unassigned_cash_total": str(missing_cash[1]),
+        "unassigned_cash_refund_count": int(missing_cash_refunds[0]),
+        "unassigned_cash_refund_total": str(missing_cash_refunds[1]),
         "bill_payment_mismatches": int(bill_mismatches), "credit_balance_mismatches": int(credit_mismatches),
         "qr_refunds_total": str(qr_refunds)}
     db.commit()
