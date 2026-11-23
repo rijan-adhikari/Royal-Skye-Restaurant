@@ -1126,14 +1126,32 @@ def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
 @router.get("/payment-reconciliation")
 def payment_reconciliation(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
     _ensure_cash_payment_links(db)
+    db.execute(text("""ALTER TABLE balance_transactions
+        ADD COLUMN IF NOT EXISTS method VARCHAR(24) NOT NULL DEFAULT 'legacy_unclassified'"""))
+    db.execute(text("""CREATE TABLE IF NOT EXISTS cash_repayment_links (
+        transaction_id UUID PRIMARY KEY REFERENCES balance_transactions(id) ON DELETE CASCADE,
+        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+        linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )"""))
     linked_legacy = _backfill_unambiguous_cash_links(db)
-    payment_totals = db.execute(text("""SELECT p.method,COUNT(*) transactions,COALESCE(SUM(p.amount),0) amount
-        FROM payments p JOIN bills b ON b.id=p.bill_id
-        WHERE b.sale_status='active' GROUP BY p.method ORDER BY p.method""")).mappings().all()
-    missing_cash = db.execute(text("""SELECT COUNT(*),COALESCE(SUM(p.amount),0)
-        FROM payments p JOIN bills b ON b.id=p.bill_id
+    payment_totals = db.execute(text("""SELECT method,COUNT(*) transactions,COALESCE(SUM(amount),0) amount FROM (
+        SELECT p.method,p.amount FROM payments p JOIN bills b ON b.id=p.bill_id WHERE b.sale_status='active'
+        UNION ALL
+        SELECT bt.method,bt.amount FROM balance_transactions bt
+        JOIN customer_balances cb ON cb.id=bt.customer_balance_id
+        JOIN bills b ON b.id=cb.bill_id WHERE b.sale_status='active'
+    ) tender GROUP BY method ORDER BY method""")).mappings().all()
+    missing_cash = db.execute(text("""SELECT COUNT(*),COALESCE(SUM(amount),0) FROM (
+        SELECT p.id receipt_id,p.amount FROM payments p JOIN bills b ON b.id=p.bill_id
         WHERE p.method='cash' AND b.sale_status='active'
-          AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.payment_id=p.id)""")).first()
+          AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.payment_id=p.id)
+        UNION ALL
+        SELECT bt.id receipt_id,bt.amount FROM balance_transactions bt
+        JOIN customer_balances cb ON cb.id=bt.customer_balance_id
+        JOIN bills b ON b.id=cb.bill_id
+        WHERE bt.method='cash' AND b.sale_status='active'
+          AND NOT EXISTS (SELECT 1 FROM cash_repayment_links l WHERE l.transaction_id=bt.id)
+    ) unassigned""")).first()
     bill_mismatches = db.execute(text("""SELECT COUNT(*) FROM bills b
         WHERE b.sale_status='active' AND ABS(b.amount_paid -
           (COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.bill_id=b.id),0) +
