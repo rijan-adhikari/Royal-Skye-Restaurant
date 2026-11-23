@@ -57,7 +57,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const load = async () => {
     const requests = [
       ["current", "/api/admin/cash-shifts/current"], ["shifts", "/api/admin/cash-shifts?limit=200"],
-      ...((role === "admin" || role === "manager") ? ([["qrPayments", "/api/admin/qr-payments"], ["unassignedCash", "/api/admin/cash-payments/unassigned"], ["paymentReconciliation", "/api/admin/payment-reconciliation"]] as [string, string][]) : []),
+      ...((role === "admin") ? ([["qrPayments", "/api/admin/qr-payments"], ["unassignedCash", "/api/admin/cash-payments/unassigned"], ["paymentReconciliation", "/api/admin/payment-reconciliation"]] as [string, string][]) : []),
       ...(!managerView ? ([["sales", "/api/admin/sales"], ["salesSummary", "/api/dashboard/summary"], ["monthlySales", "/api/dashboard/monthly-sales"], ["yearlySales", "/api/dashboard/yearly-sales"]] as [string, string][]) : []),
       ...(!managerView ? ([["customers", "/api/customers"]] as [string, string][]) : []),
       ["suppliers", "/api/operations/suppliers"], ["inventory", "/api/operations/inventory"], ["ledger", "/api/admin/suppliers/ledger"], ["supplierBalances", "/api/admin/suppliers/balances"],
@@ -420,7 +420,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     </div>}
 
     {tab === "sales" && <section className={panel}>
-      <section className="mb-4 rounded-xl border border-[#e5c9a8] bg-[#fffaf4] p-4">
+      {role === "admin" && <section className="mb-4 rounded-xl border border-[#e5c9a8] bg-[#fffaf4] p-4">
         <div className="mb-3"><p className="text-[10px] font-extrabold uppercase tracking-widest text-[#9b7957]">Admin tool</p><h2 className="mt-1 text-base font-extrabold text-[#342923]">Correct settled payment · Cash to Credit</h2><p className="mt-1 text-xs text-neutral-600">Use only when a bill was marked Cash by mistake and no cash was actually received. The original bill number is preserved and the correction is audited. Fully cash-settled bills only.</p></div>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-xs font-bold text-neutral-700">Bill number<input value={correctionBillNumber} onChange={e=>setCorrectionBillNumber(e.target.value)} placeholder="Enter bill number" className={field + " mt-1.5"}/></label>
@@ -429,7 +429,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
         </div>
         <label className="mt-3 flex items-start gap-2 text-xs font-semibold text-[#7a332b]"><input type="checkbox" checked={confirmNoCash} onChange={e=>setConfirmNoCash(e.target.checked)} className="mt-0.5"/> I confirm that no cash was physically received for this bill.</label>
         <button type="button" onClick={correctCashToCredit} disabled={correctionBusy||busy} className="mt-3 rounded-lg bg-[#7b2926] px-4 py-2 text-xs font-extrabold text-white disabled:opacity-50">{correctionBusy?"Correcting…":"Convert Cash to Credit"}</button>
-      </section>
+      </section>}
       <div className="mb-4 grid gap-3 sm:grid-cols-2">
         <button type="button" onClick={() => openPeriodSales("monthly")} className="rounded-xl border border-[#e8dfd6] bg-[#faf7f3] p-4 text-left transition hover:border-[#b99a78]"><p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-[#92775e]">Monthly sales · current month</p><p className="mt-2 text-2xl font-extrabold tracking-tight text-[#3c3029]">{money(data.salesSummary?.monthly_sales)}</p><p className="mt-2 text-xs font-semibold text-[#92775e]">Load / refresh bills ↗</p></button>
         <button type="button" onClick={() => openPeriodSales("yearly")} className="rounded-xl border border-[#e8dfd6] bg-[#faf7f3] p-4 text-left transition hover:border-[#b99a78]"><p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-[#92775e]">Yearly sales · current year</p><p className="mt-2 text-2xl font-extrabold tracking-tight text-[#3c3029]">{money(data.salesSummary?.yearly_sales)}</p><p className="mt-2 text-xs font-semibold text-[#92775e]">Load / refresh bills ↗</p></button>
