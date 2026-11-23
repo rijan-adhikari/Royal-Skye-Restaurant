@@ -28,9 +28,9 @@ export default function Credit() {
     if (!amount || amount <= 0) return;
     try {
       const method = repayMethods[balanceId] || "cash";
-      await api.post("/api/outstanding/repay", { customer_balance_id: balanceId, amount, method });
+      const response = await api.post("/api/outstanding/repay", { customer_balance_id: balanceId, amount, method });
       setRepayAmounts((current) => ({ ...current, [balanceId]: "" }));
-      setMessage(`Credit repayment recorded by ${method.replace("_", " ")}.`);
+      setMessage(`Transaction #${response.data.transaction_number || "—"} · Original bill ${response.data.bill_number || "—"} · Credit repayment received by ${method.replace("_", " ")}.`);
       await load();
     } catch (e: any) {
       setError(e?.response?.data?.detail || "Could not record payment.");
