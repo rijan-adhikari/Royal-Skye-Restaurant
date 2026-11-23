@@ -48,6 +48,7 @@ export default function Admin({ embedded = false, staffOnly = false }: { embedde
   const [creditCustomers, setCreditCustomers] = useState<CreditCustomer[]>([]);
   const [creditSearch, setCreditSearch] = useState("");
   const [repayAmounts, setRepayAmounts] = useState<Record<string, string>>({});
+  const [repayMethods, setRepayMethods] = useState<Record<string, string>>({});
   const [creditMessage, setCreditMessage] = useState("");
   const [history, setHistory] = useState<CustomerHistory[]>([]);
   const [historyCustomerId, setHistoryCustomerId] = useState("");
@@ -106,9 +107,9 @@ export default function Admin({ embedded = false, staffOnly = false }: { embedde
     setError("");
     setCreditMessage("");
     try {
-      await api.post("/api/outstanding/repay", { customer_balance_id: balanceId, amount });
+      const response = await api.post("/api/outstanding/repay", { customer_balance_id: balanceId, amount, method: repayMethods[balanceId] || "cash" });
       setRepayAmounts((current) => ({ ...current, [balanceId]: "" }));
-      setCreditMessage("Credit repayment recorded successfully.");
+      setCreditMessage(`Credit repayment #${response.data.transaction_number || "—"} recorded · ${String(response.data.payment_method || "").toUpperCase()} · Original bill ${response.data.bill_number || "—"}.`);
       await loadCredit();
     } catch (e: any) {
       setError(e?.response?.data?.detail || "Could not record credit repayment.");
@@ -377,7 +378,7 @@ export default function Admin({ embedded = false, staffOnly = false }: { embedde
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><p className="font-semibold">{customer.name}</p><p className="text-xs text-neutral-500">{customer.phone || "No phone number"}</p></div><p className="text-sm font-extrabold text-[#71352f]">Outstanding: NPR {Number(customer.total_due).toLocaleString("en-NP", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>
             <div className="space-y-3">{customer.balances.map((balance) => <div key={balance.id} className="grid gap-3 border-t border-dashed border-[#e8dfd6] pt-3 md:grid-cols-[minmax(0,1fr)_minmax(220px,.8fr)] md:items-center">
               <div className="text-sm"><p className="font-semibold">Bill {balance.bill_number || balance.bill_id}</p><p className="mt-1 text-xs text-neutral-500">{balance.business_date || formatDateTime(balance.created_at)} · {(balance.service_type || "dine_in").replace("_", " ")} {balance.table_name ? `· ${balance.table_name}` : ""}</p><p className="mt-1 text-xs text-neutral-600">Original: NPR {Number(balance.original_amount).toFixed(2)} · Remaining: <strong>NPR {Number(balance.remaining_amount).toFixed(2)}</strong></p><div className="mt-2 rounded-lg bg-[#faf7f3] p-2"><p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-[#92775e]">Items ordered</p>{(balance.items || []).length ? balance.items!.map((item,index)=><p key={index} className="flex justify-between gap-2 text-xs"><span>{item.name} × {item.quantity}</span><span>NPR {Number(item.line_total).toFixed(2)}</span></p>) : <p className="text-xs text-neutral-500">No item details available.</p>}</div></div>
-              <div className="flex gap-2"><input type="number" min="0.01" max={balance.remaining_amount} step="0.01" placeholder="Repayment amount" aria-label={`Repayment amount for bill ${balance.bill_id}`} className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm" value={repayAmounts[balance.id] || ""} onChange={(e) => setRepayAmounts((current) => ({ ...current, [balance.id]: e.target.value }))} /><button type="button" onClick={() => repayCredit(balance.id)} className="shrink-0 rounded-lg bg-[#342923] px-3 py-2 text-xs font-bold text-white">Record payment</button></div>
+              <div className="flex flex-wrap gap-2"><select aria-label={`Payment method for bill ${balance.bill_id}`} className="rounded-lg border px-2 py-2 text-xs" value={repayMethods[balance.id] || "cash"} onChange={(e) => setRepayMethods((current) => ({ ...current, [balance.id]: e.target.value }))}><option value="cash">Cash</option><option value="qr">QR</option><option value="card">Card</option><option value="bank_transfer">Bank transfer</option></select><input type="number" min="0.01" max={balance.remaining_amount} step="0.01" placeholder="Repayment amount" aria-label={`Repayment amount for bill ${balance.bill_id}`} className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm" value={repayAmounts[balance.id] || ""} onChange={(e) => setRepayAmounts((current) => ({ ...current, [balance.id]: e.target.value }))} /><button type="button" onClick={() => repayCredit(balance.id)} className="shrink-0 rounded-lg bg-[#342923] px-3 py-2 text-xs font-bold text-white">Record payment</button></div>
             </div>)}</div>
           </div>)}
           {creditCustomers.length === 0 && <p className="rounded-lg border border-dashed p-6 text-center text-sm text-neutral-500">No outstanding customer credit found.</p>}

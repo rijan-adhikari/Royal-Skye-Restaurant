@@ -12,6 +12,7 @@ from sqlalchemy import text
 from app.database import get_db
 from app import models
 from app.deps import require_roles
+from app.transaction_register import ensure_register
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -60,6 +61,7 @@ def _collection_amounts(db: Session, start: datetime, end: datetime):
 
 
 def _sales_details_for_period(db: Session, start: datetime, end: datetime):
+    ensure_register(db)
     db.execute(text("""ALTER TABLE balance_transactions
         ADD COLUMN IF NOT EXISTS method VARCHAR(24) NOT NULL DEFAULT 'legacy_unclassified'"""))
     # Detail modals are bill registers, not just cash-collection registers:
@@ -92,31 +94,38 @@ def _sales_details_for_period(db: Session, start: datetime, end: datetime):
             FROM order_items oi JOIN menu_items mi ON mi.id=oi.menu_item_id
             WHERE oi.order_id=:order_id AND oi.is_cancelled=FALSE ORDER BY mi.name"""),
             {"order_id": bill.order_id}).mappings().all()
+        sale_sequence = db.execute(text("""SELECT sequence_number FROM daily_transaction_register
+            WHERE source_type='sale' AND source_id=:bill"""), {"bill": bill.id}).scalar()
         payments = db.execute(text("""SELECT p.method, p.amount, p.created_at, u.full_name received_by_name
             FROM payments p LEFT JOIN users u ON u.id=p.received_by
             WHERE p.bill_id=:bill ORDER BY p.created_at,p.id"""), {"bill": bill.id}).mappings().all()
-        repayments = db.execute(text("""SELECT bt.amount,bt.method,bt.created_at,u.full_name received_by_name
+        repayments = db.execute(text("""SELECT bt.amount,bt.method,bt.created_at,u.full_name received_by_name,
+            dtr.sequence_number AS transaction_sequence
             FROM balance_transactions bt LEFT JOIN users u ON u.id=bt.received_by
             JOIN customer_balances cb ON cb.id=bt.customer_balance_id
+            LEFT JOIN daily_transaction_register dtr ON dtr.source_type='repayment' AND dtr.source_id=bt.id
             WHERE cb.bill_id=:bill ORDER BY bt.created_at,bt.id"""), {"bill": bill.id}).mappings().all()
         refunds = db.execute(text("""SELECT r.amount,r.method,r.created_at,u.full_name received_by_name
             FROM bill_refunds r LEFT JOIN users u ON u.id=r.created_by
             WHERE r.bill_id=:bill ORDER BY r.created_at,r.id"""), {"bill": bill.id}).mappings().all()
         payment_rows = [{"method": row["method"], "amount": str(row["amount"]),
-                         "created_at": row["created_at"], "received_by_name": row["received_by_name"]}
+                         "created_at": row["created_at"], "received_by_name": row["received_by_name"],
+                         "transaction_number": f"{int(sale_sequence):03d}" if sale_sequence is not None else None}
                         for row in payments]
         payment_rows.extend([{"method": row["method"], "amount": str(row["amount"]),
-                              "created_at": row["created_at"], "received_by_name": row["received_by_name"]}
+                              "created_at": row["created_at"], "received_by_name": row["received_by_name"],
+                              "transaction_number": f"{int(row['transaction_sequence']):03d}" if row["transaction_sequence"] is not None else None}
                              for row in repayments])
         payment_rows.extend([{"method": "refund_" + str(row["method"]), "amount": str(-Decimal(str(row["amount"]))),
                               "created_at": row["created_at"], "received_by_name": row["received_by_name"]}
                              for row in refunds])
         if Decimal(str(bill.outstanding_amount or 0)) > 0:
-            payment_rows.append({"method": "customer_credit_balance",
+            payment_rows.append({"method": "credit",
                                  "amount": str(bill.outstanding_amount), "created_at": bill.created_at,
-                                 "received_by_name": None})
+                                 "received_by_name": None,
+                                 "transaction_number": f"{int(sale_sequence):03d}" if sale_sequence is not None else None})
         result.append({
-            "id": bill.id, "bill_number": bill.bill_number, "business_date": bill.business_date.isoformat(),
+            "id": bill.id, "bill_number": bill.bill_number, "transaction_number": f"{int(sale_sequence):03d}" if sale_sequence is not None else None, "business_date": bill.business_date.isoformat(),
             "created_at": bill.created_at,
             "customer_name": customer.name if customer else (service["customer_name"] if service else "Walk-in"),
             "customer_phone": customer.phone if customer else (service["phone"] if service else None),
@@ -275,7 +284,9 @@ def daily_sales_details(report_date: date | None = None, db: Session = Depends(g
                         user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager))):
     target = report_date or datetime.now(BUSINESS_TIMEZONE).date()
     start, end = _business_window(target, target + timedelta(days=1))
-    return _sales_details_for_period(db, start, end)
+    result = _sales_details_for_period(db, start, end)
+    db.commit()
+    return result
 
 
 @router.get("/monthly-sales")

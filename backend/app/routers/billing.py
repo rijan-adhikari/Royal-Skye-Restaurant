@@ -11,6 +11,7 @@ from app.database import get_db
 from app import models, schemas
 from app.deps import get_current_user, require_roles
 from app.billing_math import calculate_bill, money
+from app.transaction_register import register_transaction
 
 router = APIRouter(prefix="/api", tags=["billing"])
 
@@ -170,6 +171,16 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
             original_amount=grand_total - total_paid, remaining_amount=grand_total - total_paid,
         ))
 
+    sale_methods = sorted({("CREDIT" if method == models.PaymentMethod.credit else method.value.upper()) for method, amount in payment_rows if amount > 0})
+    if grand_total - total_paid > 0:
+        sale_methods.append("CREDIT")
+    transaction_number = register_transaction(
+        db, business_date=bill.business_date, source_type="sale", source_id=bill.id,
+        bill_id=bill.id, reference=bill.bill_number,
+        payment_method=" + ".join(sorted(set(sale_methods))) or "CREDIT",
+        amount=grand_total, created_at=bill.created_at,
+    )
+
     db.add(models.AuditLog(user_id=user.id, action="bill.create", details=f"Generated bill {bill.bill_number} for NPR {grand_total}"))
     order.status = models.OrderStatus.completed
     if order.table:
@@ -253,7 +264,7 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
         })
 
     return {
-        "id": bill.id, "bill_number": bill.bill_number, "subtotal": str(subtotal),
+        "id": bill.id, "bill_number": bill.bill_number, "transaction_number": transaction_number, "transaction_method": " + ".join(sorted(set(sale_methods))) or "CREDIT", "subtotal": str(subtotal),
         "tax_amount": str(tax_amount), "service_charge_amount": str(service_amount),
         "discount_percent": str(payload.discount_percent),
         "discount_percent_amount": str(percent_discount_amount),
@@ -397,8 +408,21 @@ def repay_balance(payload: schemas.RepaymentCreate, db: Session = Depends(get_db
             db.execute(text("""INSERT INTO cash_repayment_links(transaction_id,drawer_entry_id,linked_by)
                 VALUES(:transaction,:entry,:user)"""),
                 {"transaction": transaction.id, "entry": entry_id, "user": user.id})
+    from datetime import timezone
+    from zoneinfo import ZoneInfo
+    repayment_day = transaction.created_at.replace(tzinfo=timezone.utc).astimezone(ZoneInfo("Asia/Kathmandu")).date()
+    transaction_number = register_transaction(
+        db, business_date=repayment_day, source_type="repayment", source_id=transaction.id,
+        bill_id=bill.id if bill else balance.bill_id,
+        reference=bill.bill_number if bill else str(balance.bill_id),
+        payment_method=payload.method.upper(), amount=payload.amount,
+        created_at=transaction.created_at,
+    )
     db.commit()
-    return {"remaining_amount": str(balance.remaining_amount), "payment_method": payload.method}
+    return {"remaining_amount": str(balance.remaining_amount), "payment_method": payload.method,
+            "transaction_number": transaction_number, "transaction_type": "CREDIT_REPAYMENT",
+            "bill_number": bill.bill_number if bill else str(balance.bill_id),
+            "created_at": transaction.created_at}
 
 
 @router.get("/outstanding")
