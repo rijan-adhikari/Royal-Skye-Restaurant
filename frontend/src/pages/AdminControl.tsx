@@ -24,6 +24,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const [tab, setTab] = useState<Tab>(initialTab && availableTabs.includes(initialTab as Tab) ? initialTab as Tab : (availableTabs[0] ?? "cash"));
   const [data, setData] = useState<any>({ shifts: [], refunds: [], bills: [], suppliers: [], inventory: [], ledger: [], supplierBalances: [], loyalty: [], serviceOrders: [], audit: [], salesSummary: null, monthlySales: [], yearlySales: [] });
   const [shift, setShift] = useState<any>(null);
+  const [unassignedShiftSelections, setUnassignedShiftSelections] = useState<Record<string, string>>({});
   const [tax, setTax] = useState<any>({ tax_enabled: true, tax_percent: "14", service_charge_enabled: false, service_charge_percent: "0" });
   const [loyaltySettings, setLoyaltySettings] = useState<any>({ enabled: true, spend_per_point: "100", point_value: "1" });
   const [restaurant, setRestaurant] = useState<any>({ name: "", email: "", phone: "", address: "", pan: "", vat: "", currency: "NPR", logo_path: "", qr_image_path: "", receipt_footer: "" });
@@ -56,6 +57,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const load = async () => {
     const requests = [
       ["current", "/api/admin/cash-shifts/current"], ["shifts", "/api/admin/cash-shifts"],
+      ...(["admin", "manager"].includes(role) ? ([["qrPayments", "/api/admin/qr-payments"], ["unassignedCash", "/api/admin/cash-payments/unassigned"], ["paymentReconciliation", "/api/admin/payment-reconciliation"]] as [string, string][]) : []),
       ...(!managerView ? ([["sales", "/api/admin/sales"], ["salesSummary", "/api/dashboard/summary"], ["monthlySales", "/api/dashboard/monthly-sales"], ["yearlySales", "/api/dashboard/yearly-sales"]] as [string, string][]) : []),
       ...(!managerView ? ([["customers", "/api/customers"]] as [string, string][]) : []),
       ["suppliers", "/api/operations/suppliers"], ["inventory", "/api/operations/inventory"], ["ledger", "/api/admin/suppliers/ledger"], ["supplierBalances", "/api/admin/suppliers/balances"],
@@ -95,6 +97,13 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     try { await action(); setMessage(success); await load(); }
     catch (e: any) { setError(apiErrorMessage(e, "Control centre operation failed")); }
     finally { setBusy(false); }
+  };
+
+  const assignUnassignedCash = async (payment: any) => {
+    const shiftId = unassignedShiftSelections[payment.payment_id];
+    if (!shiftId) { setError("Select the historical cash drawer shift first."); return; }
+    await run(() => api.post(`/api/admin/cash-payments/${payment.payment_id}/assign`, { shift_id: shiftId }),
+      `${payment.bill_number} cash payment linked to the selected drawer shift.`);
   };
 
   const openShift = async () => { await run(() => api.post("/api/admin/cash-shifts/open", { opening_float: Number(openFloat) }), "Cash drawer shift opened."); setCountedCash(""); };
@@ -356,6 +365,46 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
             {(shift.cash_entries || []).length === 0 && <tr><td colSpan={5} className="py-5 text-center text-neutral-400">No cash movements recorded in this session.</td></tr>}
           </tbody></table></div>
           <p className="mt-2 text-xs text-neutral-500">Only admins can edit or delete cash-drawer entries. Correcting a sale payment to QR, card or bank transfer removes it from physical cash while preserving the bill and receipt history.</p>
+        </div>}
+        {(["admin", "manager"].includes(role)) && <div className="mb-5 space-y-4 border-t pt-5">
+          <section className="rounded-xl border border-[#d9e8df] bg-[#f7fbf8] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div><p className="text-[10px] font-extrabold uppercase tracking-widest text-[#52765b]">Separate payment channel</p><h2 className="mt-1 text-lg font-extrabold text-[#263d2d]">QR received payments</h2><p className="mt-1 text-xs text-neutral-600">Directly from recorded QR payment transactions. These amounts never increase physical drawer cash.</p></div>
+              <button type="button" className="rounded-lg border bg-white px-3 py-2 text-xs font-bold" disabled={busy} onClick={() => load()}>Refresh QR</button>
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <div className="rounded-lg bg-white p-3"><p className="text-[10px] text-neutral-500">Received</p><p className="mt-1 text-sm font-extrabold">{money(data.qrPayments?.received_total)}</p></div>
+              <div className="rounded-lg bg-white p-3"><p className="text-[10px] text-neutral-500">Refunded</p><p className="mt-1 text-sm font-extrabold">{money(data.qrPayments?.refunded_total)}</p></div>
+              <div className="rounded-lg bg-white p-3"><p className="text-[10px] text-neutral-500">Net QR</p><p className="mt-1 text-sm font-extrabold">{money(data.qrPayments?.net_qr_received)}</p></div>
+            </div>
+            <div className="mt-3 max-h-64 overflow-auto">
+              {(data.qrPayments?.payments || []).map((payment: any) => <div key={payment.payment_id} className="flex flex-wrap justify-between gap-2 border-b border-[#e6eee8] py-2 text-xs"><span><b>{payment.bill_number}</b> · {payment.customer_name || "Walk-in"}<small className="block text-neutral-500">{new Date(payment.created_at).toLocaleString()} · {payment.received_by_name || "Staff"}</small></span><b>{money(payment.amount)}</b></div>)}
+              {(data.qrPayments?.refunds || []).map((item: any) => <div key={item.refund_id} className="flex flex-wrap justify-between gap-2 border-b border-[#e6eee8] py-2 text-xs text-red-700"><span><b>Refund · {item.bill_number}</b><small className="block">{new Date(item.created_at).toLocaleString()} · {item.reason}</small></span><b>−{money(item.amount)}</b></div>)}
+              {!(data.qrPayments?.payments || []).length && !(data.qrPayments?.refunds || []).length && <p className="py-4 text-center text-xs text-neutral-500">No QR payments or refunds recorded.</p>}
+            </div>
+          </section>
+          <section className="rounded-xl border border-[#ead9c2] bg-[#fffaf2] p-4">
+            <div><p className="text-[10px] font-extrabold uppercase tracking-widest text-[#9a6a32]">Historical reconciliation</p><h2 className="mt-1 text-lg font-extrabold text-[#59432e]">Unassigned cash payments</h2><p className="mt-1 text-xs text-neutral-600">Cash already recorded against bills but not linked to a drawer shift. Assign each payment to its actual historical shift; original bill and payment records are preserved.</p></div>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm"><b>{data.unassignedCash?.count || 0} payment(s)</b><b>{money(data.unassignedCash?.total)}</b></div>
+            <div className="mt-2 max-h-72 space-y-2 overflow-auto">
+              {(data.unassignedCash?.payments || []).map((payment: any) => <div key={payment.payment_id} className="rounded-lg border border-[#efe3d3] bg-white p-3">
+                <div className="flex flex-wrap justify-between gap-2 text-xs"><span><b>{payment.bill_number}</b> · {payment.customer_name || "Walk-in"}<small className="block text-neutral-500">{payment.business_date} · {new Date(payment.created_at).toLocaleString()}</small></span><b>{money(payment.amount)}</b></div>
+                {payment.matching_drawer_rows > 1 && <p className="mt-1 text-[11px] font-semibold text-red-700">Multiple legacy drawer matches; resolve duplicates before assigning.</p>}
+                <div className="mt-2 flex gap-2"><select className={field} value={unassignedShiftSelections[payment.payment_id] || ""} onChange={e => setUnassignedShiftSelections(old => ({...old,[payment.payment_id]:e.target.value}))}><option value="">Choose correct shift</option>{(data.shifts || []).map((s: any) => <option key={s.id} value={s.id}>{new Date(s.opened_at).toLocaleString()} · {s.status} · {s.opened_by_name}</option>)}</select><button type="button" className={primary} disabled={busy || !unassignedShiftSelections[payment.payment_id] || payment.matching_drawer_rows > 1} onClick={() => assignUnassignedCash(payment)}>Assign</button></div>
+              </div>)}
+              {!(data.unassignedCash?.payments || []).length && <p className="py-4 text-center text-xs text-emerald-700">All active cash payments are linked to drawer entries.</p>}
+            </div>
+          </section>
+          <section className="rounded-xl border border-neutral-200 bg-white p-4">
+            <h3 className="font-bold">Payment database health check</h3>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <p className="text-xs">Legacy drawer rows safely linked: <b>{data.paymentReconciliation?.legacy_drawer_rows_linked ?? "—"}</b></p>
+              <p className="text-xs">Unassigned cash: <b>{data.paymentReconciliation?.unassigned_cash_count ?? "—"}</b> ({money(data.paymentReconciliation?.unassigned_cash_total)})</p>
+              <p className="text-xs">Bill/payment total mismatches: <b className={data.paymentReconciliation?.bill_payment_mismatches ? "text-red-700" : "text-emerald-700"}>{data.paymentReconciliation?.bill_payment_mismatches ?? "—"}</b></p>
+              <p className="text-xs">Credit balance mismatches: <b className={data.paymentReconciliation?.credit_balance_mismatches ? "text-red-700" : "text-emerald-700"}>{data.paymentReconciliation?.credit_balance_mismatches ?? "—"}</b></p>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">{(data.paymentReconciliation?.payment_methods || []).map((method: any) => <span key={method.method} className="rounded-lg bg-neutral-50 px-3 py-2 text-xs capitalize">{method.method}: <b>{money(method.amount)}</b> · {method.transactions} tx</span>)}</div>
+          </section>
         </div>}
         <h2 className="font-semibold text-lg mb-3">Recent shift reconciliation</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Opened</th><th>Staff</th><th>Status</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>{data.shifts.map((s: any) => <React.Fragment key={s.id}><tr className="border-b"><td className="py-2">{new Date(s.opened_at).toLocaleString()}</td><td>{s.opened_by_name}</td><td className="capitalize">{s.status}</td><td>{s.expected_cash == null ? "—" : money(s.expected_cash)}</td><td>{s.counted_cash == null ? "—" : money(s.counted_cash)}</td><td className={Number(s.cash_difference) < 0 ? "text-red-700" : "text-emerald-700"}>{s.cash_difference == null ? "—" : money(s.cash_difference)}</td></tr>{(s.cash_entries || []).length > 0 && <tr className="border-b bg-neutral-50"><td colSpan={6} className="p-3"><p className="mb-2 text-xs font-semibold">Cash movements · {s.status === "closed" ? "Admin corrections" : "History"}</p>{s.cash_entries.map((entry: any) => <div key={entry.id} className="flex flex-wrap items-center justify-between gap-2 border-b py-2 text-xs"><span>{new Date(entry.created_at).toLocaleString()} · <b className="capitalize">{entry.entry_type.replace("_"," ")}</b> · {money(entry.amount)} · {entry.reference || entry.notes || "No reference"}</span>{s.status === "closed" && canAdminEditCash && <span className="flex gap-2">{["cash_in","cash_out","payout"].includes(entry.entry_type) && <><button type="button" disabled={busy} onClick={() => correctClosedCashEntry(entry,s.id)} className="rounded border px-2 py-1 font-semibold">Edit</button><button type="button" disabled={busy} onClick={() => deleteClosedCashEntry(entry,s.id)} className="rounded bg-red-700 px-2 py-1 font-semibold text-white">Delete</button></>}{entry.entry_type === "sale" && <><button type="button" disabled={busy} onClick={() => correctSystemSaleEntry(entry,s.id)} className="rounded border px-2 py-1 font-semibold">Edit payment</button><button type="button" disabled={busy} onClick={() => deleteCashEntry(entry,s.id)} className="rounded bg-red-700 px-2 py-1 font-semibold text-white">Delete</button></>}{entry.entry_type === "refund" && <button type="button" disabled={busy} onClick={() => deleteCashEntry(entry,s.id)} className="rounded bg-red-700 px-2 py-1 font-semibold text-white">Delete</button>}</span>}</div>)}</td></tr>}</React.Fragment>)}</tbody></table></div></section>
     </div>}
