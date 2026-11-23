@@ -67,10 +67,19 @@ def _sales_details_for_period(db: Session, start: datetime, end: datetime):
     # selected Nepal business-date range.
     start_date = start.replace(tzinfo=timezone.utc).astimezone(BUSINESS_TIMEZONE).date()
     end_date = end.replace(tzinfo=timezone.utc).astimezone(BUSINESS_TIMEZONE).date()
+    bill_ids = db.execute(text("""SELECT b.id FROM bills b
+        WHERE b.sale_status='active' AND (
+          (b.business_date>=:start_date AND b.business_date<:end_date)
+          OR EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.created_at>=:start AND p.created_at<:end)
+          OR EXISTS (SELECT 1 FROM balance_transactions bt JOIN customer_balances cb
+                     ON cb.id=bt.customer_balance_id WHERE cb.bill_id=b.id
+                     AND bt.created_at>=:start AND bt.created_at<:end)
+          OR EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id
+                     AND r.created_at>=:start AND r.created_at<:end)
+        ) ORDER BY b.created_at DESC"""),
+        {"start_date": start_date, "end_date": end_date, "start": start, "end": end}).scalars().all()
     bills = db.query(models.Bill).filter(
-        models.Bill.business_date >= start_date,
-        models.Bill.business_date < end_date,
-        models.Bill.sale_status == "active",
+        models.Bill.id.in_(bill_ids), models.Bill.sale_status == "active"
     ).order_by(models.Bill.created_at.desc()).all()
     collected = _collection_amounts(db, start, end)
     result = []
