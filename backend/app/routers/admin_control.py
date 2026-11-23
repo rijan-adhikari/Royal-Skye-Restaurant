@@ -1207,16 +1207,16 @@ def payment_reconciliation(db: Session = Depends(get_db), user=Depends(require_r
     )"""))
     linked_legacy = _backfill_unambiguous_cash_links(db)
     payment_totals = db.execute(text("""SELECT method,COUNT(*) transactions,COALESCE(SUM(amount),0) amount FROM (
-        SELECT p.method,p.amount FROM payments p JOIN bills b ON b.id=p.bill_id WHERE b.sale_status='active'
+        SELECT p.method::text method,p.amount FROM payments p JOIN bills b ON b.id=p.bill_id WHERE b.sale_status='active'
         UNION ALL
-        SELECT bt.method,bt.amount FROM balance_transactions bt
+        SELECT bt.method::text method,bt.amount FROM balance_transactions bt
         JOIN customer_balances cb ON cb.id=bt.customer_balance_id
         JOIN bills b ON b.id=cb.bill_id WHERE b.sale_status='active'
         UNION ALL
-        SELECT 'customer_credit_balance',cb.remaining_amount FROM customer_balances cb
+        SELECT 'customer_credit_balance'::text method,cb.remaining_amount FROM customer_balances cb
         JOIN bills b ON b.id=cb.bill_id WHERE b.sale_status='active' AND cb.remaining_amount>0
         UNION ALL
-        SELECT 'refund_' || r.method,-r.amount FROM bill_refunds r
+        SELECT ('refund_' || r.method::text) method,-r.amount FROM bill_refunds r
         JOIN bills b ON b.id=r.bill_id WHERE b.sale_status='active'
     ) tender GROUP BY method ORDER BY method""")).mappings().all()
     missing_cash = db.execute(text("""SELECT COUNT(*),COALESCE(SUM(amount),0) FROM (
