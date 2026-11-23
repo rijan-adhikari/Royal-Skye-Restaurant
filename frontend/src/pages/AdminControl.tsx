@@ -56,7 +56,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
 
   const load = async () => {
     const requests = [
-      ["current", "/api/admin/cash-shifts/current"], ["shifts", "/api/admin/cash-shifts"],
+      ["current", "/api/admin/cash-shifts/current"], ["shifts", "/api/admin/cash-shifts?limit=200"],
       ...((role === "admin" || role === "manager") ? ([["qrPayments", "/api/admin/qr-payments"], ["unassignedCash", "/api/admin/cash-payments/unassigned"], ["paymentReconciliation", "/api/admin/payment-reconciliation"]] as [string, string][]) : []),
       ...(!managerView ? ([["sales", "/api/admin/sales"], ["salesSummary", "/api/dashboard/summary"], ["monthlySales", "/api/dashboard/monthly-sales"], ["yearlySales", "/api/dashboard/yearly-sales"]] as [string, string][]) : []),
       ...(!managerView ? ([["customers", "/api/customers"]] as [string, string][]) : []),
