@@ -367,11 +367,38 @@ def repay_balance(payload: schemas.RepaymentCreate, db: Session = Depends(get_db
     if bill:
         bill.amount_paid += payload.amount
         bill.outstanding_amount = balance.remaining_amount
-    db.add(models.BalanceTransaction(
+    # Legacy repayments predate method capture. Keep them explicitly unclassified;
+    # new repayments always record the selected tender.
+    db.execute(text("""ALTER TABLE balance_transactions
+        ADD COLUMN IF NOT EXISTS method VARCHAR(24) NOT NULL DEFAULT 'legacy_unclassified'"""))
+    transaction = models.BalanceTransaction(
         customer_balance_id=balance.id, amount=payload.amount, received_by=user.id,
-    ))
+    )
+    db.add(transaction)
+    db.flush()
+    db.execute(text("UPDATE balance_transactions SET method=:method WHERE id=:id"),
+               {"method": payload.method, "id": transaction.id})
+    if payload.method == "cash":
+        db.execute(text("""CREATE TABLE IF NOT EXISTS cash_repayment_links (
+            transaction_id UUID PRIMARY KEY REFERENCES balance_transactions(id) ON DELETE CASCADE,
+            drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+            linked_by UUID REFERENCES users(id),
+            linked_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )"""))
+        open_shift = db.execute(text("SELECT id FROM cash_drawer_shifts WHERE status='open' ORDER BY opened_at DESC LIMIT 1 FOR UPDATE")).first()
+        if open_shift:
+            entry_id = db.execute(text("""INSERT INTO cash_drawer_entries
+                (shift_id,entry_type,amount,reference,notes,created_by,created_at)
+                VALUES(:shift,'sale',:amount,:reference,'Cash received for customer credit repayment',:user,:created_at)
+                RETURNING id"""),
+                {"shift": open_shift.id, "amount": payload.amount,
+                 "reference": "Credit repayment " + (bill.bill_number if bill else str(balance.bill_id)),
+                 "user": user.id, "created_at": transaction.created_at}).scalar_one()
+            db.execute(text("""INSERT INTO cash_repayment_links(transaction_id,drawer_entry_id,linked_by)
+                VALUES(:transaction,:entry,:user)"""),
+                {"transaction": transaction.id, "entry": entry_id, "user": user.id})
     db.commit()
-    return {"remaining_amount": str(balance.remaining_amount)}
+    return {"remaining_amount": str(balance.remaining_amount), "payment_method": payload.method}
 
 
 @router.get("/outstanding")
