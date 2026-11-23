@@ -997,11 +997,21 @@ def qr_received_payments(start: date | None = None, end: date | None = None,
           AND (:start IS NULL OR r.created_at::date>=:start)
           AND (:end IS NULL OR r.created_at::date<=:end)
         ORDER BY r.created_at DESC LIMIT 1000"""), {"start": start, "end": end}).mappings().all()
-    received = sum((Decimal(str(row["amount"])) for row in rows), Decimal("0"))
-    refunded = sum((Decimal(str(row["amount"])) for row in refunds), Decimal("0"))
+    received, payment_count = db.execute(text("""SELECT COALESCE(SUM(p.amount),0),COUNT(*)
+        FROM payments p JOIN bills b ON b.id=p.bill_id
+        WHERE p.method='qr' AND b.sale_status='active'
+          AND (:start IS NULL OR p.created_at::date>=:start)
+          AND (:end IS NULL OR p.created_at::date<=:end)"""),
+        {"start": start, "end": end}).one()
+    refunded = db.execute(text("""SELECT COALESCE(SUM(r.amount),0) FROM bill_refunds r
+        JOIN bills b ON b.id=r.bill_id WHERE r.method='qr' AND b.sale_status='active'
+          AND (:start IS NULL OR r.created_at::date>=:start)
+          AND (:end IS NULL OR r.created_at::date<=:end)"""),
+        {"start": start, "end": end}).scalar_one()
     return {"received_total": str(received), "refunded_total": str(refunded),
-            "net_qr_received": str(received-refunded), "payment_count": len(rows),
-            "payments": [dict(row) for row in rows], "refunds": [dict(row) for row in refunds]}
+            "net_qr_received": str(Decimal(str(received))-Decimal(str(refunded))),
+            "payment_count": int(payment_count), "payments": [dict(row) for row in rows],
+            "refunds": [dict(row) for row in refunds], "list_truncated": len(rows) >= 2000 or len(refunds) >= 1000}
 
 
 @router.get("/cash-payments/unassigned")
