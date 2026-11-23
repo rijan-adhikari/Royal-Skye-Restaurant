@@ -34,6 +34,9 @@ def _net_collection_sales(db: Session, start: datetime, end: datetime):
           SELECT cb.bill_id,bt.amount FROM balance_transactions bt
           JOIN customer_balances cb ON cb.id=bt.customer_balance_id
           WHERE bt.created_at >= :start AND bt.created_at < :end
+          UNION ALL
+          SELECT r.bill_id,-r.amount FROM bill_refunds r
+          WHERE r.created_at >= :start AND r.created_at < :end
         ) x JOIN bills b ON b.id=x.bill_id WHERE b.sale_status='active'"""),
         {"start": start, "end": end}).scalar_one()
     return value or 0
@@ -47,6 +50,9 @@ def _collection_amounts(db: Session, start: datetime, end: datetime):
           SELECT cb.bill_id,bt.amount FROM balance_transactions bt
           JOIN customer_balances cb ON cb.id=bt.customer_balance_id
           WHERE bt.created_at >= :start AND bt.created_at < :end
+          UNION ALL
+          SELECT r.bill_id,-r.amount FROM bill_refunds r
+          WHERE r.created_at >= :start AND r.created_at < :end
         ) x JOIN bills b ON b.id=x.bill_id WHERE b.sale_status='active'
         GROUP BY x.bill_id ORDER BY MAX(b.created_at) DESC"""),
         {"start": start, "end": end}).mappings().all()
@@ -54,6 +60,8 @@ def _collection_amounts(db: Session, start: datetime, end: datetime):
 
 
 def _sales_details_for_period(db: Session, start: datetime, end: datetime):
+    db.execute(text("""ALTER TABLE balance_transactions
+        ADD COLUMN IF NOT EXISTS method VARCHAR(24) NOT NULL DEFAULT 'legacy_unclassified'"""))
     # Detail modals are bill registers, not just cash-collection registers:
     # include fully-paid, partially-paid and unpaid-credit bills for the
     # selected Nepal business-date range.
@@ -78,16 +86,22 @@ def _sales_details_for_period(db: Session, start: datetime, end: datetime):
         payments = db.execute(text("""SELECT p.method, p.amount, p.created_at, u.full_name received_by_name
             FROM payments p LEFT JOIN users u ON u.id=p.received_by
             WHERE p.bill_id=:bill ORDER BY p.created_at,p.id"""), {"bill": bill.id}).mappings().all()
-        repayments = db.execute(text("""SELECT bt.amount,bt.created_at,u.full_name received_by_name
+        repayments = db.execute(text("""SELECT bt.amount,bt.method,bt.created_at,u.full_name received_by_name
             FROM balance_transactions bt LEFT JOIN users u ON u.id=bt.received_by
             JOIN customer_balances cb ON cb.id=bt.customer_balance_id
             WHERE cb.bill_id=:bill ORDER BY bt.created_at,bt.id"""), {"bill": bill.id}).mappings().all()
+        refunds = db.execute(text("""SELECT r.amount,r.method,r.created_at,u.full_name received_by_name
+            FROM bill_refunds r LEFT JOIN users u ON u.id=r.created_by
+            WHERE r.bill_id=:bill ORDER BY r.created_at,r.id"""), {"bill": bill.id}).mappings().all()
         payment_rows = [{"method": row["method"], "amount": str(row["amount"]),
                          "created_at": row["created_at"], "received_by_name": row["received_by_name"]}
                         for row in payments]
-        payment_rows.extend([{"method": "credit_repayment_method_not_recorded",
-                              "amount": str(row["amount"]), "created_at": row["created_at"],
-                              "received_by_name": row["received_by_name"]} for row in repayments])
+        payment_rows.extend([{"method": row["method"], "amount": str(row["amount"]),
+                              "created_at": row["created_at"], "received_by_name": row["received_by_name"]}
+                             for row in repayments])
+        payment_rows.extend([{"method": "refund_" + str(row["method"]), "amount": str(-Decimal(str(row["amount"]))),
+                              "created_at": row["created_at"], "received_by_name": row["received_by_name"]}
+                             for row in refunds])
         result.append({
             "id": bill.id, "bill_number": bill.bill_number, "business_date": bill.business_date.isoformat(),
             "created_at": bill.created_at,
