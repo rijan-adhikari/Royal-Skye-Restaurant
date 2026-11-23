@@ -34,6 +34,9 @@ def _net_collection_sales(db: Session, start: datetime, end: datetime):
           SELECT cb.bill_id,bt.amount FROM balance_transactions bt
           JOIN customer_balances cb ON cb.id=bt.customer_balance_id
           WHERE bt.created_at >= :start AND bt.created_at < :end
+          UNION ALL
+          SELECT r.bill_id,-r.amount FROM bill_refunds r
+          WHERE r.created_at >= :start AND r.created_at < :end
         ) x JOIN bills b ON b.id=x.bill_id WHERE b.sale_status='active'"""),
         {"start": start, "end": end}).scalar_one()
     return value or 0
@@ -47,6 +50,9 @@ def _collection_amounts(db: Session, start: datetime, end: datetime):
           SELECT cb.bill_id,bt.amount FROM balance_transactions bt
           JOIN customer_balances cb ON cb.id=bt.customer_balance_id
           WHERE bt.created_at >= :start AND bt.created_at < :end
+          UNION ALL
+          SELECT r.bill_id,-r.amount FROM bill_refunds r
+          WHERE r.created_at >= :start AND r.created_at < :end
         ) x JOIN bills b ON b.id=x.bill_id WHERE b.sale_status='active'
         GROUP BY x.bill_id ORDER BY MAX(b.created_at) DESC"""),
         {"start": start, "end": end}).mappings().all()
@@ -54,12 +60,28 @@ def _collection_amounts(db: Session, start: datetime, end: datetime):
 
 
 def _sales_details_for_period(db: Session, start: datetime, end: datetime):
-    collected = _collection_amounts(db, start, end)
-    if not collected:
-        return []
+    db.execute(text("""ALTER TABLE balance_transactions
+        ADD COLUMN IF NOT EXISTS method VARCHAR(24) NOT NULL DEFAULT 'legacy_unclassified'"""))
+    # Detail modals are bill registers, not just cash-collection registers:
+    # include fully-paid, partially-paid and unpaid-credit bills for the
+    # selected Nepal business-date range.
+    start_date = start.replace(tzinfo=timezone.utc).astimezone(BUSINESS_TIMEZONE).date()
+    end_date = end.replace(tzinfo=timezone.utc).astimezone(BUSINESS_TIMEZONE).date()
+    bill_ids = db.execute(text("""SELECT b.id FROM bills b
+        WHERE b.sale_status='active' AND (
+          (b.business_date>=:start_date AND b.business_date<:end_date)
+          OR EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.created_at>=:start AND p.created_at<:end)
+          OR EXISTS (SELECT 1 FROM balance_transactions bt JOIN customer_balances cb
+                     ON cb.id=bt.customer_balance_id WHERE cb.bill_id=b.id
+                     AND bt.created_at>=:start AND bt.created_at<:end)
+          OR EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id
+                     AND r.created_at>=:start AND r.created_at<:end)
+        ) ORDER BY b.created_at DESC"""),
+        {"start_date": start_date, "end_date": end_date, "start": start, "end": end}).scalars().all()
     bills = db.query(models.Bill).filter(
-        models.Bill.id.in_(list(collected.keys())), models.Bill.sale_status == "active"
+        models.Bill.id.in_(bill_ids), models.Bill.sale_status == "active"
     ).order_by(models.Bill.created_at.desc()).all()
+    collected = _collection_amounts(db, start, end)
     result = []
     for bill in bills:
         order = db.query(models.Order).filter(models.Order.id == bill.order_id).first()
@@ -70,18 +92,43 @@ def _sales_details_for_period(db: Session, start: datetime, end: datetime):
             FROM order_items oi JOIN menu_items mi ON mi.id=oi.menu_item_id
             WHERE oi.order_id=:order_id AND oi.is_cancelled=FALSE ORDER BY mi.name"""),
             {"order_id": bill.order_id}).mappings().all()
+        payments = db.execute(text("""SELECT p.method, p.amount, p.created_at, u.full_name received_by_name
+            FROM payments p LEFT JOIN users u ON u.id=p.received_by
+            WHERE p.bill_id=:bill ORDER BY p.created_at,p.id"""), {"bill": bill.id}).mappings().all()
+        repayments = db.execute(text("""SELECT bt.amount,bt.method,bt.created_at,u.full_name received_by_name
+            FROM balance_transactions bt LEFT JOIN users u ON u.id=bt.received_by
+            JOIN customer_balances cb ON cb.id=bt.customer_balance_id
+            WHERE cb.bill_id=:bill ORDER BY bt.created_at,bt.id"""), {"bill": bill.id}).mappings().all()
+        refunds = db.execute(text("""SELECT r.amount,r.method,r.created_at,u.full_name received_by_name
+            FROM bill_refunds r LEFT JOIN users u ON u.id=r.created_by
+            WHERE r.bill_id=:bill ORDER BY r.created_at,r.id"""), {"bill": bill.id}).mappings().all()
+        payment_rows = [{"method": row["method"], "amount": str(row["amount"]),
+                         "created_at": row["created_at"], "received_by_name": row["received_by_name"]}
+                        for row in payments]
+        payment_rows.extend([{"method": row["method"], "amount": str(row["amount"]),
+                              "created_at": row["created_at"], "received_by_name": row["received_by_name"]}
+                             for row in repayments])
+        payment_rows.extend([{"method": "refund_" + str(row["method"]), "amount": str(-Decimal(str(row["amount"]))),
+                              "created_at": row["created_at"], "received_by_name": row["received_by_name"]}
+                             for row in refunds])
+        if Decimal(str(bill.outstanding_amount or 0)) > 0:
+            payment_rows.append({"method": "customer_credit_balance",
+                                 "amount": str(bill.outstanding_amount), "created_at": bill.created_at,
+                                 "received_by_name": None})
         result.append({
-            "id": bill.id, "bill_number": bill.bill_number, "created_at": bill.created_at,
+            "id": bill.id, "bill_number": bill.bill_number, "business_date": bill.business_date.isoformat(),
+            "created_at": bill.created_at,
             "customer_name": customer.name if customer else (service["customer_name"] if service else "Walk-in"),
             "customer_phone": customer.phone if customer else (service["phone"] if service else None),
             "service_type": service["service_type"] if service else "dine_in",
             "table_name": service["service_type"].title() if service else (order.table.name if order and order.table else ""),
-            "grand_total": str(bill.grand_total), "collected_amount": str(collected[str(bill.id)]),
+            "grand_total": str(bill.grand_total),
+            "collected_amount": str(collected.get(str(bill.id), 0)),
             "amount_paid": str(bill.amount_paid), "outstanding_amount": str(bill.outstanding_amount),
+            "payments": payment_rows,
             "items": [{**dict(item), "unit_price": str(item["unit_price"]), "total": str(item["total"])} for item in items],
         })
     return result
-
 
 
 def _sum_amount(db: Session, model, column, start: datetime, end: datetime, date_column=None):
@@ -234,7 +281,7 @@ def daily_sales_details(report_date: date | None = None, db: Session = Depends(g
 @router.get("/monthly-sales")
 def monthly_sales_details(report_date: date | None = None, db: Session = Depends(get_db),
                           user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager, models.RoleName.cashier))):
-    target = report_date or datetime.utcnow().date()
+    target = report_date or datetime.now(BUSINESS_TIMEZONE).date()
     month_start = target.replace(day=1)
     month_end = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
     start, end = _business_window(month_start, month_end)
@@ -244,7 +291,7 @@ def monthly_sales_details(report_date: date | None = None, db: Session = Depends
 @router.get("/yearly-sales")
 def yearly_sales_details(report_date: date | None = None, db: Session = Depends(get_db),
                          user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager, models.RoleName.cashier))):
-    target = report_date or datetime.utcnow().date()
+    target = report_date or datetime.now(BUSINESS_TIMEZONE).date()
     start, end = _business_window(date(target.year, 1, 1), date(target.year + 1, 1, 1))
     return _sales_details_for_period(db, start, end)
 

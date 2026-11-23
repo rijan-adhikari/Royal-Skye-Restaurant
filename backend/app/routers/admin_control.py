@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, date
+from datetime import datetime, date, time as datetime_time, timedelta, timezone
+from zoneinfo import ZoneInfo
 from io import BytesIO
 from pathlib import Path
 import subprocess
@@ -833,12 +834,20 @@ def create_refund(payload: RefundCreate, db: Session = Depends(get_db),
         {"bill": payload.bill_id, "amount": payload.amount, "reason": payload.reason,
          "method": payload.method, "user": user.id}).mappings().first()
     if payload.method == "cash":
+        db.execute(text("""CREATE TABLE IF NOT EXISTS cash_refund_links (
+            refund_id UUID PRIMARY KEY REFERENCES bill_refunds(id) ON DELETE CASCADE,
+            drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+            linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )"""))
         open_shift = db.execute(text("SELECT id FROM cash_drawer_shifts WHERE status='open' ORDER BY opened_at DESC LIMIT 1 FOR UPDATE")).first()
         if open_shift:
-            db.execute(text("""INSERT INTO cash_drawer_entries(shift_id,entry_type,amount,reference,notes,created_by)
-                VALUES(:shift,'refund',:amount,:reference,:notes,:user)"""),
+            entry_id = db.execute(text("""INSERT INTO cash_drawer_entries
+                (shift_id,entry_type,amount,reference,notes,created_by,created_at)
+                VALUES(:shift,'refund',:amount,:reference,:notes,:user,:created_at) RETURNING id"""),
                 {"shift": open_shift.id, "amount": payload.amount, "reference": bill["bill_number"],
-                 "notes": payload.reason, "user": user.id})
+                 "notes": payload.reason, "user": user.id, "created_at": row["created_at"]}).scalar_one()
+            db.execute(text("""INSERT INTO cash_refund_links(refund_id,drawer_entry_id,linked_by)
+                VALUES(:refund,:entry,:user)"""), {"refund": row["id"], "entry": entry_id, "user": user.id})
     audit(db, user.id, "bill.refund", f"Bill {bill['bill_number']}: NPR {payload.amount}; {payload.reason}")
     db.commit()
     return dict(row)
@@ -935,3 +944,414 @@ def customer_loyalty(customer_id: str, db: Session = Depends(get_db),
     transactions = db.execute(text("""SELECT * FROM loyalty_transactions WHERE customer_id=:id
         ORDER BY created_at DESC LIMIT 100"""), {"id": customer_id}).mappings().all()
     return dict(account) | {"transactions": [dict(row) for row in transactions]}
+
+
+# Payment reconciliation -----------------------------------------------------
+# A dedicated link table gives each original cash payment a durable, unique
+# relationship to its drawer entry. It avoids fragile bill-number/amount-only
+# matching when a bill has split or repeated payments.
+def _ensure_cash_payment_links(db: Session) -> None:
+    db.execute(text("""CREATE TABLE IF NOT EXISTS cash_payment_links (
+        payment_id UUID PRIMARY KEY REFERENCES payments(id) ON DELETE CASCADE,
+        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+        linked_by UUID REFERENCES users(id),
+        linked_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        source VARCHAR(24) NOT NULL DEFAULT 'automatic'
+    )"""))
+    db.execute(text("CREATE INDEX IF NOT EXISTS ix_cash_payment_links_drawer_entry ON cash_payment_links(drawer_entry_id)"))
+    db.flush()
+
+
+def _backfill_unambiguous_cash_links(db: Session) -> int:
+    # Link legacy drawer rows only when the payment and drawer-entry match is
+    # exactly one-to-one. Ambiguous rows remain visible for manual review.
+    result = db.execute(text("""WITH candidates AS (
+        SELECT p.id payment_id,e.id entry_id,
+               COUNT(*) OVER (PARTITION BY p.id) payment_matches,
+               COUNT(*) OVER (PARTITION BY e.id) entry_matches
+        FROM payments p
+        JOIN bills b ON b.id=p.bill_id
+        JOIN cash_drawer_entries e
+          ON e.reference=b.bill_number AND e.entry_type='sale' AND e.amount=p.amount
+        WHERE p.method='cash' AND b.sale_status='active'
+          AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.payment_id=p.id)
+          AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.drawer_entry_id=e.id)
+    )
+    INSERT INTO cash_payment_links(payment_id,drawer_entry_id,source)
+    SELECT payment_id,entry_id,'legacy_match' FROM candidates
+    WHERE payment_matches=1 AND entry_matches=1
+    ON CONFLICT DO NOTHING"""))
+    return max(result.rowcount or 0, 0)
+
+
+@router.get("/qr-payments")
+def qr_received_payments(start: date | None = None, end: date | None = None,
+                         db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    if start and end and end < start:
+        raise HTTPException(422, "End date must not precede start date")
+    db.execute(text("""ALTER TABLE balance_transactions
+        ADD COLUMN IF NOT EXISTS method VARCHAR(24) NOT NULL DEFAULT 'legacy_unclassified'"""))
+    rows = db.execute(text("""SELECT p.id payment_id,'bill_payment' source_type,b.id bill_id,b.bill_number,b.business_date,
+        p.created_at,p.amount,p.method,c.name customer_name,u.full_name received_by_name
+        FROM payments p JOIN bills b ON b.id=p.bill_id
+        LEFT JOIN customers c ON c.id=b.customer_id LEFT JOIN users u ON u.id=p.received_by
+        WHERE p.method='qr' AND b.sale_status='active'
+          AND (:start IS NULL OR p.created_at::date>=:start)
+          AND (:end IS NULL OR p.created_at::date<=:end)
+        UNION ALL
+        SELECT bt.id payment_id,'credit_repayment' source_type,b.id bill_id,b.bill_number,b.business_date,
+        bt.created_at,bt.amount,bt.method,c.name customer_name,u.full_name received_by_name
+        FROM balance_transactions bt JOIN customer_balances cb ON cb.id=bt.customer_balance_id
+        JOIN bills b ON b.id=cb.bill_id LEFT JOIN customers c ON c.id=cb.customer_id
+        LEFT JOIN users u ON u.id=bt.received_by
+        WHERE bt.method='qr' AND b.sale_status='active'
+          AND (:start IS NULL OR bt.created_at::date>=:start)
+          AND (:end IS NULL OR bt.created_at::date<=:end)
+        ORDER BY created_at DESC LIMIT 2000"""), {"start": start, "end": end}).mappings().all()
+    refunds = db.execute(text("""SELECT r.id refund_id,b.bill_number,b.business_date,r.created_at,
+        r.amount,r.method,r.reason,u.full_name received_by_name
+        FROM bill_refunds r JOIN bills b ON b.id=r.bill_id
+        LEFT JOIN users u ON u.id=r.created_by
+        WHERE r.method='qr' AND b.sale_status='active'
+          AND (:start IS NULL OR r.created_at::date>=:start)
+          AND (:end IS NULL OR r.created_at::date<=:end)
+        ORDER BY r.created_at DESC LIMIT 1000"""), {"start": start, "end": end}).mappings().all()
+    received, payment_count = db.execute(text("""SELECT COALESCE(SUM(amount),0),COUNT(*) FROM (
+        SELECT p.amount,p.created_at FROM payments p JOIN bills b ON b.id=p.bill_id
+        WHERE p.method='qr' AND b.sale_status='active'
+        UNION ALL
+        SELECT bt.amount,bt.created_at FROM balance_transactions bt
+        JOIN customer_balances cb ON cb.id=bt.customer_balance_id JOIN bills b ON b.id=cb.bill_id
+        WHERE bt.method='qr' AND b.sale_status='active'
+    ) qr_receipts WHERE (:start IS NULL OR created_at::date>=:start)
+      AND (:end IS NULL OR created_at::date<=:end)"""),
+        {"start": start, "end": end}).one()
+    refunded = db.execute(text("""SELECT COALESCE(SUM(r.amount),0) FROM bill_refunds r
+        JOIN bills b ON b.id=r.bill_id WHERE r.method='qr' AND b.sale_status='active'
+          AND (:start IS NULL OR r.created_at::date>=:start)
+          AND (:end IS NULL OR r.created_at::date<=:end)"""),
+        {"start": start, "end": end}).scalar_one()
+    return {"received_total": str(received), "refunded_total": str(refunded),
+            "net_qr_received": str(Decimal(str(received))-Decimal(str(refunded))),
+            "payment_count": int(payment_count), "payments": [dict(row) for row in rows],
+            "refunds": [dict(row) for row in refunds], "list_truncated": len(rows) >= 2000 or len(refunds) >= 1000}
+
+
+@router.get("/cash-payments/unassigned")
+def unassigned_cash_payments(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    _ensure_cash_payment_links(db)
+    db.execute(text("""ALTER TABLE balance_transactions
+        ADD COLUMN IF NOT EXISTS method VARCHAR(24) NOT NULL DEFAULT 'legacy_unclassified'"""))
+    db.execute(text("""CREATE TABLE IF NOT EXISTS cash_repayment_links (
+        transaction_id UUID PRIMARY KEY REFERENCES balance_transactions(id) ON DELETE CASCADE,
+        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+        linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )"""))
+    db.execute(text("""CREATE TABLE IF NOT EXISTS cash_refund_links (
+        refund_id UUID PRIMARY KEY REFERENCES bill_refunds(id) ON DELETE CASCADE,
+        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+        linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )"""))
+    legacy_linked = _backfill_unambiguous_cash_links(db)
+    if legacy_linked:
+        audit(db, user.id, "cash_payment.legacy_links_created",
+              f"Safely linked {legacy_linked} one-to-one legacy cash drawer rows")
+    rows = db.execute(text("""SELECT p.id payment_id,'payment' source_type,b.id bill_id,b.bill_number,b.business_date,
+        p.created_at,p.amount,c.name customer_name,u.full_name received_by_name,
+        (SELECT COUNT(*) FROM cash_drawer_entries e
+         WHERE e.entry_type='sale' AND e.reference=b.bill_number AND e.amount=p.amount) matching_drawer_rows
+        FROM payments p JOIN bills b ON b.id=p.bill_id
+        LEFT JOIN customers c ON c.id=b.customer_id LEFT JOIN users u ON u.id=p.received_by
+        WHERE p.method='cash' AND b.sale_status='active'
+          AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.payment_id=p.id)
+        UNION ALL
+        SELECT bt.id payment_id,'repayment' source_type,b.id bill_id,b.bill_number,b.business_date,
+        bt.created_at,bt.amount,c.name customer_name,u.full_name received_by_name,
+        (SELECT COUNT(*) FROM cash_drawer_entries e
+         WHERE e.entry_type='sale' AND e.reference=('Credit repayment ' || b.bill_number) AND e.amount=bt.amount) matching_drawer_rows
+        FROM balance_transactions bt JOIN customer_balances cb ON cb.id=bt.customer_balance_id
+        JOIN bills b ON b.id=cb.bill_id LEFT JOIN customers c ON c.id=cb.customer_id
+        LEFT JOIN users u ON u.id=bt.received_by
+        WHERE bt.method='cash' AND b.sale_status='active'
+          AND NOT EXISTS (SELECT 1 FROM cash_repayment_links l WHERE l.transaction_id=bt.id)
+        UNION ALL
+        SELECT r.id payment_id,'refund' source_type,b.id bill_id,b.bill_number,b.business_date,
+        r.created_at,r.amount,c.name customer_name,u.full_name received_by_name,
+        (SELECT COUNT(*) FROM cash_drawer_entries e
+         WHERE e.entry_type='refund' AND e.reference=b.bill_number AND e.amount=r.amount) matching_drawer_rows
+        FROM bill_refunds r JOIN bills b ON b.id=r.bill_id
+        LEFT JOIN customers c ON c.id=b.customer_id LEFT JOIN users u ON u.id=r.created_by
+        WHERE r.method='cash' AND b.sale_status='active'
+          AND NOT EXISTS (SELECT 1 FROM cash_refund_links l WHERE l.refund_id=r.id)
+        ORDER BY created_at ASC LIMIT 3000""")).mappings().all()
+    count, total = db.execute(text("""SELECT COUNT(*),COALESCE(SUM(amount),0) FROM (
+        SELECT p.amount FROM payments p JOIN bills b ON b.id=p.bill_id
+        WHERE p.method='cash' AND b.sale_status='active'
+          AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.payment_id=p.id)
+        UNION ALL
+        SELECT bt.amount FROM balance_transactions bt
+        JOIN customer_balances cb ON cb.id=bt.customer_balance_id JOIN bills b ON b.id=cb.bill_id
+        WHERE bt.method='cash' AND b.sale_status='active'
+          AND NOT EXISTS (SELECT 1 FROM cash_repayment_links l WHERE l.transaction_id=bt.id)
+    ) unassigned""")).one()
+    refund_count, refund_total = db.execute(text("""SELECT COUNT(*),COALESCE(SUM(r.amount),0)
+        FROM bill_refunds r JOIN bills b ON b.id=r.bill_id
+        WHERE r.method='cash' AND b.sale_status='active'
+          AND NOT EXISTS (SELECT 1 FROM cash_refund_links l WHERE l.refund_id=r.id)""")).one()
+    db.commit()
+    return {"count": int(count), "total": str(total), "refund_count": int(refund_count),
+            "refund_total": str(refund_total), "payments": [dict(row) for row in rows],
+            "list_truncated": int(count)+int(refund_count) > len(rows)}
+
+
+class CashPaymentAssign(BaseModel):
+    shift_id: str
+    notes: str | None = None
+
+
+class HistoricalShiftRecovery(BaseModel):
+    business_date: date
+    opening_float: Decimal = Field(ge=0)
+    counted_cash: Decimal = Field(ge=0)
+    cash_in: Decimal = Field(default=Decimal("0"), ge=0)
+    cash_out: Decimal = Field(default=Decimal("0"), ge=0)
+    payout: Decimal = Field(default=Decimal("0"), ge=0)
+    notes: str | None = None
+
+
+@router.post("/cash-shifts/recover")
+def recover_historical_cash_shift(payload: HistoricalShiftRecovery,
+                                  db: Session = Depends(get_db),
+                                  user=Depends(require_roles(*MANAGERS))):
+    # Reconstruct a closed shift over the Nepal-local business day. Original
+    # payments are assigned separately, so no amount is fabricated here.
+    local_start = datetime.combine(payload.business_date, datetime_time.min,
+                                   tzinfo=ZoneInfo("Asia/Kathmandu"))
+    local_end = local_start + timedelta(days=1)
+    start_utc = local_start.astimezone(timezone.utc).replace(tzinfo=None)
+    end_utc = local_end.astimezone(timezone.utc).replace(tzinfo=None)
+    overlapping = db.execute(text("""SELECT id FROM cash_drawer_shifts
+        WHERE opened_at < :end_at AND COALESCE(closed_at,NOW()) > :start_at
+        FOR UPDATE"""), {"start_at": start_utc, "end_at": end_utc}).first()
+    if overlapping:
+        raise HTTPException(409, "A cash drawer shift already overlaps this business date. Assign records to that shift instead.")
+    expected = payload.opening_float + payload.cash_in - payload.cash_out - payload.payout
+    difference = payload.counted_cash - expected
+    notes = f"Historical shift recovered for Nepal business date {payload.business_date}."
+    if payload.notes and payload.notes.strip():
+        notes += "\n" + payload.notes.strip()
+    row = db.execute(text("""INSERT INTO cash_drawer_shifts
+        (opened_by,closed_by,opening_float,expected_cash,counted_cash,cash_difference,
+         status,opened_at,closed_at,notes)
+        VALUES(:user,:user,:opening,:expected,:counted,:difference,'closed',
+               :opened_at,:closed_at,:notes) RETURNING *"""),
+        {"user": user.id, "opening": payload.opening_float, "expected": expected,
+         "counted": payload.counted_cash, "difference": difference,
+         "opened_at": start_utc, "closed_at": end_utc, "notes": notes}).mappings().first()
+    for entry_type, amount in (("cash_in", payload.cash_in), ("cash_out", payload.cash_out), ("payout", payload.payout)):
+        if amount > 0:
+            db.execute(text("""INSERT INTO cash_drawer_entries
+                (shift_id,entry_type,amount,reference,notes,created_by,created_at)
+                VALUES(:shift,:entry_type,:amount,:reference,:notes,:user,:created_at)"""),
+                {"shift": row["id"], "entry_type": entry_type, "amount": amount,
+                 "reference": f"Historical recovery {payload.business_date}",
+                 "notes": payload.notes or "Historical drawer movement recorded during recovery",
+                 "user": user.id, "created_at": start_utc})
+    audit(db, user.id, "cash_shift.historical_recovery",
+          f"Created closed historical shift {row['id']} for {payload.business_date}; opening NPR {payload.opening_float}, cash-in NPR {payload.cash_in}, cash-out NPR {payload.cash_out}, payout NPR {payload.payout}, expected NPR {expected}, counted NPR {payload.counted_cash}")
+    db.commit()
+    return dict(row)
+
+
+@router.post("/cash-payments/{payment_id}/assign")
+def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
+                        db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    _ensure_cash_payment_links(db)
+    db.execute(text("""ALTER TABLE balance_transactions
+        ADD COLUMN IF NOT EXISTS method VARCHAR(24) NOT NULL DEFAULT 'legacy_unclassified'"""))
+    db.execute(text("""CREATE TABLE IF NOT EXISTS cash_repayment_links (
+        transaction_id UUID PRIMARY KEY REFERENCES balance_transactions(id) ON DELETE CASCADE,
+        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+        linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )"""))
+    db.execute(text("""CREATE TABLE IF NOT EXISTS cash_refund_links (
+        refund_id UUID PRIMARY KEY REFERENCES bill_refunds(id) ON DELETE CASCADE,
+        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+        linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )"""))
+    payment = db.execute(text("""SELECT p.id source_id,p.bill_id,p.method,p.amount,p.created_at,b.bill_number,b.sale_status,
+        'payment' source_type,b.bill_number reference,'sale' drawer_type
+        FROM payments p JOIN bills b ON b.id=p.bill_id WHERE p.id=:id FOR UPDATE OF p,b"""),
+        {"id": payment_id}).mappings().first()
+    if payment:
+        link_table, source_column = "cash_payment_links", "payment_id"
+    else:
+        payment = db.execute(text("""SELECT bt.id source_id,cb.bill_id,bt.method,bt.amount,bt.created_at,b.bill_number,b.sale_status,
+            'repayment' source_type,('Credit repayment ' || b.bill_number) reference,'sale' drawer_type
+            FROM balance_transactions bt JOIN customer_balances cb ON cb.id=bt.customer_balance_id
+            JOIN bills b ON b.id=cb.bill_id WHERE bt.id=:id FOR UPDATE OF bt,b"""),
+            {"id": payment_id}).mappings().first()
+        link_table, source_column = "cash_repayment_links", "transaction_id"
+    if not payment:
+        payment = db.execute(text("""SELECT r.id source_id,r.bill_id,r.method,r.amount,r.created_at,b.bill_number,b.sale_status,
+            'refund' source_type,b.bill_number reference,'refund' drawer_type
+            FROM bill_refunds r JOIN bills b ON b.id=r.bill_id WHERE r.id=:id FOR UPDATE OF r,b"""),
+            {"id": payment_id}).mappings().first()
+        link_table, source_column = "cash_refund_links", "refund_id"
+    if not payment:
+        raise HTTPException(404, "Cash payment, repayment or refund not found")
+    if payment["method"] != "cash" or payment["sale_status"] != "active":
+        raise HTTPException(409, "Only active cash receipts or refunds can be assigned")
+    if db.execute(text(f"SELECT 1 FROM {link_table} WHERE {source_column}=:id"), {"id": payment_id}).first():
+        raise HTTPException(409, "This cash record is already linked to a drawer entry")
+    shift = db.execute(text("SELECT id,status,opening_float,counted_cash,opened_at,closed_at FROM cash_drawer_shifts WHERE id=:id FOR UPDATE"),
+                       {"id": payload.shift_id}).mappings().first()
+    if not shift:
+        raise HTTPException(404, "Selected cash drawer shift was not found")
+    if payment["created_at"] < shift["opened_at"] or (
+        shift["closed_at"] is not None and payment["created_at"] > shift["closed_at"]
+    ):
+        raise HTTPException(409, "The selected shift does not cover this receipt's original timestamp. Choose the correct historical shift.")
+    candidates = db.execute(text("""SELECT e.id,e.shift_id FROM cash_drawer_entries e
+        WHERE e.entry_type=:entry_type AND e.reference=:reference AND e.amount=:amount
+          AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.drawer_entry_id=e.id)
+          AND NOT EXISTS (SELECT 1 FROM cash_repayment_links l WHERE l.drawer_entry_id=e.id)
+          AND NOT EXISTS (SELECT 1 FROM cash_refund_links l WHERE l.drawer_entry_id=e.id)
+        ORDER BY e.created_at"""),
+        {"entry_type": payment["drawer_type"], "reference": payment["reference"],
+         "amount": payment["amount"]}).mappings().all()
+    if len(candidates) > 1:
+        raise HTTPException(409, "Multiple matching historical drawer rows exist. Resolve the duplicate manually before linking.")
+    if candidates:
+        entry_id = candidates[0]["id"]
+        if str(candidates[0]["shift_id"]) != str(payload.shift_id):
+            raise HTTPException(409, "A matching drawer entry already belongs to a different shift. Select that shift to link it.")
+    else:
+        entry_id = db.execute(text("""INSERT INTO cash_drawer_entries
+            (shift_id,entry_type,amount,reference,notes,created_by,created_at)
+            VALUES(:shift,:entry_type,:amount,:reference,:notes,:user,:created_at) RETURNING id"""),
+            {"shift": payload.shift_id, "entry_type": payment["drawer_type"], "amount": payment["amount"],
+             "reference": payment["reference"],
+             "notes": payload.notes or ("Historical cash refund assigned" if payment["source_type"] == "refund"
+                                        else "Historical cash receipt assigned"),
+             "user": user.id, "created_at": payment["created_at"]}).scalar_one()
+    if payment["source_type"] == "payment":
+        db.execute(text("""INSERT INTO cash_payment_links(payment_id,drawer_entry_id,linked_by,source)
+            VALUES(:source,:entry,:user,'manual_assignment')"""),
+            {"source": payment_id, "entry": entry_id, "user": user.id})
+    elif payment["source_type"] == "repayment":
+        db.execute(text("""INSERT INTO cash_repayment_links(transaction_id,drawer_entry_id,linked_by)
+            VALUES(:source,:entry,:user)"""),
+            {"source": payment_id, "entry": entry_id, "user": user.id})
+    else:
+        db.execute(text("""INSERT INTO cash_refund_links(refund_id,drawer_entry_id,linked_by)
+            VALUES(:source,:entry,:user)"""),
+            {"source": payment_id, "entry": entry_id, "user": user.id})
+    if shift["status"] == "closed":
+        totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
+            FROM cash_drawer_entries WHERE shift_id=:id GROUP BY entry_type"""),
+            {"id": payload.shift_id}).mappings().all()
+        values = {row["entry_type"]: Decimal(str(row["amount"])) for row in totals}
+        expected = (Decimal(str(shift["opening_float"])) + values.get("sale", Decimal(0))
+            + values.get("cash_in", Decimal(0)) - values.get("refund", Decimal(0))
+            - values.get("cash_out", Decimal(0)) - values.get("payout", Decimal(0)))
+        difference = Decimal(str(shift["counted_cash"] or 0)) - expected
+        db.execute(text("UPDATE cash_drawer_shifts SET expected_cash=:expected,cash_difference=:difference WHERE id=:id"),
+                   {"expected": expected, "difference": difference, "id": payload.shift_id})
+    audit(db, user.id, "cash_record.assigned",
+          f"{payment['source_type']} {payment_id} for {payment['bill_number']} NPR {payment['amount']} linked to shift {payload.shift_id}")
+    db.commit()
+    return {"ok": True, "payment_id": payment_id, "source_type": payment["source_type"],
+            "drawer_entry_id": str(entry_id), "shift_id": payload.shift_id,
+            "created_historical_entry": not bool(candidates)}
+
+
+@router.get("/payment-reconciliation")
+def payment_reconciliation(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    _ensure_cash_payment_links(db)
+    db.execute(text("""ALTER TABLE balance_transactions
+        ADD COLUMN IF NOT EXISTS method VARCHAR(24) NOT NULL DEFAULT 'legacy_unclassified'"""))
+    db.execute(text("""CREATE TABLE IF NOT EXISTS cash_repayment_links (
+        transaction_id UUID PRIMARY KEY REFERENCES balance_transactions(id) ON DELETE CASCADE,
+        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+        linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )"""))
+    db.execute(text("""CREATE TABLE IF NOT EXISTS cash_refund_links (
+        refund_id UUID PRIMARY KEY REFERENCES bill_refunds(id) ON DELETE CASCADE,
+        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+        linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )"""))
+    linked_legacy = _backfill_unambiguous_cash_links(db)
+    if linked_legacy:
+        audit(db, user.id, "cash_payment.legacy_links_created",
+              f"Safely linked {linked_legacy} one-to-one legacy cash drawer rows")
+    payment_totals = db.execute(text("""SELECT method,COUNT(*) transactions,COALESCE(SUM(amount),0) amount FROM (
+        SELECT p.method::text method,p.amount FROM payments p JOIN bills b ON b.id=p.bill_id WHERE b.sale_status='active'
+        UNION ALL
+        SELECT bt.method::text method,bt.amount FROM balance_transactions bt
+        JOIN customer_balances cb ON cb.id=bt.customer_balance_id
+        JOIN bills b ON b.id=cb.bill_id WHERE b.sale_status='active'
+        UNION ALL
+        SELECT 'customer_credit_balance'::text method,cb.remaining_amount FROM customer_balances cb
+        JOIN bills b ON b.id=cb.bill_id WHERE b.sale_status='active' AND cb.remaining_amount>0
+        UNION ALL
+        SELECT ('refund_' || r.method::text) method,-r.amount FROM bill_refunds r
+        JOIN bills b ON b.id=r.bill_id WHERE b.sale_status='active'
+    ) tender GROUP BY method ORDER BY method""")).mappings().all()
+    missing_cash = db.execute(text("""SELECT COUNT(*),COALESCE(SUM(amount),0) FROM (
+        SELECT p.id receipt_id,p.amount FROM payments p JOIN bills b ON b.id=p.bill_id
+        WHERE p.method='cash' AND b.sale_status='active'
+          AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.payment_id=p.id)
+        UNION ALL
+        SELECT bt.id receipt_id,bt.amount FROM balance_transactions bt
+        JOIN customer_balances cb ON cb.id=bt.customer_balance_id
+        JOIN bills b ON b.id=cb.bill_id
+        WHERE bt.method='cash' AND b.sale_status='active'
+          AND NOT EXISTS (SELECT 1 FROM cash_repayment_links l WHERE l.transaction_id=bt.id)
+    ) unassigned""")).first()
+    missing_cash_refunds = db.execute(text("""SELECT COUNT(*),COALESCE(SUM(r.amount),0)
+        FROM bill_refunds r JOIN bills b ON b.id=r.bill_id
+        WHERE r.method='cash' AND b.sale_status='active'
+          AND NOT EXISTS (SELECT 1 FROM cash_refund_links l WHERE l.refund_id=r.id)""")).first()
+    bill_mismatches = db.execute(text("""SELECT COUNT(*) FROM bills b
+        WHERE b.sale_status='active' AND ABS(b.amount_paid -
+          (COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.bill_id=b.id),0) +
+           COALESCE((SELECT SUM(bt.amount) FROM balance_transactions bt
+             JOIN customer_balances cb ON cb.id=bt.customer_balance_id WHERE cb.bill_id=b.id),0))) > 0.01""")).scalar_one()
+    credit_mismatches = db.execute(text("""SELECT COUNT(*) FROM customer_balances cb
+        JOIN bills b ON b.id=cb.bill_id
+        WHERE ABS(cb.remaining_amount - GREATEST(cb.original_amount -
+          COALESCE((SELECT SUM(bt.amount) FROM balance_transactions bt WHERE bt.customer_balance_id=cb.id),0),0)) > 0.01
+           OR ABS(cb.remaining_amount-b.outstanding_amount)>0.01""")).scalar_one()
+    bill_mismatch_rows = db.execute(text("""SELECT b.id,b.bill_number,b.amount_paid,
+        COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.bill_id=b.id),0) +
+        COALESCE((SELECT SUM(bt.amount) FROM balance_transactions bt
+          JOIN customer_balances cb ON cb.id=bt.customer_balance_id WHERE cb.bill_id=b.id),0) calculated_paid,
+        b.outstanding_amount
+        FROM bills b WHERE b.sale_status='active' AND ABS(b.amount_paid -
+          (COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.bill_id=b.id),0) +
+           COALESCE((SELECT SUM(bt.amount) FROM balance_transactions bt
+             JOIN customer_balances cb ON cb.id=bt.customer_balance_id WHERE cb.bill_id=b.id),0))) > 0.01
+        ORDER BY b.business_date DESC LIMIT 200""")).mappings().all()
+    credit_mismatch_rows = db.execute(text("""SELECT cb.id,b.bill_number,cb.original_amount,
+        cb.remaining_amount,b.outstanding_amount,
+        COALESCE((SELECT SUM(bt.amount) FROM balance_transactions bt WHERE bt.customer_balance_id=cb.id),0) repaid,
+        GREATEST(cb.original_amount-COALESCE((SELECT SUM(bt.amount) FROM balance_transactions bt
+          WHERE bt.customer_balance_id=cb.id),0),0) calculated_remaining
+        FROM customer_balances cb JOIN bills b ON b.id=cb.bill_id
+        WHERE ABS(cb.remaining_amount-GREATEST(cb.original_amount-
+          COALESCE((SELECT SUM(bt.amount) FROM balance_transactions bt WHERE bt.customer_balance_id=cb.id),0),0))>0.01
+           OR ABS(cb.remaining_amount-b.outstanding_amount)>0.01
+        ORDER BY b.business_date DESC LIMIT 200""")).mappings().all()
+    qr_refunds = db.execute(text("SELECT COALESCE(SUM(amount),0) FROM bill_refunds WHERE method='qr'")).scalar_one()
+    result = {"legacy_drawer_rows_linked": linked_legacy,
+        "payment_methods": [dict(row) for row in payment_totals],
+        "unassigned_cash_count": int(missing_cash[0]), "unassigned_cash_total": str(missing_cash[1]),
+        "unassigned_cash_refund_count": int(missing_cash_refunds[0]),
+        "unassigned_cash_refund_total": str(missing_cash_refunds[1]),
+        "bill_payment_mismatches": int(bill_mismatches), "credit_balance_mismatches": int(credit_mismatches),
+        "bill_payment_mismatch_rows": [dict(row) for row in bill_mismatch_rows],
+        "credit_balance_mismatch_rows": [dict(row) for row in credit_mismatch_rows],
+        "qr_refunds_total": str(qr_refunds)}
+    db.commit()
+    return result
