@@ -33,7 +33,10 @@ def ensure_register(db):
                     CASE WHEN p.method='credit' THEN 'CREDIT' ELSE upper(p.method::text) END,
                     ' + ' ORDER BY CASE WHEN p.method='credit' THEN 'CREDIT' ELSE upper(p.method::text) END)
                     FROM payments p WHERE p.bill_id=b.id),
-                    CASE WHEN b.outstanding_amount>0 THEN 'CREDIT' ELSE 'UNCLASSIFIED' END) AS payment_method,
+                    CASE WHEN b.outstanding_amount>0 THEN 'CREDIT' ELSE 'UNCLASSIFIED' END)
+                 || CASE WHEN b.outstanding_amount>0 AND EXISTS
+                    (SELECT 1 FROM payments px WHERE px.bill_id=b.id AND px.method<>'credit')
+                    THEN ' + CREDIT' ELSE '' END AS payment_method,
                  b.grand_total AS amount, b.created_at
           FROM bills b WHERE b.sale_status='active'
           UNION ALL
