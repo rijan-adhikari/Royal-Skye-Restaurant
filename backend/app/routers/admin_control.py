@@ -527,8 +527,14 @@ def list_cash_shifts(limit: int = Query(50, ge=1, le=200),
         calculated_expected = (Decimal(str(row["opening_float"])) + amounts.get("sale", Decimal(0))
             + amounts.get("cash_in", Decimal(0)) - amounts.get("refund", Decimal(0))
             - amounts.get("cash_out", Decimal(0)) - amounts.get("payout", Decimal(0)))
-        expected_cash = row["expected_cash"] if row["expected_cash"] is not None else calculated_expected
-        result.append(dict(row) | {"expected_cash": str(expected_cash), "cash_entries": [dict(entry) for entry in entries]})
+        # Recalculate from channel-filtered entries so stale QR-only rows cannot inflate
+        # historical cash expectations or variances.
+        expected_cash = calculated_expected
+        cash_difference = (Decimal(str(row["counted_cash"])) - expected_cash
+                           if row["counted_cash"] is not None else row["cash_difference"])
+        result.append(dict(row) | {"expected_cash": str(expected_cash),
+            "cash_difference": str(cash_difference) if cash_difference is not None else None,
+            "cash_entries": [dict(entry) for entry in entries]})
     return result
 
 
