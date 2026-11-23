@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from io import BytesIO
+from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -214,7 +215,7 @@ def export_food_menu_pdf(db: Session = Depends(get_db), user=Depends(get_current
             ]
             if attribution:
                 details.append(Paragraph(attribution, styles["RSAttribution"]))
-            card = Table([[photo, details]], colWidths=[31*mm, 56*mm])
+            card = Table([[photo, KeepTogether(details)]], colWidths=[31*mm, 56*mm])
             card.setStyle(TableStyle([
                 ("BACKGROUND",(0,0),(-1,-1),white),("BOX",(0,0),(-1,-1),0.45,colors.HexColor("#E6DDD2")),
                 ("VALIGN",(0,0),(-1,-1),"MIDDLE"),("LEFTPADDING",(0,0),(-1,-1),5),
