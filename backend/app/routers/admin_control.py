@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, date
+from datetime import datetime, date, time as datetime_time, timedelta, timezone
+from zoneinfo import ZoneInfo
 from io import BytesIO
 from pathlib import Path
 import subprocess
@@ -1106,6 +1107,48 @@ def unassigned_cash_payments(db: Session = Depends(get_db), user=Depends(require
 class CashPaymentAssign(BaseModel):
     shift_id: str
     notes: str | None = None
+
+
+class HistoricalShiftRecovery(BaseModel):
+    business_date: date
+    opening_float: Decimal = Field(ge=0)
+    counted_cash: Decimal = Field(ge=0)
+    notes: str | None = None
+
+
+@router.post("/cash-shifts/recover")
+def recover_historical_cash_shift(payload: HistoricalShiftRecovery,
+                                  db: Session = Depends(get_db),
+                                  user=Depends(require_roles(*MANAGERS))):
+    # Reconstruct a closed shift over the Nepal-local business day. Original
+    # payments are assigned separately, so no amount is fabricated here.
+    local_start = datetime.combine(payload.business_date, datetime_time.min,
+                                   tzinfo=ZoneInfo("Asia/Kathmandu"))
+    local_end = local_start + timedelta(days=1)
+    start_utc = local_start.astimezone(timezone.utc).replace(tzinfo=None)
+    end_utc = local_end.astimezone(timezone.utc).replace(tzinfo=None)
+    overlapping = db.execute(text("""SELECT id FROM cash_drawer_shifts
+        WHERE opened_at < :end_at AND COALESCE(closed_at,NOW()) > :start_at
+        FOR UPDATE"""), {"start_at": start_utc, "end_at": end_utc}).first()
+    if overlapping:
+        raise HTTPException(409, "A cash drawer shift already overlaps this business date. Assign records to that shift instead.")
+    expected = payload.opening_float
+    difference = payload.counted_cash - expected
+    notes = f"Historical shift recovered for Nepal business date {payload.business_date}."
+    if payload.notes and payload.notes.strip():
+        notes += "\\n" + payload.notes.strip()
+    row = db.execute(text("""INSERT INTO cash_drawer_shifts
+        (opened_by,closed_by,opening_float,expected_cash,counted_cash,cash_difference,
+         status,opened_at,closed_at,notes)
+        VALUES(:user,:user,:opening,:expected,:counted,:difference,'closed',
+               :opened_at,:closed_at,:notes) RETURNING *"""),
+        {"user": user.id, "opening": payload.opening_float, "expected": expected,
+         "counted": payload.counted_cash, "difference": difference,
+         "opened_at": start_utc, "closed_at": end_utc, "notes": notes}).mappings().first()
+    audit(db, user.id, "cash_shift.historical_recovery",
+          f"Created closed historical shift {row['id']} for {payload.business_date}; opening NPR {payload.opening_float}, initial expected NPR {expected}, counted NPR {payload.counted_cash}")
+    db.commit()
+    return dict(row)
 
 
 @router.post("/cash-payments/{payment_id}/assign")
