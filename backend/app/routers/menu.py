@@ -166,17 +166,17 @@ def export_food_menu_pdf(db: Session = Depends(get_db), user=Depends(get_current
     # typographic Royal Skye masthead when the backend image is not mounted.
     logo_cell = Paragraph("RS", ParagraphStyle("RSMonogram", fontName="Helvetica-Bold",
         fontSize=20, textColor=gold, alignment=1))
-    logo_path = Path(__file__).resolve().parents[3] / "frontend" / "public" / "images" / "logo.jpg"
+    logo_path = Path(__file__).resolve().parents[1] / "assets" / "logo.jpg"
     if logo_path.exists():
         try:
             logo_cell = Image(str(logo_path), width=23*mm, height=19*mm, kind="proportional")
         except Exception:
             pass
-    masthead = Table([[logo_cell, [
+    masthead = Table([[logo_cell, KeepTogether([
         Paragraph("ROYAL SKYE", styles["RSBrand"]),
         Paragraph("RESTAURANT  ·  FOOD &amp; BEVERAGE", styles["RSSub"]),
         Paragraph("A MENU MADE FOR GOOD MOMENTS", ParagraphStyle("RSTag", parent=styles["RSSub"], fontSize=6.5, textColor=gold))
-    ]]], colWidths=[31*mm, 149*mm], rowHeights=[29*mm])
+    ])]], colWidths=[31*mm, 149*mm], rowHeights=[29*mm])
     masthead.setStyle(TableStyle([
         ("BACKGROUND", (0,0),(-1,-1), ink), ("BOX",(0,0),(-1,-1),1.2,crimson),
         ("LINEBELOW",(0,0),(-1,-1),2,gold), ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
