@@ -1136,7 +1136,7 @@ def recover_historical_cash_shift(payload: HistoricalShiftRecovery,
     difference = payload.counted_cash - expected
     notes = f"Historical shift recovered for Nepal business date {payload.business_date}."
     if payload.notes and payload.notes.strip():
-        notes += "\\n" + payload.notes.strip()
+        notes += "\n" + payload.notes.strip()
     row = db.execute(text("""INSERT INTO cash_drawer_shifts
         (opened_by,closed_by,opening_float,expected_cash,counted_cash,cash_difference,
          status,opened_at,closed_at,notes)
