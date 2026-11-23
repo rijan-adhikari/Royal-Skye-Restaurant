@@ -384,22 +384,24 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
             </div>
           </section>
           <section className="rounded-xl border border-[#ead9c2] bg-[#fffaf2] p-4">
-            <div><p className="text-[10px] font-extrabold uppercase tracking-widest text-[#9a6a32]">Historical reconciliation</p><h2 className="mt-1 text-lg font-extrabold text-[#59432e]">Unassigned cash payments</h2><p className="mt-1 text-xs text-neutral-600">Cash already recorded against bills but not linked to a drawer shift. Assign each payment to its actual historical shift; original bill and payment records are preserved.</p></div>
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm"><b>{data.unassignedCash?.count || 0} payment(s)</b><b>{money(data.unassignedCash?.total)}</b></div>
+            <div><p className="text-[10px] font-extrabold uppercase tracking-widest text-[#9a6a32]">Historical reconciliation</p><h2 className="mt-1 text-lg font-extrabold text-[#59432e]">Unassigned cash payments & refunds</h2><p className="mt-1 text-xs text-neutral-600">Cash sales, credit repayments and cash refunds already recorded in the database but not linked to a drawer shift. Assign each record to its actual historical shift; original records are preserved.</p></div>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm"><b>{data.unassignedCash?.count || 0} cash receipt(s) · {data.unassignedCash?.refund_count || 0} refund(s)</b><b>{money(data.unassignedCash?.total)} receipts · −{money(data.unassignedCash?.refund_total)} refunds</b></div>
             <div className="mt-2 max-h-72 space-y-2 overflow-auto">
               {(data.unassignedCash?.payments || []).map((payment: any) => <div key={payment.payment_id} className="rounded-lg border border-[#efe3d3] bg-white p-3">
-                <div className="flex flex-wrap justify-between gap-2 text-xs"><span><b>{payment.bill_number}</b> · {payment.customer_name || "Walk-in"}<small className="block text-neutral-500">{payment.business_date} · {new Date(payment.created_at).toLocaleString()}</small></span><b>{money(payment.amount)}</b></div>
+                <div className="flex flex-wrap justify-between gap-2 text-xs"><span><b>{payment.source_type === "refund" ? "Cash refund · " : payment.source_type === "repayment" ? "Credit repayment · " : ""}{payment.bill_number}</b> · {payment.customer_name || "Walk-in"}<small className="block text-neutral-500">{payment.business_date} · {new Date(payment.created_at).toLocaleString()}</small></span><b>{payment.source_type === "refund" ? "−" : ""}{money(payment.amount)}</b></div>
                 {payment.matching_drawer_rows > 1 && <p className="mt-1 text-[11px] font-semibold text-red-700">Multiple legacy drawer matches; resolve duplicates before assigning.</p>}
                 <div className="mt-2 flex gap-2"><select className={field} value={unassignedShiftSelections[payment.payment_id] || ""} onChange={e => setUnassignedShiftSelections(old => ({...old,[payment.payment_id]:e.target.value}))}><option value="">Choose correct shift</option>{(data.shifts || []).map((s: any) => <option key={s.id} value={s.id}>{new Date(s.opened_at).toLocaleString()} · {s.status} · {s.opened_by_name}</option>)}</select><button type="button" className={primary} disabled={busy || !unassignedShiftSelections[payment.payment_id] || payment.matching_drawer_rows > 1} onClick={() => assignUnassignedCash(payment)}>Assign</button></div>
               </div>)}
-              {!(data.unassignedCash?.payments || []).length && <p className="py-4 text-center text-xs text-emerald-700">All active cash payments are linked to drawer entries.</p>}
+              {data.unassignedCash?.list_truncated && <p className="py-2 text-xs font-semibold text-amber-800">Showing the first 3,000 unmatched records. The totals above include every unmatched record.</p>}
+              {!(data.unassignedCash?.payments || []).length && <p className="py-4 text-center text-xs text-emerald-700">All cash receipts and refunds are linked to drawer entries.</p>}
             </div>
           </section>
           <section className="rounded-xl border border-neutral-200 bg-white p-4">
             <h3 className="font-bold">Payment database health check</h3>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <p className="text-xs">Legacy drawer rows safely linked: <b>{data.paymentReconciliation?.legacy_drawer_rows_linked ?? "—"}</b></p>
-              <p className="text-xs">Unassigned cash: <b>{data.paymentReconciliation?.unassigned_cash_count ?? "—"}</b> ({money(data.paymentReconciliation?.unassigned_cash_total)})</p>
+              <p className="text-xs">Unassigned cash receipts: <b>{data.paymentReconciliation?.unassigned_cash_count ?? "—"}</b> ({money(data.paymentReconciliation?.unassigned_cash_total)})</p>
+              <p className="text-xs">Unassigned cash refunds: <b>{data.paymentReconciliation?.unassigned_cash_refund_count ?? "—"}</b> ({money(data.paymentReconciliation?.unassigned_cash_refund_total)})</p>
               <p className="text-xs">Bill/payment total mismatches: <b className={data.paymentReconciliation?.bill_payment_mismatches ? "text-red-700" : "text-emerald-700"}>{data.paymentReconciliation?.bill_payment_mismatches ?? "—"}</b></p>
               <p className="text-xs">Credit balance mismatches: <b className={data.paymentReconciliation?.credit_balance_mismatches ? "text-red-700" : "text-emerald-700"}>{data.paymentReconciliation?.credit_balance_mismatches ?? "—"}</b></p>
             </div>
