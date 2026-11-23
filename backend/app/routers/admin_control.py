@@ -712,7 +712,7 @@ def delete_system_cash_entry(shift_id: str, entry_id: str, reason: str = Query(.
     if entry["entry_type"] not in ("sale", "refund"):
         raise HTTPException(403, "This endpoint only deletes system-generated sale or refund records")
     db.execute(text("DELETE FROM cash_drawer_entries WHERE id=:entry"), {"entry": entry_id})
-    if shift["status"] == "closed":
+    if shift and shift["status"] == "closed":
         totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
             FROM cash_drawer_entries WHERE shift_id=:id GROUP BY entry_type"""),
             {"id": shift_id}).mappings().all()
@@ -1175,16 +1175,15 @@ def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
         raise HTTPException(409, "Multiple matching historical drawer rows exist. Resolve the duplicate manually before linking.")
     if candidates:
         entry_id = candidates[0]["id"]
-        if str(candidates[0]["shift_id"]) != str(payload.shift_id):
-            raise HTTPException(409, "A matching drawer entry already belongs to a different shift. Select that shift to link it.")
+        if (str(candidates[0]["shift_id"]) if candidates[0]["shift_id"] else None) != payload.shift_id:
+            raise HTTPException(409, "A matching drawer entry already belongs to a different reconciliation. Select its shift or resolve the existing entry first.")
     else:
         entry_id = db.execute(text("""INSERT INTO cash_drawer_entries
             (shift_id,entry_type,amount,reference,notes,created_by,created_at)
             VALUES(:shift,:entry_type,:amount,:reference,:notes,:user,:created_at) RETURNING id"""),
             {"shift": payload.shift_id, "entry_type": payment["drawer_type"], "amount": payment["amount"],
              "reference": payment["reference"],
-             "notes": payload.notes or ("Historical cash refund assigned" if payment["source_type"] == "refund"
-                                        else "Historical cash receipt assigned"),
+             "notes": payload.notes or ("Assigned without shift: no drawer shift was open at receipt time." if not payload.shift_id else ("Historical cash refund assigned" if payment["source_type"] == "refund" else "Historical cash receipt assigned")),
              "user": user.id, "created_at": payment["created_at"]}).scalar_one()
     if payment["source_type"] == "payment":
         db.execute(text("""INSERT INTO cash_payment_links(payment_id,drawer_entry_id,linked_by,source)
@@ -1209,11 +1208,12 @@ def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
         difference = Decimal(str(shift["counted_cash"] or 0)) - expected
         db.execute(text("UPDATE cash_drawer_shifts SET expected_cash=:expected,cash_difference=:difference WHERE id=:id"),
                    {"expected": expected, "difference": difference, "id": payload.shift_id})
-    audit(db, user.id, "cash_record.assigned",
-          f"{payment['source_type']} {payment_id} for {payment['bill_number']} NPR {payment['amount']} linked to shift {payload.shift_id}")
+    audit(db, user.id, "cash_record.assigned_without_shift" if not payload.shift_id else "cash_record.assigned",
+          f"{payment['source_type']} {payment_id} for {payment['bill_number']} NPR {payment['amount']} assigned without a drawer shift" if not payload.shift_id else f"linked to shift {payload.shift_id}")
     db.commit()
     return {"ok": True, "payment_id": payment_id, "source_type": payment["source_type"],
             "drawer_entry_id": str(entry_id), "shift_id": payload.shift_id,
+            "assigned_without_shift": payload.shift_id is None,
             "created_historical_entry": not bool(candidates)}
 
 
