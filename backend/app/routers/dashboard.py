@@ -120,9 +120,10 @@ def _sales_details_for_period(db: Session, start: datetime, end: datetime):
                               "created_at": row["created_at"], "received_by_name": row["received_by_name"]}
                              for row in refunds])
         if Decimal(str(bill.outstanding_amount or 0)) > 0:
-            payment_rows.append({"method": "customer_credit_balance",
+            payment_rows.append({"method": "credit",
                                  "amount": str(bill.outstanding_amount), "created_at": bill.created_at,
-                                 "received_by_name": None})
+                                 "received_by_name": None,
+                                 "transaction_number": f"{int(sale_sequence):03d}" if sale_sequence is not None else None})
         result.append({
             "id": bill.id, "bill_number": bill.bill_number, "transaction_number": f"{int(sale_sequence):03d}" if sale_sequence is not None else None, "business_date": bill.business_date.isoformat(),
             "created_at": bill.created_at,
