@@ -57,7 +57,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const load = async () => {
     const requests = [
       ["current", "/api/admin/cash-shifts/current"], ["shifts", "/api/admin/cash-shifts"],
-      ...(["admin", "manager"].includes(role) ? ([["qrPayments", "/api/admin/qr-payments"], ["unassignedCash", "/api/admin/cash-payments/unassigned"], ["paymentReconciliation", "/api/admin/payment-reconciliation"]] as [string, string][]) : []),
+      ...((role === "admin" || role === "manager") ? ([["qrPayments", "/api/admin/qr-payments"], ["unassignedCash", "/api/admin/cash-payments/unassigned"], ["paymentReconciliation", "/api/admin/payment-reconciliation"]] as [string, string][]) : []),
       ...(!managerView ? ([["sales", "/api/admin/sales"], ["salesSummary", "/api/dashboard/summary"], ["monthlySales", "/api/dashboard/monthly-sales"], ["yearlySales", "/api/dashboard/yearly-sales"]] as [string, string][]) : []),
       ...(!managerView ? ([["customers", "/api/customers"]] as [string, string][]) : []),
       ["suppliers", "/api/operations/suppliers"], ["inventory", "/api/operations/inventory"], ["ledger", "/api/admin/suppliers/ledger"], ["supplierBalances", "/api/admin/suppliers/balances"],
@@ -366,7 +366,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
           </tbody></table></div>
           <p className="mt-2 text-xs text-neutral-500">Only admins can edit or delete cash-drawer entries. Correcting a sale payment to QR, card or bank transfer removes it from physical cash while preserving the bill and receipt history.</p>
         </div>}
-        {(["admin", "manager"].includes(role)) && <div className="mb-5 space-y-4 border-t pt-5">
+        {(role === "admin" || role === "manager") && <div className="mb-5 space-y-4 border-t pt-5">
           <section className="rounded-xl border border-[#d9e8df] bg-[#f7fbf8] p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div><p className="text-[10px] font-extrabold uppercase tracking-widest text-[#52765b]">Separate payment channel</p><h2 className="mt-1 text-lg font-extrabold text-[#263d2d]">QR received payments</h2><p className="mt-1 text-xs text-neutral-600">Directly from recorded QR payment transactions. These amounts never increase physical drawer cash.</p></div>
@@ -430,7 +430,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
         <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold">{period === "monthly" ? "Monthly sales details" : "Yearly sales details"}</h3><p className="text-xs text-neutral-500">{rows.length} bills loaded</p></div><button type="button" aria-expanded={isOpen} onClick={() => setSalesDetailsOpen(old => ({ ...old, [period]: !old[period] }))} className="rounded-lg border px-3 py-2 text-xs font-semibold">{isOpen ? "Hide details" : "Show details"}</button></div>
         {isOpen && (rows.length === 0 ? <p className="py-4 text-center text-sm text-neutral-400">Click the sales summary above to load bills and items.</p> : <div className="mt-3 space-y-3">{rows.map((bill: any) => <article key={bill.id} className="rounded-lg border border-neutral-200 p-3">
           <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-semibold">{bill.bill_number} · {bill.customer_name || "Walk-in"}</p><p className="text-xs text-neutral-500">{bill.business_date || new Date(bill.created_at).toLocaleDateString()} · {bill.table_name || bill.service_type}</p></div><div className="flex items-center gap-2"><p className="font-bold">{money(bill.grand_total)}</p><button type="button" disabled={busy} onClick={() => permanentlyDeleteSale(bill)} className="rounded-lg bg-red-700 px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Delete bill</button></div></div>
-          {(bill.payments || []).length > 0 && <div className="mt-2 rounded-lg bg-[#f8f4ef] p-3"><p className="mb-1 text-[10px] font-extrabold uppercase tracking-wider text-[#80664c]">Payment breakdown</p>{bill.payments.map((payment: any, paymentIndex: number) => <div key={paymentIndex} className="flex justify-between gap-3 py-1 text-xs"><span className="capitalize">{String(payment.method).replaceAll("_", " ")}</span><b>{money(payment.amount)}</b></div>)}</div>}
+          {(bill.payments || []).length > 0 && <div className="mt-2 rounded-lg bg-[#f8f4ef] p-3"><p className="mb-1 text-[10px] font-extrabold uppercase tracking-wider text-[#80664c]">Payment breakdown</p>{bill.payments.map((payment: any, paymentIndex: number) => <div key={paymentIndex} className="flex justify-between gap-3 py-1 text-xs"><span className="capitalize">{String(payment.method).replace(/_/g, " ")}</span><b>{money(payment.amount)}</b></div>)}</div>}
           <div className="mt-2 border-t border-neutral-100 pt-2">{(bill.items || []).map((item: any, index: number) => <div key={index} className="flex justify-between gap-3 py-1 text-xs"><span>{item.name} × {item.quantity}</span><span>{money(item.total)}</span></div>)}</div>
         </article>)}</div>)}
       </div>; })}
