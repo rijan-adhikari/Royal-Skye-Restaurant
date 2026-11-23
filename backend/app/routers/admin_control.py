@@ -1095,41 +1095,55 @@ class CashPaymentAssign(BaseModel):
 def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
                         db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
     _ensure_cash_payment_links(db)
+    db.execute(text("""ALTER TABLE balance_transactions
+        ADD COLUMN IF NOT EXISTS method VARCHAR(24) NOT NULL DEFAULT 'legacy_unclassified'"""))
     db.execute(text("""CREATE TABLE IF NOT EXISTS cash_repayment_links (
         transaction_id UUID PRIMARY KEY REFERENCES balance_transactions(id) ON DELETE CASCADE,
         drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
         linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
     )"""))
+    db.execute(text("""CREATE TABLE IF NOT EXISTS cash_refund_links (
+        refund_id UUID PRIMARY KEY REFERENCES bill_refunds(id) ON DELETE CASCADE,
+        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+        linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )"""))
     payment = db.execute(text("""SELECT p.id source_id,p.bill_id,p.method,p.amount,p.created_at,b.bill_number,b.sale_status,
-        'payment' source_type,b.bill_number reference
+        'payment' source_type,b.bill_number reference,'sale' drawer_type
         FROM payments p JOIN bills b ON b.id=p.bill_id WHERE p.id=:id FOR UPDATE OF p,b"""),
         {"id": payment_id}).mappings().first()
     if payment:
         link_table, source_column = "cash_payment_links", "payment_id"
     else:
-        db.execute(text("""ALTER TABLE balance_transactions
-            ADD COLUMN IF NOT EXISTS method VARCHAR(24) NOT NULL DEFAULT 'legacy_unclassified'"""))
         payment = db.execute(text("""SELECT bt.id source_id,cb.bill_id,bt.method,bt.amount,bt.created_at,b.bill_number,b.sale_status,
-            'repayment' source_type,('Credit repayment ' || b.bill_number) reference
+            'repayment' source_type,('Credit repayment ' || b.bill_number) reference,'sale' drawer_type
             FROM balance_transactions bt JOIN customer_balances cb ON cb.id=bt.customer_balance_id
             JOIN bills b ON b.id=cb.bill_id WHERE bt.id=:id FOR UPDATE OF bt,b"""),
             {"id": payment_id}).mappings().first()
         link_table, source_column = "cash_repayment_links", "transaction_id"
     if not payment:
-        raise HTTPException(404, "Cash payment or repayment not found")
+        payment = db.execute(text("""SELECT r.id source_id,r.bill_id,r.method,r.amount,r.created_at,b.bill_number,b.sale_status,
+            'refund' source_type,b.bill_number reference,'refund' drawer_type
+            FROM bill_refunds r JOIN bills b ON b.id=r.bill_id WHERE r.id=:id FOR UPDATE OF r,b"""),
+            {"id": payment_id}).mappings().first()
+        link_table, source_column = "cash_refund_links", "refund_id"
+    if not payment:
+        raise HTTPException(404, "Cash payment, repayment or refund not found")
     if payment["method"] != "cash" or payment["sale_status"] != "active":
-        raise HTTPException(409, "Only active cash receipts can be assigned to a drawer shift")
+        raise HTTPException(409, "Only active cash receipts or refunds can be assigned")
     if db.execute(text(f"SELECT 1 FROM {link_table} WHERE {source_column}=:id"), {"id": payment_id}).first():
-        raise HTTPException(409, "This cash receipt is already linked to a drawer entry")
+        raise HTTPException(409, "This cash record is already linked to a drawer entry")
     shift = db.execute(text("SELECT id,status,opening_float,counted_cash FROM cash_drawer_shifts WHERE id=:id FOR UPDATE"),
                        {"id": payload.shift_id}).mappings().first()
     if not shift:
         raise HTTPException(404, "Selected cash drawer shift was not found")
     candidates = db.execute(text("""SELECT e.id,e.shift_id FROM cash_drawer_entries e
-        WHERE e.entry_type='sale' AND e.reference=:reference AND e.amount=:amount
+        WHERE e.entry_type=:entry_type AND e.reference=:reference AND e.amount=:amount
           AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.drawer_entry_id=e.id)
           AND NOT EXISTS (SELECT 1 FROM cash_repayment_links l WHERE l.drawer_entry_id=e.id)
-        ORDER BY e.created_at"""), {"reference": payment["reference"], "amount": payment["amount"]}).mappings().all()
+          AND NOT EXISTS (SELECT 1 FROM cash_refund_links l WHERE l.drawer_entry_id=e.id)
+        ORDER BY e.created_at"""),
+        {"entry_type": payment["drawer_type"], "reference": payment["reference"],
+         "amount": payment["amount"]}).mappings().all()
     if len(candidates) > 1:
         raise HTTPException(409, "Multiple matching historical drawer rows exist. Resolve the duplicate manually before linking.")
     if candidates:
@@ -1139,16 +1153,22 @@ def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
     else:
         entry_id = db.execute(text("""INSERT INTO cash_drawer_entries
             (shift_id,entry_type,amount,reference,notes,created_by,created_at)
-            VALUES(:shift,'sale',:amount,:reference,:notes,:user,:created_at) RETURNING id"""),
-            {"shift": payload.shift_id, "amount": payment["amount"], "reference": payment["reference"],
-             "notes": payload.notes or "Historical cash receipt assigned from unassigned receipts",
+            VALUES(:shift,:entry_type,:amount,:reference,:notes,:user,:created_at) RETURNING id"""),
+            {"shift": payload.shift_id, "entry_type": payment["drawer_type"], "amount": payment["amount"],
+             "reference": payment["reference"],
+             "notes": payload.notes or ("Historical cash refund assigned" if payment["source_type"] == "refund"
+                                        else "Historical cash receipt assigned"),
              "user": user.id, "created_at": payment["created_at"]}).scalar_one()
     if payment["source_type"] == "payment":
         db.execute(text("""INSERT INTO cash_payment_links(payment_id,drawer_entry_id,linked_by,source)
             VALUES(:source,:entry,:user,'manual_assignment')"""),
             {"source": payment_id, "entry": entry_id, "user": user.id})
-    else:
+    elif payment["source_type"] == "repayment":
         db.execute(text("""INSERT INTO cash_repayment_links(transaction_id,drawer_entry_id,linked_by)
+            VALUES(:source,:entry,:user)"""),
+            {"source": payment_id, "entry": entry_id, "user": user.id})
+    else:
+        db.execute(text("""INSERT INTO cash_refund_links(refund_id,drawer_entry_id,linked_by)
             VALUES(:source,:entry,:user)"""),
             {"source": payment_id, "entry": entry_id, "user": user.id})
     if shift["status"] == "closed":
@@ -1162,7 +1182,7 @@ def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
         difference = Decimal(str(shift["counted_cash"] or 0)) - expected
         db.execute(text("UPDATE cash_drawer_shifts SET expected_cash=:expected,cash_difference=:difference WHERE id=:id"),
                    {"expected": expected, "difference": difference, "id": payload.shift_id})
-    audit(db, user.id, "cash_receipt.assigned",
+    audit(db, user.id, "cash_record.assigned",
           f"{payment['source_type']} {payment_id} for {payment['bill_number']} NPR {payment['amount']} linked to shift {payload.shift_id}")
     db.commit()
     return {"ok": True, "payment_id": payment_id, "source_type": payment["source_type"],
