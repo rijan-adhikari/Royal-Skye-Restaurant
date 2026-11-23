@@ -54,12 +54,17 @@ def _collection_amounts(db: Session, start: datetime, end: datetime):
 
 
 def _sales_details_for_period(db: Session, start: datetime, end: datetime):
-    collected = _collection_amounts(db, start, end)
-    if not collected:
-        return []
+    # Detail modals are bill registers, not just cash-collection registers:
+    # include fully-paid, partially-paid and unpaid-credit bills for the
+    # selected Nepal business-date range.
+    start_date = start.replace(tzinfo=timezone.utc).astimezone(BUSINESS_TIMEZONE).date()
+    end_date = end.replace(tzinfo=timezone.utc).astimezone(BUSINESS_TIMEZONE).date()
     bills = db.query(models.Bill).filter(
-        models.Bill.id.in_(list(collected.keys())), models.Bill.sale_status == "active"
+        models.Bill.business_date >= start_date,
+        models.Bill.business_date < end_date,
+        models.Bill.sale_status == "active",
     ).order_by(models.Bill.created_at.desc()).all()
+    collected = _collection_amounts(db, start, end)
     result = []
     for bill in bills:
         order = db.query(models.Order).filter(models.Order.id == bill.order_id).first()
@@ -70,18 +75,33 @@ def _sales_details_for_period(db: Session, start: datetime, end: datetime):
             FROM order_items oi JOIN menu_items mi ON mi.id=oi.menu_item_id
             WHERE oi.order_id=:order_id AND oi.is_cancelled=FALSE ORDER BY mi.name"""),
             {"order_id": bill.order_id}).mappings().all()
+        payments = db.execute(text("""SELECT p.method, p.amount, p.created_at, u.full_name received_by_name
+            FROM payments p LEFT JOIN users u ON u.id=p.received_by
+            WHERE p.bill_id=:bill ORDER BY p.created_at,p.id"""), {"bill": bill.id}).mappings().all()
+        repayments = db.execute(text("""SELECT bt.amount,bt.created_at,u.full_name received_by_name
+            FROM balance_transactions bt LEFT JOIN users u ON u.id=bt.received_by
+            JOIN customer_balances cb ON cb.id=bt.customer_balance_id
+            WHERE cb.bill_id=:bill ORDER BY bt.created_at,bt.id"""), {"bill": bill.id}).mappings().all()
+        payment_rows = [{"method": row["method"], "amount": str(row["amount"]),
+                         "created_at": row["created_at"], "received_by_name": row["received_by_name"]}
+                        for row in payments]
+        payment_rows.extend([{"method": "credit_repayment_method_not_recorded",
+                              "amount": str(row["amount"]), "created_at": row["created_at"],
+                              "received_by_name": row["received_by_name"]} for row in repayments])
         result.append({
-            "id": bill.id, "bill_number": bill.bill_number, "created_at": bill.created_at,
+            "id": bill.id, "bill_number": bill.bill_number, "business_date": bill.business_date.isoformat(),
+            "created_at": bill.created_at,
             "customer_name": customer.name if customer else (service["customer_name"] if service else "Walk-in"),
             "customer_phone": customer.phone if customer else (service["phone"] if service else None),
             "service_type": service["service_type"] if service else "dine_in",
             "table_name": service["service_type"].title() if service else (order.table.name if order and order.table else ""),
-            "grand_total": str(bill.grand_total), "collected_amount": str(collected[str(bill.id)]),
+            "grand_total": str(bill.grand_total),
+            "collected_amount": str(collected.get(str(bill.id), 0)),
             "amount_paid": str(bill.amount_paid), "outstanding_amount": str(bill.outstanding_amount),
+            "payments": payment_rows,
             "items": [{**dict(item), "unit_price": str(item["unit_price"]), "total": str(item["total"])} for item in items],
         })
     return result
-
 
 
 def _sum_amount(db: Session, model, column, start: datetime, end: datetime, date_column=None):
