@@ -496,7 +496,7 @@ def add_daily_savings(shift_id: str, payload: CashEntry, db: Session = Depends(g
     shift = db.execute(text("SELECT id,opening_float FROM cash_drawer_shifts WHERE id=:id AND status='open' FOR UPDATE"), {"id": shift_id}).mappings().first()
     if not shift:
         raise HTTPException(409, "Cash shift is not open")
-    totals = db.execute(text("SELECT entry_type,COALESCE(SUM(amount),0) amount FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT (e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) GROUP BY e.entry_type"), {"id": shift_id}).mappings().all()
+    totals = db.execute(text("SELECT entry_type,COALESCE(SUM(amount),0) amount FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT ((e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) OR (e.entry_type='refund' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)))) GROUP BY e.entry_type"), {"id": shift_id}).mappings().all()
     amounts = {row["entry_type"]: Decimal(str(row["amount"])) for row in totals}
     expected = Decimal(str(shift["opening_float"])) + amounts.get("sale", Decimal(0)) + amounts.get("cash_in", Decimal(0)) - amounts.get("refund", Decimal(0)) - amounts.get("cash_out", Decimal(0)) - amounts.get("payout", Decimal(0))
     if payload.amount > expected:
@@ -520,9 +520,9 @@ def list_cash_shifts(limit: int = Query(50, ge=1, le=200),
     for row in rows:
         entries = db.execute(text("""SELECT e.id,e.entry_type,e.amount,e.reference,e.notes,e.created_at,u.full_name created_by_name
             FROM cash_drawer_entries e JOIN users u ON u.id=e.created_by
-            WHERE e.shift_id=:id AND NOT (e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) ORDER BY e.created_at DESC"""), {"id": row["id"]}).mappings().all()
+            WHERE e.shift_id=:id AND NOT ((e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) OR (e.entry_type='refund' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)))) ORDER BY e.created_at DESC"""), {"id": row["id"]}).mappings().all()
         entry_totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
-            FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT (e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) GROUP BY e.entry_type"""), {"id": row["id"]}).mappings().all()
+            FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT ((e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) OR (e.entry_type='refund' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)))) GROUP BY e.entry_type"""), {"id": row["id"]}).mappings().all()
         amounts = {entry["entry_type"]: Decimal(str(entry["amount"])) for entry in entry_totals}
         calculated_expected = (Decimal(str(row["opening_float"])) + amounts.get("sale", Decimal(0))
             + amounts.get("cash_in", Decimal(0)) - amounts.get("refund", Decimal(0))
@@ -539,12 +539,12 @@ def current_cash_shift(db: Session = Depends(get_db), user=Depends(require_roles
     if not row:
         return None
     entries = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
-        FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT (e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) GROUP BY e.entry_type"""), {"id": row["id"]}).mappings().all()
+        FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT ((e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) OR (e.entry_type='refund' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)))) GROUP BY e.entry_type"""), {"id": row["id"]}).mappings().all()
     totals = {r["entry_type"]: Decimal(str(r["amount"])) for r in entries}
     expected = Decimal(str(row["opening_float"])) + totals.get("sale", Decimal(0)) + totals.get("cash_in", Decimal(0)) - totals.get("refund", Decimal(0)) - totals.get("cash_out", Decimal(0)) - totals.get("payout", Decimal(0))
     entry_rows = db.execute(text("""SELECT e.id,e.entry_type,e.amount,e.reference,e.notes,e.created_at,u.full_name created_by_name
         FROM cash_drawer_entries e JOIN users u ON u.id=e.created_by
-        WHERE e.shift_id=:id AND NOT (e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) ORDER BY e.created_at DESC"""), {"id": row["id"]}).mappings().all()
+        WHERE e.shift_id=:id AND NOT ((e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) OR (e.entry_type='refund' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)))) ORDER BY e.created_at DESC"""), {"id": row["id"]}).mappings().all()
     return dict(row) | {"entries": {k: str(v) for k,v in totals.items()},
         "cash_entries": [dict(entry) for entry in entry_rows], "expected_cash": str(expected)}
 
@@ -584,7 +584,7 @@ def add_cash_entry(shift_id: str, payload: CashEntry, db: Session = Depends(get_
         raise HTTPException(409, "Cash shift is not open")
     if payload.entry_type in ("cash_out", "payout"):
         totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
-            FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT (e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) GROUP BY e.entry_type"""), {"id": shift_id}).mappings().all()
+            FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT ((e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) OR (e.entry_type='refund' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)))) GROUP BY e.entry_type"""), {"id": shift_id}).mappings().all()
         values = {r["entry_type"]: Decimal(str(r["amount"])) for r in totals}
         available = (Decimal(str(shift["opening_float"])) + values.get("sale", Decimal(0))
                      + values.get("cash_in", Decimal(0)) - values.get("refund", Decimal(0))
@@ -615,7 +615,7 @@ def update_cash_entry(shift_id: str, entry_id: str, payload: CashEntryUpdate,
         raise HTTPException(403, "System-generated sale and refund records must use the admin sale-correction action")
     if payload.entry_type in ("cash_out", "payout"):
         totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
-            FROM cash_drawer_entries e WHERE e.shift_id=:id AND e.id<>:entry AND NOT (e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) GROUP BY e.entry_type"""),
+            FROM cash_drawer_entries e WHERE e.shift_id=:id AND e.id<>:entry AND NOT ((e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) OR (e.entry_type='refund' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)))) GROUP BY e.entry_type"""),
             {"id": shift_id, "entry": entry_id}).mappings().all()
         values = {r["entry_type"]: Decimal(str(r["amount"])) for r in totals}
         available = (Decimal(str(shift["opening_float"])) + values.get("sale", Decimal(0))
@@ -672,7 +672,7 @@ def correct_closed_cash_entry(shift_id: str, entry_id: str, payload: CashEntryUp
         if payload.amount > available:
             raise HTTPException(422, f"Cash-out exceeds available drawer cash of NPR {available}")
     db.execute(text("UPDATE cash_drawer_entries SET entry_type=:type,amount=:amount,reference=:reference,notes=:notes WHERE id=:entry"), {"type": payload.entry_type, "amount": payload.amount, "reference": payload.reference, "notes": payload.notes, "entry": entry_id})
-    totals = db.execute(text("SELECT entry_type,COALESCE(SUM(amount),0) amount FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT (e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) GROUP BY e.entry_type"), {"id": shift_id}).mappings().all()
+    totals = db.execute(text("SELECT entry_type,COALESCE(SUM(amount),0) amount FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT ((e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) OR (e.entry_type='refund' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)))) GROUP BY e.entry_type"), {"id": shift_id}).mappings().all()
     values = {r["entry_type"]: Decimal(str(r["amount"])) for r in totals}
     expected = Decimal(str(shift["opening_float"])) + values.get("sale", Decimal(0)) + values.get("cash_in", Decimal(0)) - values.get("refund", Decimal(0)) - values.get("cash_out", Decimal(0)) - values.get("payout", Decimal(0))
     difference = Decimal(str(shift["counted_cash"] or 0)) - expected
@@ -689,7 +689,7 @@ def delete_closed_cash_entry(shift_id: str, entry_id: str, db: Session = Depends
     if not entry: raise HTTPException(404, "Cash movement not found in this shift")
     if entry["entry_type"] not in ("cash_in", "cash_out", "payout"): raise HTTPException(403, "System-generated sale and refund records cannot be deleted")
     db.execute(text("DELETE FROM cash_drawer_entries WHERE id=:entry"), {"entry": entry_id})
-    totals = db.execute(text("SELECT entry_type,COALESCE(SUM(amount),0) amount FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT (e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) GROUP BY e.entry_type"), {"id": shift_id}).mappings().all()
+    totals = db.execute(text("SELECT entry_type,COALESCE(SUM(amount),0) amount FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT ((e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) OR (e.entry_type='refund' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)))) GROUP BY e.entry_type"), {"id": shift_id}).mappings().all()
     values = {r["entry_type"]: Decimal(str(r["amount"])) for r in totals}
     expected = Decimal(str(shift["opening_float"])) + values.get("sale", Decimal(0)) + values.get("cash_in", Decimal(0)) - values.get("refund", Decimal(0)) - values.get("cash_out", Decimal(0)) - values.get("payout", Decimal(0))
     difference = Decimal(str(shift["counted_cash"] or 0)) - expected
@@ -714,7 +714,7 @@ def delete_system_cash_entry(shift_id: str, entry_id: str, reason: str = Query(.
     db.execute(text("DELETE FROM cash_drawer_entries WHERE id=:entry"), {"entry": entry_id})
     if shift and shift["status"] == "closed":
         totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
-            FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT (e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) GROUP BY e.entry_type"""),
+            FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT ((e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) OR (e.entry_type='refund' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)))) GROUP BY e.entry_type"""),
             {"id": shift_id}).mappings().all()
         values = {r["entry_type"]: Decimal(str(r["amount"])) for r in totals}
         expected = (Decimal(str(shift["opening_float"])) + values.get("sale", Decimal(0))
@@ -757,7 +757,7 @@ def correct_system_sale_entry(shift_id: str, entry_id: str, payload: CashSaleCor
         db.execute(text("DELETE FROM cash_drawer_entries WHERE id=:id"), {"id": entry_id})
     if shift["status"] == "closed":
         totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
-            FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT (e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) GROUP BY e.entry_type"""),
+            FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT ((e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) OR (e.entry_type='refund' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)))) GROUP BY e.entry_type"""),
             {"id": shift_id}).mappings().all()
         values = {r["entry_type"]: Decimal(str(r["amount"])) for r in totals}
         expected = (Decimal(str(shift["opening_float"])) + values.get("sale", Decimal(0))
@@ -780,7 +780,7 @@ def close_cash_shift(shift_id: str, payload: ShiftClose, db: Session = Depends(g
     if not shift:
         raise HTTPException(409, "Cash shift is already closed or does not exist")
     totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
-        FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT (e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) GROUP BY e.entry_type"""), {"id": shift_id}).mappings().all()
+        FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT ((e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) OR (e.entry_type='refund' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)))) GROUP BY e.entry_type"""), {"id": shift_id}).mappings().all()
     values = {r["entry_type"]: Decimal(str(r["amount"])) for r in totals}
     expected = Decimal(str(shift["opening_float"])) + values.get("sale", Decimal(0)) + values.get("cash_in", Decimal(0)) - values.get("refund", Decimal(0)) - values.get("cash_out", Decimal(0)) - values.get("payout", Decimal(0))
     difference = payload.counted_cash - expected
@@ -1202,7 +1202,7 @@ def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
             {"source": payment_id, "entry": entry_id, "user": user.id})
     if shift["status"] == "closed":
         totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
-            FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT (e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) GROUP BY e.entry_type"""),
+            FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT ((e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) OR (e.entry_type='refund' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)))) GROUP BY e.entry_type"""),
             {"id": payload.shift_id}).mappings().all()
         values = {row["entry_type"]: Decimal(str(row["amount"])) for row in totals}
         expected = (Decimal(str(shift["opening_float"])) + values.get("sale", Decimal(0))
@@ -1300,9 +1300,12 @@ def payment_reconciliation(db: Session = Depends(get_db), user=Depends(require_r
     qr_refunds = db.execute(text("SELECT COALESCE(SUM(amount),0) FROM bill_refunds WHERE method='qr'")).scalar_one()
     qr_drawer_overlaps = db.execute(text("""SELECT COUNT(*) FROM cash_drawer_entries e
         JOIN bills b ON b.bill_number=e.reference
-        WHERE e.entry_type='sale' AND e.amount>0
-          AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount)
-          AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount)""")).scalar_one()
+        WHERE e.amount>0 AND ((e.entry_type='sale'
+            AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount)
+            AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))
+          OR (e.entry_type='refund'
+            AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount)
+            AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)))""")).scalar_one()
     unclassified_count = db.execute(text("""SELECT COUNT(*) FROM (
         SELECT id FROM payments WHERE method='legacy_unclassified'
         UNION ALL SELECT id FROM balance_transactions WHERE method='legacy_unclassified'
