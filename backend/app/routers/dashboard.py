@@ -283,7 +283,9 @@ def daily_sales_details(report_date: date | None = None, db: Session = Depends(g
                         user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager))):
     target = report_date or datetime.now(BUSINESS_TIMEZONE).date()
     start, end = _business_window(target, target + timedelta(days=1))
-    return _sales_details_for_period(db, start, end)
+    result = _sales_details_for_period(db, start, end)
+    db.commit()
+    return result
 
 
 @router.get("/monthly-sales")
