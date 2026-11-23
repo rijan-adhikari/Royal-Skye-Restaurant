@@ -138,15 +138,31 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
                     {"customer": payload.customer_id, "bill": bill.id, "points": earned_points,
                      "notes": "Points earned on bill " + bill.bill_number, "user": user.id})
 
+    # Create the durable payment-to-drawer link table before recording new cash payments.
+    db.execute(text("""CREATE TABLE IF NOT EXISTS cash_payment_links (
+        payment_id UUID PRIMARY KEY REFERENCES payments(id) ON DELETE CASCADE,
+        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+        linked_by UUID REFERENCES users(id),
+        linked_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        source VARCHAR(24) NOT NULL DEFAULT 'automatic'
+    )"""))
     for method, amount in payment_rows:
         if amount > 0:
-            db.add(models.Payment(bill_id=bill.id, method=method, amount=amount, received_by=user.id))
+            payment = models.Payment(bill_id=bill.id, method=method, amount=amount, received_by=user.id)
+            db.add(payment)
+            db.flush()
             if method == models.PaymentMethod.cash:
                 open_shift = db.execute(text("SELECT id FROM cash_drawer_shifts WHERE status='open' ORDER BY opened_at DESC LIMIT 1 FOR UPDATE")).first()
                 if open_shift:
-                    db.execute(text("""INSERT INTO cash_drawer_entries(shift_id,entry_type,amount,reference,notes,created_by)
-                        VALUES(:shift,'sale',:amount,:reference,'Cash received for POS bill',:user)"""),
-                        {"shift": open_shift.id, "amount": amount, "reference": bill.bill_number, "user": user.id})
+                    entry_id = db.execute(text("""INSERT INTO cash_drawer_entries
+                        (shift_id,entry_type,amount,reference,notes,created_by,created_at)
+                        VALUES(:shift,'sale',:amount,:reference,'Cash received for POS bill',:user,:created_at)
+                        RETURNING id"""),
+                        {"shift": open_shift.id, "amount": amount, "reference": bill.bill_number,
+                         "user": user.id, "created_at": payment.created_at}).scalar_one()
+                    db.execute(text("""INSERT INTO cash_payment_links(payment_id,drawer_entry_id,linked_by,source)
+                        VALUES(:payment,:entry,:user,'automatic')"""),
+                        {"payment": payment.id, "entry": entry_id, "user": user.id})
 
     if grand_total - total_paid > 0:
         db.add(models.CustomerBalance(
