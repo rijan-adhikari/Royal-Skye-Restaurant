@@ -988,6 +988,8 @@ def qr_received_payments(start: date | None = None, end: date | None = None,
                          db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
     if start and end and end < start:
         raise HTTPException(422, "End date must not precede start date")
+    db.execute(text("""ALTER TABLE balance_transactions
+        ADD COLUMN IF NOT EXISTS method VARCHAR(24) NOT NULL DEFAULT 'legacy_unclassified'"""))
     rows = db.execute(text("""SELECT p.id payment_id,'bill_payment' source_type,b.id bill_id,b.bill_number,b.business_date,
         p.created_at,p.amount,p.method,c.name customer_name,u.full_name received_by_name
         FROM payments p JOIN bills b ON b.id=p.bill_id
