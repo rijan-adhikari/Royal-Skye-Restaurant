@@ -1032,6 +1032,11 @@ def unassigned_cash_payments(db: Session = Depends(get_db), user=Depends(require
         drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
         linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
     )"""))
+    db.execute(text("""CREATE TABLE IF NOT EXISTS cash_refund_links (
+        refund_id UUID PRIMARY KEY REFERENCES bill_refunds(id) ON DELETE CASCADE,
+        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+        linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )"""))
     _backfill_unambiguous_cash_links(db)
     rows = db.execute(text("""SELECT p.id payment_id,'payment' source_type,b.id bill_id,b.bill_number,b.business_date,
         p.created_at,p.amount,c.name customer_name,u.full_name received_by_name,
@@ -1051,6 +1056,15 @@ def unassigned_cash_payments(db: Session = Depends(get_db), user=Depends(require
         LEFT JOIN users u ON u.id=bt.received_by
         WHERE bt.method='cash' AND b.sale_status='active'
           AND NOT EXISTS (SELECT 1 FROM cash_repayment_links l WHERE l.transaction_id=bt.id)
+        UNION ALL
+        SELECT r.id payment_id,'refund' source_type,b.id bill_id,b.bill_number,b.business_date,
+        r.created_at,r.amount,c.name customer_name,u.full_name received_by_name,
+        (SELECT COUNT(*) FROM cash_drawer_entries e
+         WHERE e.entry_type='refund' AND e.reference=b.bill_number AND e.amount=r.amount) matching_drawer_rows
+        FROM bill_refunds r JOIN bills b ON b.id=r.bill_id
+        LEFT JOIN customers c ON c.id=b.customer_id LEFT JOIN users u ON u.id=r.created_by
+        WHERE r.method='cash' AND b.sale_status='active'
+          AND NOT EXISTS (SELECT 1 FROM cash_refund_links l WHERE l.refund_id=r.id)
         ORDER BY created_at ASC LIMIT 3000""")).mappings().all()
     count, total = db.execute(text("""SELECT COUNT(*),COALESCE(SUM(amount),0) FROM (
         SELECT p.amount FROM payments p JOIN bills b ON b.id=p.bill_id
@@ -1062,9 +1076,14 @@ def unassigned_cash_payments(db: Session = Depends(get_db), user=Depends(require
         WHERE bt.method='cash' AND b.sale_status='active'
           AND NOT EXISTS (SELECT 1 FROM cash_repayment_links l WHERE l.transaction_id=bt.id)
     ) unassigned""")).one()
+    refund_count, refund_total = db.execute(text("""SELECT COUNT(*),COALESCE(SUM(r.amount),0)
+        FROM bill_refunds r JOIN bills b ON b.id=r.bill_id
+        WHERE r.method='cash' AND b.sale_status='active'
+          AND NOT EXISTS (SELECT 1 FROM cash_refund_links l WHERE l.refund_id=r.id)""")).one()
     db.commit()
-    return {"count": int(count), "total": str(total), "payments": [dict(row) for row in rows],
-            "list_truncated": int(count) > len(rows)}
+    return {"count": int(count), "total": str(total), "refund_count": int(refund_count),
+            "refund_total": str(refund_total), "payments": [dict(row) for row in rows],
+            "list_truncated": int(count)+int(refund_count) > len(rows)}
 
 
 class CashPaymentAssign(BaseModel):
