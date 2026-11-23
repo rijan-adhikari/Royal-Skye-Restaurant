@@ -952,7 +952,10 @@ def customer_loyalty(customer_id: str, db: Session = Depends(get_db),
 # matching when a bill has split or repeated payments.
 def _ensure_cash_payment_links(db: Session) -> None:
     # Allow a reconciled cash receipt to exist without a fabricated historical shift.
-    db.execute(text("ALTER TABLE cash_drawer_entries ALTER COLUMN shift_id DROP NOT NULL"))
+    shift_nullable = db.execute(text("""SELECT is_nullable FROM information_schema.columns
+        WHERE table_schema=current_schema() AND table_name='cash_drawer_entries' AND column_name='shift_id'""")).scalar()
+    if shift_nullable == "NO":
+        db.execute(text("ALTER TABLE cash_drawer_entries ALTER COLUMN shift_id DROP NOT NULL"))
     db.execute(text("""CREATE TABLE IF NOT EXISTS cash_payment_links (
         payment_id UUID PRIMARY KEY REFERENCES payments(id) ON DELETE CASCADE,
         drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
