@@ -496,7 +496,7 @@ def add_daily_savings(shift_id: str, payload: CashEntry, db: Session = Depends(g
     shift = db.execute(text("SELECT id,opening_float FROM cash_drawer_shifts WHERE id=:id AND status='open' FOR UPDATE"), {"id": shift_id}).mappings().first()
     if not shift:
         raise HTTPException(409, "Cash shift is not open")
-    totals = db.execute(text("SELECT entry_type,COALESCE(SUM(amount),0) amount FROM cash_drawer_entries WHERE shift_id=:id GROUP BY entry_type"), {"id": shift_id}).mappings().all()
+    totals = db.execute(text("SELECT entry_type,COALESCE(SUM(amount),0) amount FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT (e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) GROUP BY e.entry_type"), {"id": shift_id}).mappings().all()
     amounts = {row["entry_type"]: Decimal(str(row["amount"])) for row in totals}
     expected = Decimal(str(shift["opening_float"])) + amounts.get("sale", Decimal(0)) + amounts.get("cash_in", Decimal(0)) - amounts.get("refund", Decimal(0)) - amounts.get("cash_out", Decimal(0)) - amounts.get("payout", Decimal(0))
     if payload.amount > expected:
@@ -520,7 +520,7 @@ def list_cash_shifts(limit: int = Query(50, ge=1, le=200),
     for row in rows:
         entries = db.execute(text("""SELECT e.id,e.entry_type,e.amount,e.reference,e.notes,e.created_at,u.full_name created_by_name
             FROM cash_drawer_entries e JOIN users u ON u.id=e.created_by
-            WHERE e.shift_id=:id ORDER BY e.created_at DESC"""), {"id": row["id"]}).mappings().all()
+            WHERE e.shift_id=:id AND NOT (e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) ORDER BY e.created_at DESC"""), {"id": row["id"]}).mappings().all()
         entry_totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
             FROM cash_drawer_entries WHERE shift_id=:id GROUP BY entry_type"""), {"id": row["id"]}).mappings().all()
         amounts = {entry["entry_type"]: Decimal(str(entry["amount"])) for entry in entry_totals}
@@ -544,7 +544,7 @@ def current_cash_shift(db: Session = Depends(get_db), user=Depends(require_roles
     expected = Decimal(str(row["opening_float"])) + totals.get("sale", Decimal(0)) + totals.get("cash_in", Decimal(0)) - totals.get("refund", Decimal(0)) - totals.get("cash_out", Decimal(0)) - totals.get("payout", Decimal(0))
     entry_rows = db.execute(text("""SELECT e.id,e.entry_type,e.amount,e.reference,e.notes,e.created_at,u.full_name created_by_name
         FROM cash_drawer_entries e JOIN users u ON u.id=e.created_by
-        WHERE e.shift_id=:id ORDER BY e.created_at DESC"""), {"id": row["id"]}).mappings().all()
+        WHERE e.shift_id=:id AND NOT (e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) ORDER BY e.created_at DESC"""), {"id": row["id"]}).mappings().all()
     return dict(row) | {"entries": {k: str(v) for k,v in totals.items()},
         "cash_entries": [dict(entry) for entry in entry_rows], "expected_cash": str(expected)}
 
@@ -615,7 +615,7 @@ def update_cash_entry(shift_id: str, entry_id: str, payload: CashEntryUpdate,
         raise HTTPException(403, "System-generated sale and refund records must use the admin sale-correction action")
     if payload.entry_type in ("cash_out", "payout"):
         totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
-            FROM cash_drawer_entries WHERE shift_id=:id AND id<>:entry GROUP BY entry_type"""),
+            FROM cash_drawer_entries e WHERE e.shift_id=:id AND e.id<>:entry AND NOT (e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) GROUP BY e.entry_type"""),
             {"id": shift_id, "entry": entry_id}).mappings().all()
         values = {r["entry_type"]: Decimal(str(r["amount"])) for r in totals}
         available = (Decimal(str(shift["opening_float"])) + values.get("sale", Decimal(0))
