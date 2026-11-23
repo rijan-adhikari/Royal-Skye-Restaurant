@@ -52,7 +52,7 @@ def ensure_register(db):
           (business_date,sequence_number,source_type,source_id,bill_id,reference,payment_method,amount,created_at)
         SELECT business_date,seq,source_type,source_id,bill_id,reference,payment_method,amount,created_at
         FROM ranked
-        ON CONFLICT(source_type,source_id) DO NOTHING
+        ON CONFLICT DO NOTHING
     """))
 
 
