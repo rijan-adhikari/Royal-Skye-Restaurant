@@ -370,7 +370,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
         {role === "admin" && <div className="mb-5 space-y-4 border-t pt-5">
           <section className="rounded-xl border border-[#d9e8df] bg-[#f7fbf8] p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div><p className="text-[10px] font-extrabold uppercase tracking-widest text-[#52765b]">Separate payment channel</p><h2 className="mt-1 text-lg font-extrabold text-[#263d2d]">QR received payments</h2><p className="mt-1 text-xs text-neutral-600">Directly from recorded QR payment transactions. These amounts never increase physical drawer cash.</p></div>
+              <div><p className="text-[10px] font-extrabold uppercase tracking-widest text-[#52765b]">Separate payment channel</p><h2 className="mt-1 text-lg font-extrabold text-[#263d2d]">QR received payments</h2><p className="mt-1 text-xs text-neutral-600">Complete historical register of recorded QR bill payments, QR credit repayments and QR refunds, including older or voided bills. These amounts never increase physical drawer cash.</p></div>
               <button type="button" className="rounded-lg border bg-white px-3 py-2 text-xs font-bold" disabled={busy} onClick={() => load()}>Refresh QR</button>
             </div>
             <div className="mt-3 grid grid-cols-3 gap-2">
@@ -380,8 +380,8 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
             </div>
             {data.qrPayments?.list_truncated && <p className="mt-2 text-[11px] font-semibold text-amber-800">Totals include every QR record; this register is showing the most recent 2,000 payments and 1,000 refunds.</p>}
             <div className="mt-3 max-h-64 overflow-auto">
-              {(data.qrPayments?.payments || []).map((payment: any) => <div key={payment.payment_id} className="flex flex-wrap justify-between gap-2 border-b border-[#e6eee8] py-2 text-xs"><span><b>{payment.source_type === "credit_repayment" ? "Credit repayment · " : ""}{payment.bill_number}</b> · {payment.customer_name || "Walk-in"}<small className="block text-neutral-500">{new Date(payment.created_at).toLocaleString()} · {payment.received_by_name || "Staff"}</small></span><b>{money(payment.amount)}</b></div>)}
-              {(data.qrPayments?.refunds || []).map((item: any) => <div key={item.refund_id} className="flex flex-wrap justify-between gap-2 border-b border-[#e6eee8] py-2 text-xs text-red-700"><span><b>Refund · {item.bill_number}</b><small className="block">{new Date(item.created_at).toLocaleString()} · {item.reason}</small></span><b>−{money(item.amount)}</b></div>)}
+              {(data.qrPayments?.payments || []).map((payment: any) => <div key={payment.payment_id} className="flex flex-wrap justify-between gap-2 border-b border-[#e6eee8] py-2 text-xs"><span><b>{payment.source_type === "credit_repayment" ? "Credit repayment · " : ""}{payment.bill_number}</b> · {payment.customer_name || "Walk-in"}<small className="block text-neutral-500">{new Date(payment.created_at).toLocaleString()} · {payment.received_by_name || "Staff"} · Bill {payment.sale_status || "recorded"}</small></span><b>{money(payment.amount)}</b></div>)}
+              {(data.qrPayments?.refunds || []).map((item: any) => <div key={item.refund_id} className="flex flex-wrap justify-between gap-2 border-b border-[#e6eee8] py-2 text-xs text-red-700"><span><b>Refund · {item.bill_number}</b><small className="block">{new Date(item.created_at).toLocaleString()} · {item.reason} · Bill {item.sale_status || "recorded"}</small></span><b>−{money(item.amount)}</b></div>)}
               {!(data.qrPayments?.payments || []).length && !(data.qrPayments?.refunds || []).length && <p className="py-4 text-center text-xs text-neutral-500">No QR payments or refunds recorded.</p>}
             </div>
           </section>
