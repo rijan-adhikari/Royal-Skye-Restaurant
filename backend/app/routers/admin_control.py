@@ -988,7 +988,7 @@ def _backfill_unambiguous_cash_links(db: Session) -> int:
 
 @router.get("/qr-payments")
 def qr_received_payments(start: date | None = None, end: date | None = None,
-                         db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+                         db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     if start and end and end < start:
         raise HTTPException(422, "End date must not precede start date")
     db.execute(text("""ALTER TABLE balance_transactions
@@ -1114,7 +1114,7 @@ class CashPaymentAssign(BaseModel):
 
 @router.post("/cash-payments/{payment_id}/assign")
 def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
-                        db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+                        db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     _ensure_cash_payment_links(db)
     db.execute(text("""ALTER TABLE balance_transactions
         ADD COLUMN IF NOT EXISTS method VARCHAR(24) NOT NULL DEFAULT 'legacy_unclassified'"""))
