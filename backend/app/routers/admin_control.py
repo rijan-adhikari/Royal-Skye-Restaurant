@@ -935,3 +935,183 @@ def customer_loyalty(customer_id: str, db: Session = Depends(get_db),
     transactions = db.execute(text("""SELECT * FROM loyalty_transactions WHERE customer_id=:id
         ORDER BY created_at DESC LIMIT 100"""), {"id": customer_id}).mappings().all()
     return dict(account) | {"transactions": [dict(row) for row in transactions]}
+
+
+# Payment reconciliation -----------------------------------------------------
+# A dedicated link table gives each original cash payment a durable, unique
+# relationship to its drawer entry. It avoids fragile bill-number/amount-only
+# matching when a bill has split or repeated payments.
+def _ensure_cash_payment_links(db: Session) -> None:
+    db.execute(text("""CREATE TABLE IF NOT EXISTS cash_payment_links (
+        payment_id UUID PRIMARY KEY REFERENCES payments(id) ON DELETE CASCADE,
+        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+        linked_by UUID REFERENCES users(id),
+        linked_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        source VARCHAR(24) NOT NULL DEFAULT 'automatic'
+    )"""))
+    db.execute(text("CREATE INDEX IF NOT EXISTS ix_cash_payment_links_drawer_entry ON cash_payment_links(drawer_entry_id)"))
+    db.flush()
+
+
+def _backfill_unambiguous_cash_links(db: Session) -> int:
+    # Link legacy drawer rows only when the payment and drawer-entry match is
+    # exactly one-to-one. Ambiguous rows remain visible for manual review.
+    result = db.execute(text("""WITH candidates AS (
+        SELECT p.id payment_id,e.id entry_id,
+               COUNT(*) OVER (PARTITION BY p.id) payment_matches,
+               COUNT(*) OVER (PARTITION BY e.id) entry_matches
+        FROM payments p
+        JOIN bills b ON b.id=p.bill_id
+        JOIN cash_drawer_entries e
+          ON e.reference=b.bill_number AND e.entry_type='sale' AND e.amount=p.amount
+        WHERE p.method='cash' AND b.sale_status='active'
+          AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.payment_id=p.id)
+          AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.drawer_entry_id=e.id)
+    )
+    INSERT INTO cash_payment_links(payment_id,drawer_entry_id,source)
+    SELECT payment_id,entry_id,'legacy_match' FROM candidates
+    WHERE payment_matches=1 AND entry_matches=1
+    ON CONFLICT DO NOTHING"""))
+    return max(result.rowcount or 0, 0)
+
+
+@router.get("/qr-payments")
+def qr_received_payments(start: date | None = None, end: date | None = None,
+                         db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    if start and end and end < start:
+        raise HTTPException(422, "End date must not precede start date")
+    rows = db.execute(text("""SELECT p.id payment_id,b.id bill_id,b.bill_number,b.business_date,
+        p.created_at,p.amount,p.method,c.name customer_name,u.full_name received_by_name
+        FROM payments p JOIN bills b ON b.id=p.bill_id
+        LEFT JOIN customers c ON c.id=b.customer_id
+        LEFT JOIN users u ON u.id=p.received_by
+        WHERE p.method='qr' AND b.sale_status='active'
+          AND (:start IS NULL OR p.created_at::date>=:start)
+          AND (:end IS NULL OR p.created_at::date<=:end)
+        ORDER BY p.created_at DESC LIMIT 2000"""), {"start": start, "end": end}).mappings().all()
+    refunds = db.execute(text("""SELECT r.id refund_id,b.bill_number,b.business_date,r.created_at,
+        r.amount,r.method,r.reason,u.full_name received_by_name
+        FROM bill_refunds r JOIN bills b ON b.id=r.bill_id
+        LEFT JOIN users u ON u.id=r.created_by
+        WHERE r.method='qr' AND b.sale_status='active'
+          AND (:start IS NULL OR r.created_at::date>=:start)
+          AND (:end IS NULL OR r.created_at::date<=:end)
+        ORDER BY r.created_at DESC LIMIT 1000"""), {"start": start, "end": end}).mappings().all()
+    received = sum((Decimal(str(row["amount"])) for row in rows), Decimal("0"))
+    refunded = sum((Decimal(str(row["amount"])) for row in refunds), Decimal("0"))
+    return {"received_total": str(received), "refunded_total": str(refunded),
+            "net_qr_received": str(received-refunded), "payment_count": len(rows),
+            "payments": [dict(row) for row in rows], "refunds": [dict(row) for row in refunds]}
+
+
+@router.get("/cash-payments/unassigned")
+def unassigned_cash_payments(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    _ensure_cash_payment_links(db)
+    _backfill_unambiguous_cash_links(db)
+    rows = db.execute(text("""SELECT p.id payment_id,b.id bill_id,b.bill_number,b.business_date,
+        p.created_at,p.amount,c.name customer_name,u.full_name received_by_name,
+        (SELECT COUNT(*) FROM cash_drawer_entries e
+         WHERE e.entry_type='sale' AND e.reference=b.bill_number AND e.amount=p.amount) matching_drawer_rows
+        FROM payments p JOIN bills b ON b.id=p.bill_id
+        LEFT JOIN customers c ON c.id=b.customer_id
+        LEFT JOIN users u ON u.id=p.received_by
+        WHERE p.method='cash' AND b.sale_status='active'
+          AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.payment_id=p.id)
+        ORDER BY p.created_at ASC LIMIT 3000""")).mappings().all()
+    total = sum((Decimal(str(row["amount"])) for row in rows), Decimal("0"))
+    return {"count": len(rows), "total": str(total), "payments": [dict(row) for row in rows]}
+
+
+class CashPaymentAssign(BaseModel):
+    shift_id: str
+    notes: str | None = None
+
+
+@router.post("/cash-payments/{payment_id}/assign")
+def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
+                        db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    _ensure_cash_payment_links(db)
+    payment = db.execute(text("""SELECT p.id,p.bill_id,p.method,p.amount,p.created_at,b.bill_number,b.sale_status
+        FROM payments p JOIN bills b ON b.id=p.bill_id WHERE p.id=:id FOR UPDATE OF p,b"""),
+        {"id": payment_id}).mappings().first()
+    if not payment:
+        raise HTTPException(404, "Cash payment not found")
+    if payment["method"] != "cash" or payment["sale_status"] != "active":
+        raise HTTPException(409, "Only active cash payments can be assigned to a drawer shift")
+    if db.execute(text("SELECT 1 FROM cash_payment_links WHERE payment_id=:id"), {"id": payment_id}).first():
+        raise HTTPException(409, "This cash payment is already linked to a drawer entry")
+    shift = db.execute(text("SELECT id,status,opening_float,counted_cash FROM cash_drawer_shifts WHERE id=:id FOR UPDATE"),
+                       {"id": payload.shift_id}).mappings().first()
+    if not shift:
+        raise HTTPException(404, "Selected cash drawer shift was not found")
+
+    # Reuse a single exact legacy drawer row if one exists; never duplicate it.
+    candidates = db.execute(text("""SELECT e.id FROM cash_drawer_entries e
+        WHERE e.entry_type='sale' AND e.reference=:bill AND e.amount=:amount
+          AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.drawer_entry_id=e.id)
+        ORDER BY e.created_at"""), {"bill": payment["bill_number"], "amount": payment["amount"]}).mappings().all()
+    if len(candidates) > 1:
+        raise HTTPException(409, "Multiple matching historical drawer rows exist. Resolve the duplicate manually before linking.")
+    if candidates:
+        entry_id = candidates[0]["id"]
+        entry_shift = db.execute(text("SELECT shift_id FROM cash_drawer_entries WHERE id=:id"),
+                                 {"id": entry_id}).scalar_one()
+        if str(entry_shift) != str(payload.shift_id):
+            raise HTTPException(409, "A matching drawer entry already belongs to a different shift. Select that shift to link it.")
+    else:
+        entry_id = db.execute(text("""INSERT INTO cash_drawer_entries
+            (shift_id,entry_type,amount,reference,notes,created_by,created_at)
+            VALUES(:shift,'sale',:amount,:reference,:notes,:user,:created_at) RETURNING id"""),
+            {"shift": payload.shift_id, "amount": payment["amount"], "reference": payment["bill_number"],
+             "notes": payload.notes or "Historical cash payment assigned from unassigned payments",
+             "user": user.id, "created_at": payment["created_at"]}).scalar_one()
+    db.execute(text("""INSERT INTO cash_payment_links(payment_id,drawer_entry_id,linked_by,source)
+        VALUES(:payment,:entry,:user,'manual_assignment')"""),
+        {"payment": payment_id, "entry": entry_id, "user": user.id})
+    if shift["status"] == "closed":
+        totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
+            FROM cash_drawer_entries WHERE shift_id=:id GROUP BY entry_type"""),
+            {"id": payload.shift_id}).mappings().all()
+        values = {row["entry_type"]: Decimal(str(row["amount"])) for row in totals}
+        expected = (Decimal(str(shift["opening_float"])) + values.get("sale", Decimal(0))
+            + values.get("cash_in", Decimal(0)) - values.get("refund", Decimal(0))
+            - values.get("cash_out", Decimal(0)) - values.get("payout", Decimal(0)))
+        difference = Decimal(str(shift["counted_cash"] or 0)) - expected
+        db.execute(text("UPDATE cash_drawer_shifts SET expected_cash=:expected,cash_difference=:difference WHERE id=:id"),
+                   {"expected": expected, "difference": difference, "id": payload.shift_id})
+    audit(db, user.id, "cash_payment.assigned",
+          f"Payment {payment_id} for {payment['bill_number']} NPR {payment['amount']} linked to shift {payload.shift_id}")
+    db.commit()
+    return {"ok": True, "payment_id": payment_id, "drawer_entry_id": str(entry_id),
+            "shift_id": payload.shift_id, "created_historical_entry": not bool(candidates)}
+
+
+@router.get("/payment-reconciliation")
+def payment_reconciliation(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    _ensure_cash_payment_links(db)
+    linked_legacy = _backfill_unambiguous_cash_links(db)
+    payment_totals = db.execute(text("""SELECT p.method,COUNT(*) transactions,COALESCE(SUM(p.amount),0) amount
+        FROM payments p JOIN bills b ON b.id=p.bill_id
+        WHERE b.sale_status='active' GROUP BY p.method ORDER BY p.method""")).mappings().all()
+    missing_cash = db.execute(text("""SELECT COUNT(*),COALESCE(SUM(p.amount),0)
+        FROM payments p JOIN bills b ON b.id=p.bill_id
+        WHERE p.method='cash' AND b.sale_status='active'
+          AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.payment_id=p.id)""")).first()
+    bill_mismatches = db.execute(text("""SELECT COUNT(*) FROM bills b
+        WHERE b.sale_status='active' AND ABS(b.amount_paid -
+          (COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.bill_id=b.id),0) +
+           COALESCE((SELECT SUM(bt.amount) FROM balance_transactions bt
+             JOIN customer_balances cb ON cb.id=bt.customer_balance_id WHERE cb.bill_id=b.id),0))) > 0.01""")).scalar_one()
+    credit_mismatches = db.execute(text("""SELECT COUNT(*) FROM customer_balances cb
+        JOIN bills b ON b.id=cb.bill_id
+        WHERE ABS(cb.remaining_amount - GREATEST(cb.original_amount -
+          COALESCE((SELECT SUM(bt.amount) FROM balance_transactions bt WHERE bt.customer_balance_id=cb.id),0),0)) > 0.01
+           OR ABS(cb.remaining_amount-b.outstanding_amount)>0.01""")).scalar_one()
+    qr_refunds = db.execute(text("SELECT COALESCE(SUM(amount),0) FROM bill_refunds WHERE method='qr'")).scalar_one()
+    result = {"legacy_drawer_rows_linked": linked_legacy,
+        "payment_methods": [dict(row) for row in payment_totals],
+        "unassigned_cash_count": int(missing_cash[0]), "unassigned_cash_total": str(missing_cash[1]),
+        "bill_payment_mismatches": int(bill_mismatches), "credit_balance_mismatches": int(credit_mismatches),
+        "qr_refunds_total": str(qr_refunds)}
+    db.commit()
+    return result
