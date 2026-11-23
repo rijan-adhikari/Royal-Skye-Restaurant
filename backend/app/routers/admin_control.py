@@ -988,15 +988,23 @@ def qr_received_payments(start: date | None = None, end: date | None = None,
                          db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
     if start and end and end < start:
         raise HTTPException(422, "End date must not precede start date")
-    rows = db.execute(text("""SELECT p.id payment_id,b.id bill_id,b.bill_number,b.business_date,
+    rows = db.execute(text("""SELECT p.id payment_id,'bill_payment' source_type,b.id bill_id,b.bill_number,b.business_date,
         p.created_at,p.amount,p.method,c.name customer_name,u.full_name received_by_name
         FROM payments p JOIN bills b ON b.id=p.bill_id
-        LEFT JOIN customers c ON c.id=b.customer_id
-        LEFT JOIN users u ON u.id=p.received_by
+        LEFT JOIN customers c ON c.id=b.customer_id LEFT JOIN users u ON u.id=p.received_by
         WHERE p.method='qr' AND b.sale_status='active'
           AND (:start IS NULL OR p.created_at::date>=:start)
           AND (:end IS NULL OR p.created_at::date<=:end)
-        ORDER BY p.created_at DESC LIMIT 2000"""), {"start": start, "end": end}).mappings().all()
+        UNION ALL
+        SELECT bt.id payment_id,'credit_repayment' source_type,b.id bill_id,b.bill_number,b.business_date,
+        bt.created_at,bt.amount,bt.method,c.name customer_name,u.full_name received_by_name
+        FROM balance_transactions bt JOIN customer_balances cb ON cb.id=bt.customer_balance_id
+        JOIN bills b ON b.id=cb.bill_id LEFT JOIN customers c ON c.id=cb.customer_id
+        LEFT JOIN users u ON u.id=bt.received_by
+        WHERE bt.method='qr' AND b.sale_status='active'
+          AND (:start IS NULL OR bt.created_at::date>=:start)
+          AND (:end IS NULL OR bt.created_at::date<=:end)
+        ORDER BY created_at DESC LIMIT 2000"""), {"start": start, "end": end}).mappings().all()
     refunds = db.execute(text("""SELECT r.id refund_id,b.bill_number,b.business_date,r.created_at,
         r.amount,r.method,r.reason,u.full_name received_by_name
         FROM bill_refunds r JOIN bills b ON b.id=r.bill_id
@@ -1005,11 +1013,15 @@ def qr_received_payments(start: date | None = None, end: date | None = None,
           AND (:start IS NULL OR r.created_at::date>=:start)
           AND (:end IS NULL OR r.created_at::date<=:end)
         ORDER BY r.created_at DESC LIMIT 1000"""), {"start": start, "end": end}).mappings().all()
-    received, payment_count = db.execute(text("""SELECT COALESCE(SUM(p.amount),0),COUNT(*)
-        FROM payments p JOIN bills b ON b.id=p.bill_id
+    received, payment_count = db.execute(text("""SELECT COALESCE(SUM(amount),0),COUNT(*) FROM (
+        SELECT p.amount,p.created_at FROM payments p JOIN bills b ON b.id=p.bill_id
         WHERE p.method='qr' AND b.sale_status='active'
-          AND (:start IS NULL OR p.created_at::date>=:start)
-          AND (:end IS NULL OR p.created_at::date<=:end)"""),
+        UNION ALL
+        SELECT bt.amount,bt.created_at FROM balance_transactions bt
+        JOIN customer_balances cb ON cb.id=bt.customer_balance_id JOIN bills b ON b.id=cb.bill_id
+        WHERE bt.method='qr' AND b.sale_status='active'
+    ) qr_receipts WHERE (:start IS NULL OR created_at::date>=:start)
+      AND (:end IS NULL OR created_at::date<=:end)"""),
         {"start": start, "end": end}).one()
     refunded = db.execute(text("""SELECT COALESCE(SUM(r.amount),0) FROM bill_refunds r
         JOIN bills b ON b.id=r.bill_id WHERE r.method='qr' AND b.sale_status='active'
