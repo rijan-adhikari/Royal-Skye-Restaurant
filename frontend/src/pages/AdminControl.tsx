@@ -33,6 +33,9 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const [recoveryDate, setRecoveryDate] = useState("");
   const [recoveryOpeningFloat, setRecoveryOpeningFloat] = useState("");
   const [recoveryCountedCash, setRecoveryCountedCash] = useState("");
+  const [recoveryCashIn, setRecoveryCashIn] = useState("0");
+  const [recoveryCashOut, setRecoveryCashOut] = useState("0");
+  const [recoveryPayout, setRecoveryPayout] = useState("0");
   const [recoveryNotes, setRecoveryNotes] = useState("");
   const [cashEntry, setCashEntry] = useState({ entry_type: "cash_in", amount: "", reference: "", notes: "" });
   const [editingCashEntry, setEditingCashEntry] = useState<string | null>(null);
@@ -121,9 +124,12 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
       business_date: recoveryDate,
       opening_float: Number(recoveryOpeningFloat),
       counted_cash: Number(recoveryCountedCash),
+      cash_in: Number(recoveryCashIn || 0),
+      cash_out: Number(recoveryCashOut || 0),
+      payout: Number(recoveryPayout || 0),
       notes: recoveryNotes.trim() || null,
     }), "Historical cash shift created. Assign its unlinked cash records below.");
-    setRecoveryDate(""); setRecoveryOpeningFloat(""); setRecoveryCountedCash(""); setRecoveryNotes("");
+    setRecoveryDate(""); setRecoveryOpeningFloat(""); setRecoveryCountedCash(""); setRecoveryCashIn("0"); setRecoveryCashOut("0"); setRecoveryPayout("0"); setRecoveryNotes("");
   };
 
   const openShift = async () => { await run(() => api.post("/api/admin/cash-shifts/open", { opening_float: Number(openFloat) }), "Cash drawer shift opened."); setCountedCash(""); };
@@ -413,7 +419,10 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
                 <label className="text-[11px] font-semibold">Business date<input required type="date" className={field + " mt-1"} value={recoveryDate} onChange={e => setRecoveryDate(e.target.value)} /></label>
                 <label className="text-[11px] font-semibold">Opening float (NPR)<input required type="number" min="0" step="0.01" className={field + " mt-1"} value={recoveryOpeningFloat} onChange={e => setRecoveryOpeningFloat(e.target.value)} /></label>
                 <label className="text-[11px] font-semibold">Counted closing cash (NPR)<input required type="number" min="0" step="0.01" className={field + " mt-1"} value={recoveryCountedCash} onChange={e => setRecoveryCountedCash(e.target.value)} /></label>
-                <label className="text-[11px] font-semibold">Notes (optional)<input className={field + " mt-1"} value={recoveryNotes} onChange={e => setRecoveryNotes(e.target.value)} placeholder="Reason / cash count reference" /></label>
+                <label className="text-[11px] font-semibold">Manual cash-in (NPR)<input type="number" min="0" step="0.01" className={field + " mt-1"} value={recoveryCashIn} onChange={e => setRecoveryCashIn(e.target.value)} /></label>
+                <label className="text-[11px] font-semibold">Manual cash-out (NPR)<input type="number" min="0" step="0.01" className={field + " mt-1"} value={recoveryCashOut} onChange={e => setRecoveryCashOut(e.target.value)} /></label>
+                <label className="text-[11px] font-semibold">Payout (NPR)<input type="number" min="0" step="0.01" className={field + " mt-1"} value={recoveryPayout} onChange={e => setRecoveryPayout(e.target.value)} /></label>
+                <label className="text-[11px] font-semibold sm:col-span-2">Notes (optional)<input className={field + " mt-1"} value={recoveryNotes} onChange={e => setRecoveryNotes(e.target.value)} placeholder="Reason / cash count reference" /></label>
               </div>
               <button type="submit" className={primary + " mt-2"} disabled={busy || !recoveryDate || !recoveryOpeningFloat.trim() || !recoveryCountedCash.trim()}>Create historical shift</button>
             </form>
