@@ -1146,10 +1146,14 @@ def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
         raise HTTPException(409, "Only active cash receipts or refunds can be assigned")
     if db.execute(text(f"SELECT 1 FROM {link_table} WHERE {source_column}=:id"), {"id": payment_id}).first():
         raise HTTPException(409, "This cash record is already linked to a drawer entry")
-    shift = db.execute(text("SELECT id,status,opening_float,counted_cash FROM cash_drawer_shifts WHERE id=:id FOR UPDATE"),
+    shift = db.execute(text("SELECT id,status,opening_float,counted_cash,opened_at,closed_at FROM cash_drawer_shifts WHERE id=:id FOR UPDATE"),
                        {"id": payload.shift_id}).mappings().first()
     if not shift:
         raise HTTPException(404, "Selected cash drawer shift was not found")
+    if payment["created_at"] < shift["opened_at"] or (
+        shift["closed_at"] is not None and payment["created_at"] > shift["closed_at"]
+    ):
+        raise HTTPException(409, "The selected shift does not cover this receipt's original timestamp. Choose the correct historical shift.")
     candidates = db.execute(text("""SELECT e.id,e.shift_id FROM cash_drawer_entries e
         WHERE e.entry_type=:entry_type AND e.reference=:reference AND e.amount=:amount
           AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.drawer_entry_id=e.id)
