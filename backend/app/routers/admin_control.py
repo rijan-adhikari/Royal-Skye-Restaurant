@@ -951,6 +951,8 @@ def customer_loyalty(customer_id: str, db: Session = Depends(get_db),
 # relationship to its drawer entry. It avoids fragile bill-number/amount-only
 # matching when a bill has split or repeated payments.
 def _ensure_cash_payment_links(db: Session) -> None:
+    # Allow a reconciled cash receipt to exist without a fabricated historical shift.
+    db.execute(text("ALTER TABLE cash_drawer_entries ALTER COLUMN shift_id DROP NOT NULL"))
     db.execute(text("""CREATE TABLE IF NOT EXISTS cash_payment_links (
         payment_id UUID PRIMARY KEY REFERENCES payments(id) ON DELETE CASCADE,
         drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
@@ -1038,7 +1040,7 @@ def qr_received_payments(start: date | None = None, end: date | None = None,
 
 
 @router.get("/cash-payments/unassigned")
-def unassigned_cash_payments(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+def unassigned_cash_payments(db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     _ensure_cash_payment_links(db)
     db.execute(text("""ALTER TABLE balance_transactions
         ADD COLUMN IF NOT EXISTS method VARCHAR(24) NOT NULL DEFAULT 'legacy_unclassified'"""))
@@ -1105,62 +1107,9 @@ def unassigned_cash_payments(db: Session = Depends(get_db), user=Depends(require
 
 
 class CashPaymentAssign(BaseModel):
-    shift_id: str
+    # Null means the receipt was received when no drawer shift was open.
+    shift_id: str | None = None
     notes: str | None = None
-
-
-class HistoricalShiftRecovery(BaseModel):
-    business_date: date
-    opening_float: Decimal = Field(ge=0)
-    counted_cash: Decimal = Field(ge=0)
-    cash_in: Decimal = Field(default=Decimal("0"), ge=0)
-    cash_out: Decimal = Field(default=Decimal("0"), ge=0)
-    payout: Decimal = Field(default=Decimal("0"), ge=0)
-    notes: str | None = None
-
-
-@router.post("/cash-shifts/recover")
-def recover_historical_cash_shift(payload: HistoricalShiftRecovery,
-                                  db: Session = Depends(get_db),
-                                  user=Depends(require_roles(*MANAGERS))):
-    # Reconstruct a closed shift over the Nepal-local business day. Original
-    # payments are assigned separately, so no amount is fabricated here.
-    local_start = datetime.combine(payload.business_date, datetime_time.min,
-                                   tzinfo=ZoneInfo("Asia/Kathmandu"))
-    local_end = local_start + timedelta(days=1)
-    start_utc = local_start.astimezone(timezone.utc).replace(tzinfo=None)
-    end_utc = local_end.astimezone(timezone.utc).replace(tzinfo=None)
-    overlapping = db.execute(text("""SELECT id FROM cash_drawer_shifts
-        WHERE opened_at < :end_at AND COALESCE(closed_at,NOW()) > :start_at
-        FOR UPDATE"""), {"start_at": start_utc, "end_at": end_utc}).first()
-    if overlapping:
-        raise HTTPException(409, "A cash drawer shift already overlaps this business date. Assign records to that shift instead.")
-    expected = payload.opening_float + payload.cash_in - payload.cash_out - payload.payout
-    difference = payload.counted_cash - expected
-    notes = f"Historical shift recovered for Nepal business date {payload.business_date}."
-    if payload.notes and payload.notes.strip():
-        notes += "\n" + payload.notes.strip()
-    row = db.execute(text("""INSERT INTO cash_drawer_shifts
-        (opened_by,closed_by,opening_float,expected_cash,counted_cash,cash_difference,
-         status,opened_at,closed_at,notes)
-        VALUES(:user,:user,:opening,:expected,:counted,:difference,'closed',
-               :opened_at,:closed_at,:notes) RETURNING *"""),
-        {"user": user.id, "opening": payload.opening_float, "expected": expected,
-         "counted": payload.counted_cash, "difference": difference,
-         "opened_at": start_utc, "closed_at": end_utc, "notes": notes}).mappings().first()
-    for entry_type, amount in (("cash_in", payload.cash_in), ("cash_out", payload.cash_out), ("payout", payload.payout)):
-        if amount > 0:
-            db.execute(text("""INSERT INTO cash_drawer_entries
-                (shift_id,entry_type,amount,reference,notes,created_by,created_at)
-                VALUES(:shift,:entry_type,:amount,:reference,:notes,:user,:created_at)"""),
-                {"shift": row["id"], "entry_type": entry_type, "amount": amount,
-                 "reference": f"Historical recovery {payload.business_date}",
-                 "notes": payload.notes or "Historical drawer movement recorded during recovery",
-                 "user": user.id, "created_at": start_utc})
-    audit(db, user.id, "cash_shift.historical_recovery",
-          f"Created closed historical shift {row['id']} for {payload.business_date}; opening NPR {payload.opening_float}, cash-in NPR {payload.cash_in}, cash-out NPR {payload.cash_out}, payout NPR {payload.payout}, expected NPR {expected}, counted NPR {payload.counted_cash}")
-    db.commit()
-    return dict(row)
 
 
 @router.post("/cash-payments/{payment_id}/assign")
@@ -1204,14 +1153,16 @@ def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
         raise HTTPException(409, "Only active cash receipts or refunds can be assigned")
     if db.execute(text(f"SELECT 1 FROM {link_table} WHERE {source_column}=:id"), {"id": payment_id}).first():
         raise HTTPException(409, "This cash record is already linked to a drawer entry")
-    shift = db.execute(text("SELECT id,status,opening_float,counted_cash,opened_at,closed_at FROM cash_drawer_shifts WHERE id=:id FOR UPDATE"),
-                       {"id": payload.shift_id}).mappings().first()
-    if not shift:
-        raise HTTPException(404, "Selected cash drawer shift was not found")
-    if payment["created_at"] < shift["opened_at"] or (
-        shift["closed_at"] is not None and payment["created_at"] > shift["closed_at"]
-    ):
-        raise HTTPException(409, "The selected shift does not cover this receipt's original timestamp. Choose the correct historical shift.")
+    shift = None
+    if payload.shift_id:
+        shift = db.execute(text("SELECT id,status,opening_float,counted_cash,opened_at,closed_at FROM cash_drawer_shifts WHERE id=:id FOR UPDATE"),
+                           {"id": payload.shift_id}).mappings().first()
+        if not shift:
+            raise HTTPException(404, "Selected cash drawer shift was not found")
+        if payment["created_at"] < shift["opened_at"] or (
+            shift["closed_at"] is not None and payment["created_at"] > shift["closed_at"]
+        ):
+            raise HTTPException(409, "The selected shift does not cover this receipt's original timestamp.")
     candidates = db.execute(text("""SELECT e.id,e.shift_id FROM cash_drawer_entries e
         WHERE e.entry_type=:entry_type AND e.reference=:reference AND e.amount=:amount
           AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.drawer_entry_id=e.id)
@@ -1267,7 +1218,7 @@ def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
 
 
 @router.get("/payment-reconciliation")
-def payment_reconciliation(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+def payment_reconciliation(db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     _ensure_cash_payment_links(db)
     db.execute(text("""ALTER TABLE balance_transactions
         ADD COLUMN IF NOT EXISTS method VARCHAR(24) NOT NULL DEFAULT 'legacy_unclassified'"""))
