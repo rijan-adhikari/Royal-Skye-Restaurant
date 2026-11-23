@@ -30,6 +30,10 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const [restaurant, setRestaurant] = useState<any>({ name: "", email: "", phone: "", address: "", pan: "", vat: "", currency: "NPR", logo_path: "", qr_image_path: "", receipt_footer: "" });
   const [openFloat, setOpenFloat] = useState("0");
   const [countedCash, setCountedCash] = useState("");
+  const [recoveryDate, setRecoveryDate] = useState("");
+  const [recoveryOpeningFloat, setRecoveryOpeningFloat] = useState("0");
+  const [recoveryCountedCash, setRecoveryCountedCash] = useState("");
+  const [recoveryNotes, setRecoveryNotes] = useState("");
   const [cashEntry, setCashEntry] = useState({ entry_type: "cash_in", amount: "", reference: "", notes: "" });
   const [editingCashEntry, setEditingCashEntry] = useState<string | null>(null);
   const [cashEntryEdit, setCashEntryEdit] = useState({ entry_type: "cash_in", amount: "", reference: "", notes: "" });
@@ -103,7 +107,23 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     const shiftId = unassignedShiftSelections[payment.payment_id];
     if (!shiftId) { setError("Select the historical cash drawer shift first."); return; }
     await run(() => api.post(`/api/admin/cash-payments/${payment.payment_id}/assign`, { shift_id: shiftId }),
-      `${payment.bill_number} cash payment linked to the selected drawer shift.`);
+      `${payment.bill_number} cash record linked to the selected drawer shift.`);
+  };
+
+  const createHistoricalShift = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recoveryDate || !recoveryCountedCash.trim()) {
+      setError("Enter the missing business date and the actual counted closing cash.");
+      return;
+    }
+    if (!window.confirm(`Create a closed historical cash shift for ${recoveryDate}? Use the actual opening float and closing cash count. The existing payments will be assigned separately.`)) return;
+    await run(() => api.post("/api/admin/cash-shifts/recover", {
+      business_date: recoveryDate,
+      opening_float: Number(recoveryOpeningFloat),
+      counted_cash: Number(recoveryCountedCash),
+      notes: recoveryNotes.trim() || null,
+    }), "Historical cash shift created. Assign its unlinked cash records below.");
+    setRecoveryDate(""); setRecoveryOpeningFloat("0"); setRecoveryCountedCash(""); setRecoveryNotes("");
   };
 
   const openShift = async () => { await run(() => api.post("/api/admin/cash-shifts/open", { opening_float: Number(openFloat) }), "Cash drawer shift opened."); setCountedCash(""); };
@@ -386,6 +406,17 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
           </section>
           <section className="rounded-xl border border-[#ead9c2] bg-[#fffaf2] p-4">
             <div><p className="text-[10px] font-extrabold uppercase tracking-widest text-[#9a6a32]">Historical reconciliation</p><h2 className="mt-1 text-lg font-extrabold text-[#59432e]">Unassigned cash payments & refunds</h2><p className="mt-1 text-xs text-neutral-600">Cash sales, credit repayments and cash refunds already recorded in the database but not linked to a drawer shift. Assign each record to its actual historical shift; original records are preserved.</p></div>
+            <form onSubmit={createHistoricalShift} className="mt-3 rounded-lg border border-[#ead9c2] bg-white p-3">
+              <p className="text-xs font-extrabold text-[#6f5131]">No shift for that day? Create a historical shift</p>
+              <p className="mt-1 text-[11px] text-neutral-500">This creates a closed shift for the selected Nepal business date. Enter the real opening float and actual counted cash at close; do not estimate either figure.</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <label className="text-[11px] font-semibold">Business date<input required type="date" className={field + " mt-1"} value={recoveryDate} onChange={e => setRecoveryDate(e.target.value)} /></label>
+                <label className="text-[11px] font-semibold">Opening float (NPR)<input required type="number" min="0" step="0.01" className={field + " mt-1"} value={recoveryOpeningFloat} onChange={e => setRecoveryOpeningFloat(e.target.value)} /></label>
+                <label className="text-[11px] font-semibold">Counted closing cash (NPR)<input required type="number" min="0" step="0.01" className={field + " mt-1"} value={recoveryCountedCash} onChange={e => setRecoveryCountedCash(e.target.value)} /></label>
+                <label className="text-[11px] font-semibold">Notes (optional)<input className={field + " mt-1"} value={recoveryNotes} onChange={e => setRecoveryNotes(e.target.value)} placeholder="Reason / cash count reference" /></label>
+              </div>
+              <button type="submit" className={primary + " mt-2"} disabled={busy || !recoveryDate || !recoveryCountedCash.trim()}>Create historical shift</button>
+            </form>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm"><b>{data.unassignedCash?.count || 0} cash receipt(s) · {data.unassignedCash?.refund_count || 0} refund(s)</b><b>{money(data.unassignedCash?.total)} receipts · −{money(data.unassignedCash?.refund_total)} refunds</b></div>
             <div className="mt-2 max-h-72 space-y-2 overflow-auto">
               {(data.unassignedCash?.payments || []).map((payment: any) => <div key={payment.payment_id} className="rounded-lg border border-[#efe3d3] bg-white p-3">
