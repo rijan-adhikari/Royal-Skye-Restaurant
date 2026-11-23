@@ -1200,7 +1200,7 @@ def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
         db.execute(text("""INSERT INTO cash_refund_links(refund_id,drawer_entry_id,linked_by)
             VALUES(:source,:entry,:user)"""),
             {"source": payment_id, "entry": entry_id, "user": user.id})
-    if shift["status"] == "closed":
+    if shift and shift["status"] == "closed":
         totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
             FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT ((e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) OR (e.entry_type='refund' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)))) GROUP BY e.entry_type"""),
             {"id": payload.shift_id}).mappings().all()
