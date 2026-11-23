@@ -386,7 +386,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
             </div>
           </section>
           <section className="rounded-xl border border-[#ead9c2] bg-[#fffaf2] p-4">
-            <div><p className="text-[10px] font-extrabold uppercase tracking-widest text-[#9a6a32]">Historical reconciliation</p><h2 className="mt-1 text-lg font-extrabold text-[#59432e]">Unassigned cash payments & refunds</h2><p className="mt-1 text-xs text-neutral-600">Cash sales, credit repayments and cash refunds already recorded in the database but not linked to a drawer shift. Assign each record to its actual historical shift; original records are preserved.</p></div>
+            <div><p className="text-[10px] font-extrabold uppercase tracking-widest text-[#9a6a32]">Historical reconciliation</p><h2 className="mt-1 text-lg font-extrabold text-[#59432e]">Unassigned cash payments & refunds</h2><p className="mt-1 text-xs text-neutral-600">Cash sales, credit repayments and cash refunds already recorded but not yet reconciled. Assign a record to an existing shift or mark it as received when no shift was open; original payment records are preserved.</p></div>
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm"><b>{data.unassignedCash?.count || 0} cash receipt(s) · {data.unassignedCash?.refund_count || 0} refund(s)</b><b>{money(data.unassignedCash?.total)} receipts · −{money(data.unassignedCash?.refund_total)} refunds</b></div>
             <div className="mt-2 max-h-72 space-y-2 overflow-auto">
