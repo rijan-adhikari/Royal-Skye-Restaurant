@@ -1113,6 +1113,9 @@ class HistoricalShiftRecovery(BaseModel):
     business_date: date
     opening_float: Decimal = Field(ge=0)
     counted_cash: Decimal = Field(ge=0)
+    cash_in: Decimal = Field(default=Decimal("0"), ge=0)
+    cash_out: Decimal = Field(default=Decimal("0"), ge=0)
+    payout: Decimal = Field(default=Decimal("0"), ge=0)
     notes: str | None = None
 
 
@@ -1132,7 +1135,7 @@ def recover_historical_cash_shift(payload: HistoricalShiftRecovery,
         FOR UPDATE"""), {"start_at": start_utc, "end_at": end_utc}).first()
     if overlapping:
         raise HTTPException(409, "A cash drawer shift already overlaps this business date. Assign records to that shift instead.")
-    expected = payload.opening_float
+    expected = payload.opening_float + payload.cash_in - payload.cash_out - payload.payout
     difference = payload.counted_cash - expected
     notes = f"Historical shift recovered for Nepal business date {payload.business_date}."
     if payload.notes and payload.notes.strip():
@@ -1145,8 +1148,17 @@ def recover_historical_cash_shift(payload: HistoricalShiftRecovery,
         {"user": user.id, "opening": payload.opening_float, "expected": expected,
          "counted": payload.counted_cash, "difference": difference,
          "opened_at": start_utc, "closed_at": end_utc, "notes": notes}).mappings().first()
+    for entry_type, amount in (("cash_in", payload.cash_in), ("cash_out", payload.cash_out), ("payout", payload.payout)):
+        if amount > 0:
+            db.execute(text("""INSERT INTO cash_drawer_entries
+                (shift_id,entry_type,amount,reference,notes,created_by,created_at)
+                VALUES(:shift,:entry_type,:amount,:reference,:notes,:user,:created_at)"""),
+                {"shift": row["id"], "entry_type": entry_type, "amount": amount,
+                 "reference": f"Historical recovery {payload.business_date}",
+                 "notes": payload.notes or "Historical drawer movement recorded during recovery",
+                 "user": user.id, "created_at": start_utc})
     audit(db, user.id, "cash_shift.historical_recovery",
-          f"Created closed historical shift {row['id']} for {payload.business_date}; opening NPR {payload.opening_float}, initial expected NPR {expected}, counted NPR {payload.counted_cash}")
+          f"Created closed historical shift {row['id']} for {payload.business_date}; opening NPR {payload.opening_float}, cash-in NPR {payload.cash_in}, cash-out NPR {payload.cash_out}, payout NPR {payload.payout}, expected NPR {expected}, counted NPR {payload.counted_cash}")
     db.commit()
     return dict(row)
 
