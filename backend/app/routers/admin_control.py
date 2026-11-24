@@ -525,6 +525,12 @@ def _qr_account_totals(db: Session) -> dict[str, Decimal]:
             "expenses": expenses, "balance": opening + receipts - refunds - expenses}
 
 
+@router.get("/qr-account/summary")
+def get_qr_account_summary(db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+    totals = _qr_account_totals(db)
+    return {key: str(value) for key, value in totals.items()}
+
+
 @router.get("/qr-account")
 def get_qr_account(db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     totals = _qr_account_totals(db)
@@ -541,7 +547,7 @@ def get_qr_account(db: Session = Depends(get_db), user=Depends(require_roles(*AD
                 'QR refund · ' || COALESCE(b.bill_number,'Bill'),b.bill_number,r.amount,'out'::varchar
             FROM bill_refunds r JOIN bills b ON b.id=r.bill_id WHERE r.method='qr' AND r.created_at>=:since
             UNION ALL
-            SELECT e.expense_date,'qr_expense'::varchar,
+            SELECT e.created_at,'qr_expense'::varchar,
                 'Expense · ' || e.description,e.receipt_reference,e.amount,'out'::varchar
             FROM expenses e WHERE e.payment_method='qr' AND e.payment_status='paid' AND e.created_at>=:since
         ) account_activity
@@ -722,8 +728,10 @@ def correct_closed_cash_entry(shift_id: str, entry_id: str, payload: CashEntryUp
                               db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     shift = db.execute(text("SELECT * FROM cash_drawer_shifts WHERE id=:id AND status='closed' FOR UPDATE"), {"id": shift_id}).mappings().first()
     if not shift: raise HTTPException(409, "This correction endpoint is only for closed shifts")
-    entry = db.execute(text("SELECT id,entry_type,amount,reference FROM cash_drawer_entries WHERE id=:entry AND shift_id=:shift FOR UPDATE"), {"entry": entry_id, "shift": shift_id}).mappings().first()
+    entry = db.execute(text("SELECT id,entry_type,amount,reference,expense_id FROM cash_drawer_entries WHERE id=:entry AND shift_id=:shift FOR UPDATE"), {"entry": entry_id, "shift": shift_id}).mappings().first()
     if not entry: raise HTTPException(404, "Cash movement not found in this shift")
+    if entry["expense_id"]:
+        raise HTTPException(403, "Expense-linked cash movements must be corrected from the original expense record.")
     if entry["entry_type"] not in ("cash_in", "cash_out", "payout"): raise HTTPException(403, "System-generated sale and refund records cannot be corrected")
     if payload.entry_type in ("cash_out", "payout"):
         totals_before = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
