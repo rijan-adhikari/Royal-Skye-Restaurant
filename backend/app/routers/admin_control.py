@@ -465,6 +465,11 @@ def _ensure_daily_savings_table(db: Session):
         amount NUMERIC(12,2) NOT NULL CHECK (amount > 0), notes TEXT,
         created_by UUID NOT NULL REFERENCES users(id), created_at TIMESTAMP NOT NULL DEFAULT NOW()
     )"""))
+    db.execute(text("""CREATE TABLE IF NOT EXISTS daily_savings_drawer_links (
+        daily_savings_id BIGINT PRIMARY KEY REFERENCES daily_savings(id) ON DELETE RESTRICT,
+        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE RESTRICT,
+        linked_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )"""))
     db.commit()
 
 
@@ -489,9 +494,13 @@ def add_daily_savings(shift_id: str, payload: CashEntry, db: Session = Depends(g
     expected = Decimal(str(shift["opening_float"])) + amounts.get("sale", Decimal(0)) + amounts.get("cash_in", Decimal(0)) - amounts.get("refund", Decimal(0)) - amounts.get("cash_out", Decimal(0)) - amounts.get("payout", Decimal(0))
     if payload.amount > expected:
         raise HTTPException(422, f"Savings amount exceeds available drawer cash of {expected}")
-    db.execute(text("""INSERT INTO cash_drawer_entries(shift_id,entry_type,amount,reference,notes,created_by)
-        VALUES(:shift,'cash_out',:amount,'Daily savings',:notes,:user)"""), {"shift":shift_id,"amount":payload.amount,"notes":payload.notes,"user":user.id})
-    row=db.execute(text("INSERT INTO daily_savings(shift_id,amount,notes,created_by) VALUES(:shift,:amount,:notes,:user) RETURNING *"), {"shift":shift_id,"amount":payload.amount,"notes":payload.notes,"user":user.id}).mappings().first()
+    drawer_entry_id = db.execute(text("""INSERT INTO cash_drawer_entries(shift_id,entry_type,amount,reference,notes,created_by)
+        VALUES(:shift,'cash_out',:amount,'Daily savings',:notes,:user) RETURNING id"""),
+        {"shift":shift_id,"amount":payload.amount,"notes":payload.notes,"user":user.id}).scalar_one()
+    row=db.execute(text("INSERT INTO daily_savings(shift_id,amount,notes,created_by) VALUES(:shift,:amount,:notes,:user) RETURNING *"),
+        {"shift":shift_id,"amount":payload.amount,"notes":payload.notes,"user":user.id}).mappings().first()
+    db.execute(text("""INSERT INTO daily_savings_drawer_links(daily_savings_id,drawer_entry_id)
+        VALUES(:savings,:entry)"""), {"savings":row["id"],"entry":drawer_entry_id})
     audit(db,user.id,"daily_savings.deposit",f"Transferred NPR {payload.amount} from cash drawer to daily savings")
     db.commit()
     return dict(row)
