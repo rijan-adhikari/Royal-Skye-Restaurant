@@ -917,6 +917,14 @@ def correct_system_sale_entry(shift_id: str, entry_id: str, payload: CashSaleCor
             {"reference": entry["reference"], "amount": entry["amount"]}).mappings().all()
     if len(payment) != 1:
         raise HTTPException(409, "Could not uniquely match this cash-drawer entry to its bill payment. No changes were made.")
+    existing_link = db.execute(text("""SELECT drawer_entry_id FROM cash_payment_links
+        WHERE payment_id=:payment FOR UPDATE"""), {"payment": payment[0]["id"]}).first()
+    if existing_link and str(existing_link[0]) != str(entry_id):
+        raise HTTPException(409, "This payment is already linked to a different drawer entry. Resolve the link before correcting its tender.")
+    if not existing_link:
+        db.execute(text("""INSERT INTO cash_payment_links(payment_id,drawer_entry_id,linked_by,source)
+            VALUES(:payment,:entry,:user,'tender_correction')"""),
+            {"payment": payment[0]["id"], "entry": entry_id, "user": user.id})
     db.execute(text("UPDATE payments SET method=:method WHERE id=:id"),
                {"method": payload.method, "id": payment[0]["id"]})
     if payload.method != "cash":
