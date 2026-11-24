@@ -173,7 +173,8 @@ export default function Dashboard() {
   ];
 
   return (
-    <div data-theme={theme} className="dashboard-page mx-auto max-w-[1500px] space-y-7 pb-8">\n      
+    <div data-theme={theme} className="dashboard-page mx-auto max-w-[1500px] space-y-7 pb-8">
+      
 <style>{`
 /* Dashboard theme tokens: keep the warm Royal Skye identity while preserving contrast. */
 .dashboard-page[data-theme="dark"] section:not(.dashboard-hero) .rounded-2xl.border,
