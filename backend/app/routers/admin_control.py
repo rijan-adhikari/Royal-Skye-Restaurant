@@ -770,13 +770,15 @@ def delete_closed_cash_entry(shift_id: str, entry_id: str, db: Session = Depends
     if entry["expense_id"]:
         raise HTTPException(403, "Expense-linked cash movements cannot be deleted separately from the expense.")
     if entry["entry_type"] not in ("cash_in", "cash_out", "payout"): raise HTTPException(403, "System-generated sale and refund records cannot be deleted")
-    db.execute(text("DELETE FROM cash_drawer_entries WHERE id=:entry"), {"entry": entry_id})
+    db.execute(text("""UPDATE cash_drawer_entries
+        SET shift_id=NULL,notes=CONCAT(COALESCE(notes,''),' · ARCHIVED from closed shift ',:shift)
+        WHERE id=:entry"""), {"shift": shift_id, "entry": entry_id})
     totals = db.execute(text("SELECT entry_type,COALESCE(SUM(amount),0) amount FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT ((e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) OR (e.entry_type='refund' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)))) GROUP BY e.entry_type"), {"id": shift_id}).mappings().all()
     values = {r["entry_type"]: Decimal(str(r["amount"])) for r in totals}
     expected = Decimal(str(shift["opening_float"])) + values.get("sale", Decimal(0)) + values.get("cash_in", Decimal(0)) - values.get("refund", Decimal(0)) - values.get("cash_out", Decimal(0)) - values.get("payout", Decimal(0))
     difference = Decimal(str(shift["counted_cash"] or 0)) - expected
     db.execute(text("UPDATE cash_drawer_shifts SET expected_cash=:expected,cash_difference=:difference WHERE id=:id"), {"expected": expected, "difference": difference, "id": shift_id})
-    audit(db, user.id, "cash_shift.closed_entry_deleted", f"Closed shift {shift_id}: deleted {entry['entry_type']} NPR {entry['amount']} reference {entry['reference'] or ''}")
+    audit(db, user.id, "cash_shift.closed_entry_archived", f"Closed shift {shift_id}: archived {entry['entry_type']} NPR {entry['amount']} reference {entry['reference'] or ''}; original row retained")
     db.commit()
     return {"ok": True, "deleted_id": entry_id, "expected_cash": str(expected), "cash_difference": str(difference)}
 @router.delete("/cash-shifts/{shift_id}/entries/{entry_id}/system-delete")
@@ -809,8 +811,8 @@ def delete_system_cash_entry(shift_id: str, entry_id: str, reason: str = Query(.
         db.execute(text("""UPDATE cash_drawer_shifts SET expected_cash=:expected,
             cash_difference=:difference WHERE id=:id"""),
             {"expected": expected, "difference": difference, "id": shift_id})
-    audit(db, user.id, "cash_shift.system_entry_deleted",
-          f"Shift {shift_id}: deleted system {entry['entry_type']} entry {entry_id}, "
+    audit(db, user.id, "cash_shift.system_entry_archived",
+          f"Shift {shift_id}: archived system {entry['entry_type']} entry {entry_id}, "
           f"NPR {entry['amount']}, reference {entry['reference'] or ''}; reason: {reason}")
     db.commit()
     return {"ok": True, "deleted_id": entry_id}
