@@ -1369,10 +1369,11 @@ def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
 
 
 
+@router.post("/cash-payments/rebuild-unlinked")
 @router.post("/cash-payments/assign-unassigned-to-open-shift")
 def assign_unassigned_cash_to_open_shift(db: Session = Depends(get_db),
                                          user=Depends(require_roles(*ADMIN))):
-    """Link all safely identifiable unassigned cash receipts/refunds to the current open drawer."""
+    """Rebuild missing cash drawer links against original receipt timestamps."""
     # Rebuild missing drawer links against the shift that actually covered each
     # receipt timestamp. Never bulk-attach historical payments to today's open shift.
     pending = unassigned_cash_payments(db, user)
