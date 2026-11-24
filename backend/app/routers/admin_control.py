@@ -514,12 +514,13 @@ def add_daily_savings(shift_id: str, payload: CashEntry, db: Session = Depends(g
 
 
 def _qr_account_totals(db: Session) -> dict[str, Decimal]:
-    settings_row = db.execute(text("SELECT opening_balance FROM qr_account_settings WHERE id=1")).mappings().first()
+    settings_row = db.execute(text("SELECT opening_balance,opening_balance_at FROM qr_account_settings WHERE id=1")).mappings().first()
     opening = Decimal(str(settings_row["opening_balance"])) if settings_row else Decimal("0")
-    receipts = Decimal(str(db.execute(text("SELECT COALESCE(SUM(amount),0) FROM payments WHERE method='qr'")).scalar_one()))
-    refunds = Decimal(str(db.execute(text("SELECT COALESCE(SUM(amount),0) FROM bill_refunds WHERE method='qr'")).scalar_one()))
+    since = settings_row["opening_balance_at"] if settings_row else datetime.min
+    receipts = Decimal(str(db.execute(text("SELECT COALESCE(SUM(amount),0) FROM payments WHERE method='qr' AND created_at>=:since"), {"since": since}).scalar_one()))
+    refunds = Decimal(str(db.execute(text("SELECT COALESCE(SUM(amount),0) FROM bill_refunds WHERE method='qr' AND created_at>=:since"), {"since": since}).scalar_one()))
     expenses = Decimal(str(db.execute(text("""SELECT COALESCE(SUM(amount),0) FROM expenses
-        WHERE payment_method='qr' AND payment_status='paid'""")).scalar_one()))
+        WHERE payment_method='qr' AND payment_status='paid' AND created_at>=:since"""), {"since": since}).scalar_one()))
     return {"opening_balance": opening, "receipts": receipts, "refunds": refunds,
             "expenses": expenses, "balance": opening + receipts - refunds - expenses}
 
@@ -527,22 +528,24 @@ def _qr_account_totals(db: Session) -> dict[str, Decimal]:
 @router.get("/qr-account")
 def get_qr_account(db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     totals = _qr_account_totals(db)
+    settings_row = db.execute(text("SELECT opening_balance_at FROM qr_account_settings WHERE id=1")).mappings().first()
+    since = settings_row["opening_balance_at"] if settings_row else datetime.min
     rows = db.execute(text("""SELECT happened_at,transaction_type,description,reference,amount,direction
         FROM (
             SELECT p.created_at happened_at,'qr_receipt'::varchar transaction_type,
                 'QR payment · ' || COALESCE(b.bill_number,'Bill') description,
                 b.bill_number reference,p.amount,'in'::varchar direction
-            FROM payments p JOIN bills b ON b.id=p.bill_id WHERE p.method='qr'
+            FROM payments p JOIN bills b ON b.id=p.bill_id WHERE p.method='qr' AND p.created_at>=:since
             UNION ALL
             SELECT r.created_at,'qr_refund'::varchar,
                 'QR refund · ' || COALESCE(b.bill_number,'Bill'),b.bill_number,r.amount,'out'::varchar
-            FROM bill_refunds r JOIN bills b ON b.id=r.bill_id WHERE r.method='qr'
+            FROM bill_refunds r JOIN bills b ON b.id=r.bill_id WHERE r.method='qr' AND r.created_at>=:since
             UNION ALL
             SELECT e.expense_date,'qr_expense'::varchar,
                 'Expense · ' || e.description,e.receipt_reference,e.amount,'out'::varchar
-            FROM expenses e WHERE e.payment_method='qr' AND e.payment_status='paid'
+            FROM expenses e WHERE e.payment_method='qr' AND e.payment_status='paid' AND e.created_at>=:since
         ) account_activity
-        ORDER BY happened_at DESC LIMIT 500""")).mappings().all()
+        ORDER BY happened_at DESC LIMIT 500"""), {"since": since}).mappings().all()
     return {key: str(value) for key, value in totals.items()} | {
         "transactions": [dict(row) for row in rows],
         "balance_note": "Calculated from the opening balance, recorded QR bill payments, QR refunds and paid QR expenses. Not a live bank feed."
@@ -552,7 +555,7 @@ def get_qr_account(db: Session = Depends(get_db), user=Depends(require_roles(*AD
 @router.put("/qr-account/opening-balance")
 def update_qr_account_opening_balance(payload: QRAccountOpeningBalance,
                                       db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
-    db.execute(text("""UPDATE qr_account_settings SET opening_balance=:balance,updated_at=NOW(),updated_by=:user
+    db.execute(text("""UPDATE qr_account_settings SET opening_balance=:balance,opening_balance_at=NOW(),updated_at=NOW(),updated_by=:user
         WHERE id=1"""), {"balance": payload.opening_balance, "user": user.id})
     audit(db, user.id, "qr_account.opening_balance_updated",
           f"Opening QR account balance set to NPR {payload.opening_balance}")
