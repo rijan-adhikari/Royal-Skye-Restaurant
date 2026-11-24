@@ -485,12 +485,13 @@ def create_detailed_expense(payload: ExpenseCreate, db: Session = Depends(get_db
         if payload.amount > available:
             raise HTTPException(422, f"Cash expense exceeds available drawer cash of NPR {available}.")
     elif payload.payment_status == "paid" and payload.payment_method == "qr":
-        settings_row = db.execute(text("SELECT opening_balance FROM qr_account_settings WHERE id=1")).mappings().first()
+        settings_row = db.execute(text("SELECT opening_balance,opening_balance_at FROM qr_account_settings WHERE id=1")).mappings().first()
         opening = Decimal(str(settings_row["opening_balance"])) if settings_row else Decimal("0")
-        receipts = Decimal(str(db.execute(text("SELECT COALESCE(SUM(amount),0) FROM payments WHERE method='qr'")).scalar_one()))
-        refunds = Decimal(str(db.execute(text("SELECT COALESCE(SUM(amount),0) FROM bill_refunds WHERE method='qr'")).scalar_one()))
+        since = settings_row["opening_balance_at"] if settings_row else datetime.min
+        receipts = Decimal(str(db.execute(text("SELECT COALESCE(SUM(amount),0) FROM payments WHERE method='qr' AND created_at>=:since"), {"since": since}).scalar_one()))
+        refunds = Decimal(str(db.execute(text("SELECT COALESCE(SUM(amount),0) FROM bill_refunds WHERE method='qr' AND created_at>=:since"), {"since": since}).scalar_one()))
         qr_expenses = Decimal(str(db.execute(text("""SELECT COALESCE(SUM(amount),0) FROM expenses
-            WHERE payment_method='qr' AND payment_status='paid'""")).scalar_one()))
+            WHERE payment_method='qr' AND payment_status='paid' AND created_at>=:since"""), {"since": since}).scalar_one()))
         available = opening + receipts - refunds - qr_expenses
         if payload.amount > available:
             raise HTTPException(422, f"QR account expense exceeds available recorded balance of NPR {available}.")
