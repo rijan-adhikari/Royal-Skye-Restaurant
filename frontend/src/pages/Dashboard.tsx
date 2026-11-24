@@ -84,10 +84,10 @@ export default function Dashboard() {
   const [settingsQuery, setSettingsQuery] = useState("");
   const [settingsSearchOpen, setSettingsSearchOpen] = useState(false);
   const [settingsActiveIndex, setSettingsActiveIndex] = useState(0);
-  const normalizedSettingsQuery = settingsQuery.toLocaleLowerCase().trim().replace(/[^\\p{L}\\p{N}]+/gu, " ");
-  const settingsTerms = normalizedSettingsQuery.split(/\\s+/).filter(Boolean);
+  const normalizedSettingsQuery = settingsQuery.toLocaleLowerCase().trim().replace(/[^\p{L}\p{N}]+/gu, " ");
+  const settingsTerms = normalizedSettingsQuery.split(/\s+/).filter(Boolean);
   const settingsMatches = dashboardSettingsIndex.filter((item) => {
-    const searchable = (item.title + " " + item.detail + " " + item.keywords).toLocaleLowerCase().replace(/[^\\p{L}\\p{N}]+/gu, " ");
+    const searchable = (item.title + " " + item.detail + " " + item.keywords).toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ");
     return settingsTerms.every((term) => searchable.includes(term));
   }).sort((a, b) => {
     const aTitle = a.title.toLocaleLowerCase();
