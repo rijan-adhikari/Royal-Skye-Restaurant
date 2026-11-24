@@ -1533,6 +1533,7 @@ def assign_unassigned_cash_to_open_shift(db: Session = Depends(get_db),
                          "amount": str(savings["amount"]), "source_type": "daily_savings",
                          "shift_id": str(savings["shift_id"])})
 
+    db.commit()
     return {"assigned_count": len(assigned),
             "assigned_total": str(sum((Decimal(x["amount"]) for x in assigned
                 if x["source_type"] in ("payment", "repayment")), Decimal(0))),
