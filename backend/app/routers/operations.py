@@ -511,6 +511,10 @@ def create_detailed_expense(payload: ExpenseCreate, db: Session = Depends(get_db
                 "reference": payload.receipt_reference or f"Expense: {payload.description[:90]}",
                 "notes": payload.notes or f"Expense record {expense_id}",
                 "user": user.id, "expense": expense_id})
+    db.execute(text("INSERT INTO audit_logs(id,user_id,action,details) VALUES(:id,:user,'expense.created',:details)"), {
+        "id": str(uuid.uuid4()), "user": user.id,
+        "details": f"Recorded {payload.payment_method} expense {payload.description}: NPR {payload.amount} (status: {payload.payment_status})"
+    })
     db.commit()
     return dict(row)
 
