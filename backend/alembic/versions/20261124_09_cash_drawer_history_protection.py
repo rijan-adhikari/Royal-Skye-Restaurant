@@ -12,6 +12,9 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Archived and legitimately unassigned cash records must remain representable
+    # without attaching them to an unrelated open shift.
+    op.execute("ALTER TABLE cash_drawer_entries ALTER COLUMN shift_id DROP NOT NULL")
     op.execute("ALTER TABLE balance_transactions ADD COLUMN IF NOT EXISTS method VARCHAR(24) NOT NULL DEFAULT 'legacy_unclassified'")
     op.execute("""CREATE TABLE IF NOT EXISTS cash_payment_links (
         payment_id UUID PRIMARY KEY REFERENCES payments(id) ON DELETE CASCADE,
