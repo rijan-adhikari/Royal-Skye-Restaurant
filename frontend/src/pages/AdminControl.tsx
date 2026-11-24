@@ -22,7 +22,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const roleTabs = managerView ? tabs.filter((item) => ["cash", "service", "loyalty"].includes(item.id)) : tabs;
   const availableTabs = visibleTabs ?? roleTabs.map((item) => item.id);
   const [tab, setTab] = useState<Tab>(initialTab && availableTabs.includes(initialTab as Tab) ? initialTab as Tab : (availableTabs[0] ?? "cash"));
-  const [data, setData] = useState<any>({ shifts: [], refunds: [], bills: [], suppliers: [], inventory: [], ledger: [], supplierBalances: [], loyalty: [], serviceOrders: [], audit: [], salesSummary: null, monthlySales: [], yearlySales: [] });
+  const [data, setData] = useState<any>({ shifts: [], archivedCashEntries: [], refunds: [], bills: [], suppliers: [], inventory: [], ledger: [], supplierBalances: [], loyalty: [], serviceOrders: [], audit: [], salesSummary: null, monthlySales: [], yearlySales: [] });
   const [shift, setShift] = useState<any>(null);
   const [tax, setTax] = useState<any>({ tax_enabled: true, tax_percent: "14", service_charge_enabled: false, service_charge_percent: "0" });
   const [loyaltySettings, setLoyaltySettings] = useState<any>({ enabled: true, spend_per_point: "100", point_value: "1" });
@@ -57,6 +57,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const load = async () => {
     const requests = [
       ["current", "/api/admin/cash-shifts/current"], ["shifts", "/api/admin/cash-shifts?limit=200"],
+      ...(!managerView ? ([["archivedCashEntries", "/api/admin/cash-shifts/archived-entries"]] as [string, string][]) : []),
       ["qrAccountSummary", "/api/admin/qr-account/summary"],
       ...(!managerView ? ([["sales", "/api/admin/sales"], ["salesSummary", "/api/dashboard/summary"], ["monthlySales", "/api/dashboard/monthly-sales"], ["yearlySales", "/api/dashboard/yearly-sales"]] as [string, string][]) : []),
       ...(!managerView ? ([["customers", "/api/customers"]] as [string, string][]) : []),
@@ -172,6 +173,11 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const deleteClosedCashEntry = async (entry: any, shiftId: string) => {
     if (!window.confirm(`Archive the ${entry.entry_type.replace("_"," ")} record for ${money(entry.amount)} from this closed shift? The original record will be retained and reconciliation recalculated.`)) return;
     await run(() => api.delete(`/api/admin/cash-shifts/${shiftId}/entries/${entry.id}/closed-correction`), "Closed shift movement archived; history preserved and reconciliation recalculated.");
+  };
+  const restoreArchivedCashEntry = async (entry: any) => {
+    const target = window.prompt("Enter the exact shift ID to restore this record to. It must cover the original transaction time:");
+    if (!target || !target.trim()) return;
+    await run(() => api.post(`/api/admin/cash-shifts/${target.trim()}/entries/${entry.id}/restore`), "Archived cash record restored to its original shift.");
   };
 
   const addSupplierEntry = (e: React.FormEvent) => {
@@ -387,7 +393,11 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
             </React.Fragment>)}
             {(shift.cash_entries || []).length === 0 && <tr><td colSpan={5} className="py-5 text-center text-neutral-400">No cash movements recorded in this session.</td></tr>}
           </tbody></table></div>
-          <p className="mt-2 text-xs text-neutral-500">Only admins can edit or delete cash-drawer entries. Correcting a sale payment to QR, card or bank transfer removes it from physical cash while preserving the bill and receipt history.</p>
+          <p className="mt-2 text-xs text-neutral-500">Admin corrections are archived, not physically erased. Correcting a sale payment changes its tender channel while preserving the original bill and receipt history.</p>
+        </div>}
+        {role === "admin" && <div className="mb-5 rounded-xl border border-[#294b4a] bg-[#0d191c] p-4 text-[#dcebe6]">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-extrabold">Archived drawer records</h3><p className="mt-1 text-[11px] text-[#91aaa4]">Records removed from a shift remain stored and can be restored only to a shift covering their original timestamp.</p></div><span className="rounded-full border border-[#65e6c2]/20 bg-[#65e6c2]/10 px-3 py-1 text-[10px] font-bold text-[#8cebd0]">{(data.archivedCashEntries || []).length} archived</span></div>
+          {(data.archivedCashEntries || []).length === 0 ? <p className="py-3 text-xs text-[#91aaa4]">No archived drawer records.</p> : <div className="space-y-2">{data.archivedCashEntries.map((entry: any) => <div key={entry.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[.035] p-3"><div className="min-w-0"><p className="text-xs font-bold">{entry.reference || entry.bill_number || entry.entry_type}</p><p className="mt-1 text-[10px] text-[#91aaa4]">{new Date(entry.created_at).toLocaleString()} · {entry.entry_type} · {entry.source_method || "manual movement"}</p></div><div className="flex items-center gap-3"><b className="text-xs">{money(entry.amount)}</b><button type="button" disabled={busy} onClick={() => restoreArchivedCashEntry(entry)} className="rounded-lg border border-[#65e6c2]/30 px-3 py-2 text-[10px] font-bold text-[#8cebd0] hover:bg-[#65e6c2]/10">Restore</button></div></div>)}</div>}
         </div>}
         <h2 className="font-semibold text-lg mb-3">Recent shift reconciliation</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Opened</th><th>Staff</th><th>Status</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>{data.shifts.map((s: any) => <React.Fragment key={s.id}><tr className="border-b"><td className="py-2">{new Date(s.opened_at).toLocaleString()}</td><td>{s.opened_by_name}</td><td className="capitalize">{s.status}</td><td>{s.expected_cash == null ? "—" : money(s.expected_cash)}</td><td>{s.counted_cash == null ? "—" : money(s.counted_cash)}</td><td className={Number(s.cash_difference) < 0 ? "text-red-700" : "text-emerald-700"}>{s.cash_difference == null ? "—" : money(s.cash_difference)}</td></tr>{(s.cash_entries || []).length > 0 && <tr className="border-b bg-neutral-50"><td colSpan={6} className="p-3"><p className="mb-2 text-xs font-semibold">Cash movements · {s.status === "closed" ? "Admin corrections" : "History"}</p>{s.cash_entries.map((entry: any) => <div key={entry.id} className="flex flex-wrap items-center justify-between gap-2 border-b py-2 text-xs"><span>{new Date(entry.created_at).toLocaleString()} · <b className="capitalize">{entry.entry_type.replace("_"," ")}</b> · {money(entry.amount)} · {entry.reference || entry.notes || "No reference"}</span>{entry.expense_id ? <span className="text-[10px] font-semibold text-neutral-400">Linked expense</span> : s.status === "closed" && canAdminEditCash && <span className="flex gap-2">{["cash_in","cash_out","payout"].includes(entry.entry_type) && <><button type="button" disabled={busy} onClick={() => correctClosedCashEntry(entry,s.id)} className="rounded border px-2 py-1 font-semibold">Edit</button><button type="button" disabled={busy} onClick={() => deleteClosedCashEntry(entry,s.id)} className="rounded bg-red-700 px-2 py-1 font-semibold text-white">Delete</button></>}{entry.entry_type === "sale" && <><button type="button" disabled={busy} onClick={() => correctSystemSaleEntry(entry,s.id)} className="rounded border px-2 py-1 font-semibold">Edit payment</button><button type="button" disabled={busy} onClick={() => deleteCashEntry(entry,s.id)} className="rounded bg-red-700 px-2 py-1 font-semibold text-white">Delete</button></>}{entry.entry_type === "refund" && <button type="button" disabled={busy} onClick={() => deleteCashEntry(entry,s.id)} className="rounded bg-red-700 px-2 py-1 font-semibold text-white">Delete</button>}</span>}</div>)}</td></tr>}</React.Fragment>)}</tbody></table></div></section>
     </div>}
