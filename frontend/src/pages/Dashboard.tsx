@@ -173,7 +173,70 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="dashboard-page mx-auto max-w-[1500px] space-y-7 pb-8">
+    <div data-theme={theme} className="dashboard-page mx-auto max-w-[1500px] space-y-7 pb-8">\n      
+<style>{`
+/* Dashboard theme tokens: keep the warm Royal Skye identity while preserving contrast. */
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) .rounded-2xl.border,
+.dashboard-page[data-theme="dark"] .dashboard-financial-card,
+.dashboard-page[data-theme="dark"] .dashboard-quick-access,
+.dashboard-page[data-theme="dark"] .dashboard-quick-link,
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) button.rounded-2xl,
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) a.rounded-2xl {
+  background-color:#122123 !important;
+  border-color:#29413f !important;
+  color:#e5eeeb !important;
+}
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) [class*="bg-[#f"],
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) [class*="bg-[#e"],
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) [class*="bg-[#edf"],
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) [class*="bg-[#fa"] {
+  background-color:#192c2d !important;
+}
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) [class*="text-[#30251f]"],
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) [class*="text-[#514238]"],
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) [class*="text-[#43352c]"],
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) [class*="text-[#59432e]"],
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) [class*="text-[#49392d]"],
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) [class*="text-[#3d3028]"] { color:#e5eeeb !important; }
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) [class*="text-[#a18d7c]"],
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) [class*="text-[#958477]"],
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) [class*="text-[#9b8b7f]"],
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) [class*="text-[#928276]"],
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) [class*="text-[#8c7b6b]"] { color:#a9bbb5 !important; }
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) [class*="border-[#e"],
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) [class*="border-[#f"] { border-color:#29413f !important; }
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) .text-\[\#3f5946\],
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) .text-\[\#477453\] { color:#9dd3a8 !important; }
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) .text-\[\#a43d3d\],
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) .text-\[\#a14b47\] { color:#f29b96 !important; }
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) .bg-\[\#64856c\] { background-color:#80b88d !important; }
+.dashboard-page[data-theme="dark"] section:not(.dashboard-hero) .bg-\[\#f0ece6\] { background-color:#29413f !important; }
+/* Portal-based sales dialogs sit outside the dashboard DOM, so theme them at the document level. */
+body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 > section {
+  background-color:#0d191b !important; color:#e5eeeb !important; border:1px solid #29413f !important;
+}
+body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 article,
+body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 [class*="bg-[#f8f4ef]"],
+body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 [class*="bg-[#fdfbf8]"],
+body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 [class*="bg-[#f0ece6]"] {
+  background-color:#172a2b !important; border-color:#29413f !important;
+}
+body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 [class*="text-[#30251f]"],
+body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 [class*="text-[#514238]"],
+body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 [class*="text-[#43352c]"],
+body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 [class*="text-neutral-500"],
+body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 [class*="text-[#9b8b7f]"],
+body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 [class*="text-[#958477]"] { color:#b8c9c3 !important; }
+body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 table th,
+body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 table td,
+body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 table tr { border-color:#29413f !important; }
+body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 thead { background-color:#1c3434 !important; color:#e5eeeb !important; }
+body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 button { color:#e5eeeb; }
+@media (prefers-reduced-motion:no-preference) {
+  .dashboard-page .dashboard-quick-link, .dashboard-page section:not(.dashboard-hero) button.rounded-2xl { transition:background-color .18s ease,border-color .18s ease,box-shadow .18s ease,transform .18s ease; }
+}
+`}</style>
+
       <section className="dashboard-hero relative isolate overflow-hidden rounded-[28px] bg-[#2b211d] px-6 py-7 text-[#fffaf4] shadow-[0_22px_55px_rgba(45,30,22,.16)] md:px-9 md:py-9">
         <div className="pointer-events-none absolute -right-16 -top-28 h-80 w-80 rounded-full border border-[#d9b98f]/15" />
         <div className="pointer-events-none absolute -right-2 -top-16 h-64 w-64 rounded-full border border-[#d9b98f]/10" />
