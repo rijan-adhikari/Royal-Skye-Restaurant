@@ -732,7 +732,7 @@ def list_archived_cash_entries(limit: int = Query(100, ge=1, le=500),
         LEFT JOIN cash_refund_links cfl ON cfl.drawer_entry_id=e.id
         LEFT JOIN bill_refunds br ON br.id=cfl.refund_id
         LEFT JOIN bills r ON r.id=br.bill_id
-        WHERE e.shift_id IS NULL AND e.notes ILIKE '%ARCHIVED%'
+        WHERE e.shift_id IS NULL
         ORDER BY e.created_at DESC LIMIT :limit"""), {"limit": limit}).mappings().all()
     return [dict(row) for row in rows]
 
@@ -745,8 +745,7 @@ def restore_archived_cash_entry(shift_id: str, entry_id: str,
     if not shift:
         raise HTTPException(404, "Cash drawer shift not found")
     entry = db.execute(text("""SELECT id,entry_type,amount,reference,notes,created_at
-        FROM cash_drawer_entries WHERE id=:entry AND shift_id IS NULL
-          AND notes ILIKE '%ARCHIVED%' FOR UPDATE"""), {"entry": entry_id}).mappings().first()
+        FROM cash_drawer_entries WHERE id=:entry AND shift_id IS NULL FOR UPDATE"""), {"entry": entry_id}).mappings().first()
     if not entry:
         raise HTTPException(404, "Archived cash record not found")
     if entry["created_at"] < shift["opened_at"] or (
@@ -758,8 +757,17 @@ def restore_archived_cash_entry(shift_id: str, entry_id: str,
         WHERE id=:entry"""), {"shift": shift_id, "entry": entry_id})
     if shift["status"] == "closed":
         totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
-            FROM cash_drawer_entries WHERE shift_id=:id GROUP BY entry_type"""),
-            {"id": shift_id}).mappings().all()
+            FROM cash_drawer_entries e WHERE e.shift_id=:id
+              AND NOT ((e.entry_type='sale' AND EXISTS (
+                SELECT 1 FROM bills b WHERE b.bill_number=e.reference
+                  AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount)
+                  AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount)
+              )) OR (e.entry_type='refund' AND EXISTS (
+                SELECT 1 FROM bills b WHERE b.bill_number=e.reference
+                  AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount)
+                  AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)
+              )))
+            GROUP BY e.entry_type"""), {"id": shift_id}).mappings().all()
         values = {row["entry_type"]: Decimal(str(row["amount"])) for row in totals}
         expected = (Decimal(str(shift["opening_float"])) + values.get("sale", Decimal(0))
             + values.get("cash_in", Decimal(0)) - values.get("refund", Decimal(0))
