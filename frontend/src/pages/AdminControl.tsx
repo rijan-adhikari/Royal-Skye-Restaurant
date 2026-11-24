@@ -102,11 +102,11 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   };
 
   const recoverUnlinkedCashHistory = async () => {
-    if (!window.confirm("Rebuild missing cash-drawer links using each original receipt timestamp? Receipts will be assigned only to the shift that was actually open at that time. Records outside a shift will remain unassigned; today's drawer will not absorb old cash.")) return;
+    if (!window.confirm("Rebuild missing cash-drawer links using each original receipt timestamp? Receipts will be assigned only to the shift that was actually open at that time. Records outside a shift will remain unassigned; today's drawer will not absorb old cash. Existing daily-savings transfers will also be restored from their source ledger.")) return;
     await run(async () => {
       const response = await api.post("/api/admin/cash-payments/rebuild-unlinked");
       const result = response.data;
-      setMessage(result.assigned_count + " cash records restored against their original shift. Receipts: NPR " + result.assigned_total + "; refunds: NPR " + result.refund_total + "; skipped: " + result.skipped_count + ".");
+      setMessage(result.assigned_count + " cash records restored against their original shift. Receipts: NPR " + result.assigned_total + "; refunds: NPR " + result.refund_total + "; savings cash-outs restored: NPR " + (result.cash_out_total || "0.00") + "; skipped: " + result.skipped_count + ".");
     }, "Cash history recovery completed.");
   };
 
