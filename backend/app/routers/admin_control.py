@@ -510,7 +510,11 @@ def _qr_account_totals(db: Session) -> dict[str, Decimal]:
     settings_row = db.execute(text("SELECT opening_balance,opening_balance_at FROM qr_account_settings WHERE id=1")).mappings().first()
     opening = Decimal(str(settings_row["opening_balance"])) if settings_row else Decimal("0")
     since = settings_row["opening_balance_at"] if settings_row else datetime.min
-    receipts = Decimal(str(db.execute(text("SELECT COALESCE(SUM(amount),0) FROM payments WHERE method='qr' AND created_at>=:since"), {"since": since}).scalar_one()))
+    receipts = Decimal(str(db.execute(text("""SELECT COALESCE(SUM(amount),0) FROM (
+        SELECT amount,created_at FROM payments WHERE method='qr'
+        UNION ALL
+        SELECT amount,created_at FROM balance_transactions WHERE method='qr'
+    ) qr_receipts WHERE created_at>=:since"""), {"since": since}).scalar_one()))
     refunds = Decimal(str(db.execute(text("SELECT COALESCE(SUM(amount),0) FROM bill_refunds WHERE method='qr' AND created_at>=:since"), {"since": since}).scalar_one()))
     expenses = Decimal(str(db.execute(text("""SELECT COALESCE(SUM(amount),0) FROM expenses
         WHERE payment_method='qr' AND payment_status='paid' AND created_at>=:since"""), {"since": since}).scalar_one()))
