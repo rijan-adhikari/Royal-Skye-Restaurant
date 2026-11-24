@@ -24,7 +24,6 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const [tab, setTab] = useState<Tab>(initialTab && availableTabs.includes(initialTab as Tab) ? initialTab as Tab : (availableTabs[0] ?? "cash"));
   const [data, setData] = useState<any>({ shifts: [], refunds: [], bills: [], suppliers: [], inventory: [], ledger: [], supplierBalances: [], loyalty: [], serviceOrders: [], audit: [], salesSummary: null, monthlySales: [], yearlySales: [] });
   const [shift, setShift] = useState<any>(null);
-  const [unassignedShiftSelections, setUnassignedShiftSelections] = useState<Record<string, string>>({});
   const [tax, setTax] = useState<any>({ tax_enabled: true, tax_percent: "14", service_charge_enabled: false, service_charge_percent: "0" });
   const [loyaltySettings, setLoyaltySettings] = useState<any>({ enabled: true, spend_per_point: "100", point_value: "1" });
   const [restaurant, setRestaurant] = useState<any>({ name: "", email: "", phone: "", address: "", pan: "", vat: "", currency: "NPR", logo_path: "", qr_image_path: "", receipt_footer: "" });
@@ -57,7 +56,6 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const load = async () => {
     const requests = [
       ["current", "/api/admin/cash-shifts/current"], ["shifts", "/api/admin/cash-shifts?limit=200"],
-      ...((role === "admin") ? ([["qrPayments", "/api/admin/qr-payments"], ["unassignedCash", "/api/admin/cash-payments/unassigned"], ["paymentReconciliation", "/api/admin/payment-reconciliation"]] as [string, string][]) : []),
       ...(!managerView ? ([["sales", "/api/admin/sales"], ["salesSummary", "/api/dashboard/summary"], ["monthlySales", "/api/dashboard/monthly-sales"], ["yearlySales", "/api/dashboard/yearly-sales"]] as [string, string][]) : []),
       ...(!managerView ? ([["customers", "/api/customers"]] as [string, string][]) : []),
       ["suppliers", "/api/operations/suppliers"], ["inventory", "/api/operations/inventory"], ["ledger", "/api/admin/suppliers/ledger"], ["supplierBalances", "/api/admin/suppliers/balances"],
@@ -99,12 +97,14 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     finally { setBusy(false); }
   };
 
-  const assignUnassignedCash = async (payment: any) => {
-    const selection = unassignedShiftSelections[payment.payment_id];
-    if (!selection) { setError("Choose a shift or select no-shift assignment."); return; }
-    const shiftId = selection === "none" ? null : selection;
-    await run(() => api.post(`/api/admin/cash-payments/${payment.payment_id}/assign`, { shift_id: shiftId }),
-      shiftId ? `${payment.bill_number} linked to the selected cash shift.` : `${payment.bill_number} assigned without a cash shift.`);
+  const assignUnassignedCashToOpenShift = async () => {
+    if (!shift) { setError("There is no open cash drawer shift."); return; }
+    if (!window.confirm("Assign every safely identifiable unassigned cash receipt, credit repayment and cash refund to the currently open drawer? Original payment timestamps and bills will remain unchanged.")) return;
+    await run(async () => {
+      const response = await api.post("/api/admin/cash-payments/assign-unassigned-to-open-shift");
+      const result = response.data;
+      setMessage(result.assigned_count + " cash records assigned to the open drawer. Receipts: NPR " + result.assigned_total + "; refunds: NPR " + result.refund_total + "; skipped: " + result.skipped_count + ".");
+    }, "Cash reconciliation completed.");
   };
 
   const openShift = async () => { await run(() => api.post("/api/admin/cash-shifts/open", { opening_float: Number(openFloat) }), "Cash drawer shift opened."); setCountedCash(""); };
@@ -351,7 +351,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
       </section>
       <section className={panel}>
         {shift && <div className="mb-5">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-lg">Session cash movements</h2><span className="text-xs text-neutral-500">{(shift.cash_entries || []).length} record(s)</span></div>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-lg">Session cash movements</h2><div className="flex flex-wrap items-center gap-2"><span className="text-xs text-neutral-500">{(shift.cash_entries || []).length} record(s)</span>{role === "admin" && <button type="button" disabled={busy} onClick={assignUnassignedCashToOpenShift} className="rounded-lg bg-[#7b2926] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Assign unlinked cash to this open shift</button>}</div></div>
           <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Time</th><th>Type</th><th>Reference / notes</th><th>Amount</th><th>Actions</th></tr></thead><tbody>
             {(shift.cash_entries || []).map((entry: any) => <React.Fragment key={entry.id}>
               <tr className="border-b align-top"><td className="py-2 whitespace-nowrap">{new Date(entry.created_at).toLocaleString()}</td><td className="capitalize">{entry.entry_type.replace("_", " ")}</td><td>{entry.reference || "—"}{entry.notes ? <p className="text-xs text-neutral-500">{entry.notes}</p> : null}</td><td>{money(entry.amount)}</td><td><div className="flex gap-2">{canAdminEditCash && <>{entry.entry_type === "sale" ? <button type="button" disabled={busy} onClick={() => correctSystemSaleEntry(entry, shift.id)} className="rounded-lg border px-2 py-1 text-xs font-semibold">Edit payment</button> : <button type="button" disabled={busy || !["cash_in","cash_out","payout"].includes(entry.entry_type)} onClick={() => editCashEntry(entry)} className="rounded-lg border px-2 py-1 text-xs font-semibold">Edit</button>}<button type="button" disabled={busy || !["cash_in","cash_out","payout","sale","refund"].includes(entry.entry_type)} onClick={() => deleteCashEntry(entry)} className="rounded-lg bg-red-700 px-2 py-1 text-xs font-semibold text-white">Delete</button></>}</div></td></tr>
@@ -366,55 +366,6 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
             {(shift.cash_entries || []).length === 0 && <tr><td colSpan={5} className="py-5 text-center text-neutral-400">No cash movements recorded in this session.</td></tr>}
           </tbody></table></div>
           <p className="mt-2 text-xs text-neutral-500">Only admins can edit or delete cash-drawer entries. Correcting a sale payment to QR, card or bank transfer removes it from physical cash while preserving the bill and receipt history.</p>
-        </div>}
-        {role === "admin" && <div className="mb-5 space-y-4 border-t pt-5">
-          <section className="rounded-xl border border-[#d9e8df] bg-[#f7fbf8] p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div><p className="text-[10px] font-extrabold uppercase tracking-widest text-[#52765b]">Separate payment channel</p><h2 className="mt-1 text-lg font-extrabold text-[#263d2d]">QR received payments</h2><p className="mt-1 text-xs text-neutral-600">Complete historical register of recorded QR bill payments, QR credit repayments and QR refunds, including older or voided bills. These amounts never increase physical drawer cash.</p></div>
-              <button type="button" className="rounded-lg border bg-white px-3 py-2 text-xs font-bold" disabled={busy} onClick={() => load()}>Refresh QR</button>
-            </div>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              <div className="rounded-lg bg-white p-3"><p className="text-[10px] text-neutral-500">Received</p><p className="mt-1 text-sm font-extrabold">{money(data.qrPayments?.received_total)}</p></div>
-              <div className="rounded-lg bg-white p-3"><p className="text-[10px] text-neutral-500">Refunded</p><p className="mt-1 text-sm font-extrabold">{money(data.qrPayments?.refunded_total)}</p></div>
-              <div className="rounded-lg bg-white p-3"><p className="text-[10px] text-neutral-500">Net QR</p><p className="mt-1 text-sm font-extrabold">{money(data.qrPayments?.net_qr_received)}</p></div>
-            </div>
-            {data.qrPayments?.list_truncated && <p className="mt-2 text-[11px] font-semibold text-amber-800">Totals include every QR record; this register is showing the most recent 2,000 payments and 1,000 refunds.</p>}
-            <div className="mt-3 max-h-64 overflow-auto">
-              {(data.qrPayments?.payments || []).map((payment: any) => <div key={payment.payment_id} className="flex flex-wrap justify-between gap-2 border-b border-[#e6eee8] py-2 text-xs"><span><b>{payment.source_type === "credit_repayment" ? "Credit repayment · " : ""}{payment.bill_number}</b> · {payment.customer_name || "Walk-in"}<small className="block text-neutral-500">{new Date(payment.created_at).toLocaleString()} · {payment.received_by_name || "Staff"} · Bill {payment.sale_status || "recorded"}</small></span><b>{money(payment.amount)}</b></div>)}
-              {(data.qrPayments?.refunds || []).map((item: any) => <div key={item.refund_id} className="flex flex-wrap justify-between gap-2 border-b border-[#e6eee8] py-2 text-xs text-red-700"><span><b>Refund · {item.bill_number}</b><small className="block">{new Date(item.created_at).toLocaleString()} · {item.reason} · Bill {item.sale_status || "recorded"}</small></span><b>−{money(item.amount)}</b></div>)}
-              {!(data.qrPayments?.payments || []).length && !(data.qrPayments?.refunds || []).length && <p className="py-4 text-center text-xs text-neutral-500">No QR payments or refunds recorded.</p>}
-            </div>
-          </section>
-          <section className="rounded-xl border border-[#ead9c2] bg-[#fffaf2] p-4">
-            <div><p className="text-[10px] font-extrabold uppercase tracking-widest text-[#9a6a32]">Historical reconciliation</p><h2 className="mt-1 text-lg font-extrabold text-[#59432e]">Unassigned cash payments & refunds</h2><p className="mt-1 text-xs text-neutral-600">Cash sales, credit repayments and cash refunds already recorded but not yet reconciled. Assign a record to an existing shift or mark it as received when no shift was open; original payment records are preserved.</p></div>
-
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm"><b>{data.unassignedCash?.count || 0} cash receipt(s) · {data.unassignedCash?.refund_count || 0} refund(s)</b><b>{money(data.unassignedCash?.total)} receipts · −{money(data.unassignedCash?.refund_total)} refunds</b></div>
-            <div className="mt-2 max-h-72 space-y-2 overflow-auto">
-              {(data.unassignedCash?.payments || []).map((payment: any) => <div key={payment.payment_id} className="rounded-lg border border-[#efe3d3] bg-white p-3">
-                <div className="flex flex-wrap justify-between gap-2 text-xs"><span><b>{payment.source_type === "refund" ? "Cash refund · " : payment.source_type === "repayment" ? "Credit repayment · " : ""}{payment.bill_number}</b> · {payment.customer_name || "Walk-in"}<small className="block text-neutral-500">{payment.business_date} · {new Date(payment.created_at).toLocaleString()}</small></span><b>{payment.source_type === "refund" ? "−" : ""}{money(payment.amount)}</b></div>
-                {payment.matching_drawer_rows > 1 && <p className="mt-1 text-[11px] font-semibold text-red-700">Multiple legacy drawer matches; resolve duplicates before assigning.</p>}
-                <div className="mt-2 flex gap-2"><select className={field} value={unassignedShiftSelections[payment.payment_id] || ""} onChange={e => setUnassignedShiftSelections(old => ({...old,[payment.payment_id]:e.target.value}))}><option value="">Choose reconciliation</option><option value="none">No shift was open — assign without a shift</option>{(data.shifts || []).map((s: any) => <option key={s.id} value={s.id}>{new Date(s.opened_at).toLocaleString()} · {s.status} · {s.opened_by_name}</option>)}</select><button type="button" className={primary} disabled={busy || !unassignedShiftSelections[payment.payment_id] || payment.matching_drawer_rows > 1} onClick={() => assignUnassignedCash(payment)}>Assign</button></div>
-              </div>)}
-              {data.unassignedCash?.list_truncated && <p className="py-2 text-xs font-semibold text-amber-800">Showing the first 3,000 unmatched records. The totals above include every unmatched record.</p>}
-              {!(data.unassignedCash?.payments || []).length && <p className="py-4 text-center text-xs text-emerald-700">All cash receipts and refunds are linked to drawer entries.</p>}
-            </div>
-          </section>
-          <section className="rounded-xl border border-neutral-200 bg-white p-4">
-            <h3 className="font-bold">Payment database health check</h3>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <p className="text-xs">Legacy drawer rows safely linked: <b>{data.paymentReconciliation?.legacy_drawer_rows_linked ?? "—"}</b></p>
-              <p className="text-xs">Unassigned cash receipts: <b>{data.paymentReconciliation?.unassigned_cash_count ?? "—"}</b> ({money(data.paymentReconciliation?.unassigned_cash_total)})</p>
-              <p className="text-xs">Unassigned cash refunds: <b>{data.paymentReconciliation?.unassigned_cash_refund_count ?? "—"}</b> ({money(data.paymentReconciliation?.unassigned_cash_refund_total)})</p>
-              <p className="text-xs">Bill/payment total mismatches: <b className={data.paymentReconciliation?.bill_payment_mismatches ? "text-red-700" : "text-emerald-700"}>{data.paymentReconciliation?.bill_payment_mismatches ?? "—"}</b></p>
-              <p className="text-xs">Credit balance mismatches: <b className={data.paymentReconciliation?.credit_balance_mismatches ? "text-red-700" : "text-emerald-700"}>{data.paymentReconciliation?.credit_balance_mismatches ?? "—"}</b></p>
-              <p className="text-xs">QR payments incorrectly in cash drawer: <b className={data.paymentReconciliation?.qr_drawer_overlaps ? "text-red-700" : "text-emerald-700"}>{data.paymentReconciliation?.qr_drawer_overlaps ?? "—"}</b></p>
-              <p className="text-xs">Unclassified historical payments: <b className={data.paymentReconciliation?.unclassified_payment_count ? "text-amber-700" : "text-emerald-700"}>{data.paymentReconciliation?.unclassified_payment_count ?? "—"}</b></p>
-              <p className="text-xs">Cash records assigned without a shift: <b>{data.paymentReconciliation?.no_shift_cash_assignments ?? "—"}</b></p>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">{(data.paymentReconciliation?.payment_methods || []).map((method: any) => <span key={method.method} className="rounded-lg bg-neutral-50 px-3 py-2 text-xs capitalize">{method.method.replace(/_/g, " ")}: <b>{money(method.amount)}</b> · {method.transactions} tx</span>)}</div>
-            {(data.paymentReconciliation?.bill_payment_mismatch_rows || []).length > 0 && <details className="mt-3 rounded-lg border border-red-200 p-3"><summary className="cursor-pointer text-xs font-bold text-red-800">Review bill/payment mismatches ({data.paymentReconciliation.bill_payment_mismatches})</summary><div className="mt-2 space-y-2">{data.paymentReconciliation.bill_payment_mismatch_rows.map((item: any) => <div key={item.id} className="flex flex-wrap justify-between gap-2 border-b py-2 text-xs"><span><b>{item.bill_number}</b><small className="block text-neutral-500">Recorded paid {money(item.amount_paid)} · payment ledger {money(item.calculated_paid)} · due {money(item.outstanding_amount)}</small></span><b className="text-red-700">Difference {money(Number(item.amount_paid)-Number(item.calculated_paid))}</b></div>)}</div></details>}
-            {(data.paymentReconciliation?.credit_balance_mismatch_rows || []).length > 0 && <details className="mt-3 rounded-lg border border-amber-200 p-3"><summary className="cursor-pointer text-xs font-bold text-amber-800">Review customer-credit mismatches ({data.paymentReconciliation.credit_balance_mismatches})</summary><div className="mt-2 space-y-2">{data.paymentReconciliation.credit_balance_mismatch_rows.map((item: any) => <div key={item.id} className="flex flex-wrap justify-between gap-2 border-b py-2 text-xs"><span><b>{item.bill_number}</b><small className="block text-neutral-500">Original {money(item.original_amount)} · repayments {money(item.repaid)} · calculated due {money(item.calculated_remaining)} · bill due {money(item.outstanding_amount)}</small></span><b className="text-amber-800">Recorded due {money(item.remaining_amount)}</b></div>)}</div></details>}
-          </section>
         </div>}
         <h2 className="font-semibold text-lg mb-3">Recent shift reconciliation</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Opened</th><th>Staff</th><th>Status</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>{data.shifts.map((s: any) => <React.Fragment key={s.id}><tr className="border-b"><td className="py-2">{new Date(s.opened_at).toLocaleString()}</td><td>{s.opened_by_name}</td><td className="capitalize">{s.status}</td><td>{s.expected_cash == null ? "—" : money(s.expected_cash)}</td><td>{s.counted_cash == null ? "—" : money(s.counted_cash)}</td><td className={Number(s.cash_difference) < 0 ? "text-red-700" : "text-emerald-700"}>{s.cash_difference == null ? "—" : money(s.cash_difference)}</td></tr>{(s.cash_entries || []).length > 0 && <tr className="border-b bg-neutral-50"><td colSpan={6} className="p-3"><p className="mb-2 text-xs font-semibold">Cash movements · {s.status === "closed" ? "Admin corrections" : "History"}</p>{s.cash_entries.map((entry: any) => <div key={entry.id} className="flex flex-wrap items-center justify-between gap-2 border-b py-2 text-xs"><span>{new Date(entry.created_at).toLocaleString()} · <b className="capitalize">{entry.entry_type.replace("_"," ")}</b> · {money(entry.amount)} · {entry.reference || entry.notes || "No reference"}</span>{s.status === "closed" && canAdminEditCash && <span className="flex gap-2">{["cash_in","cash_out","payout"].includes(entry.entry_type) && <><button type="button" disabled={busy} onClick={() => correctClosedCashEntry(entry,s.id)} className="rounded border px-2 py-1 font-semibold">Edit</button><button type="button" disabled={busy} onClick={() => deleteClosedCashEntry(entry,s.id)} className="rounded bg-red-700 px-2 py-1 font-semibold text-white">Delete</button></>}{entry.entry_type === "sale" && <><button type="button" disabled={busy} onClick={() => correctSystemSaleEntry(entry,s.id)} className="rounded border px-2 py-1 font-semibold">Edit payment</button><button type="button" disabled={busy} onClick={() => deleteCashEntry(entry,s.id)} className="rounded bg-red-700 px-2 py-1 font-semibold text-white">Delete</button></>}{entry.entry_type === "refund" && <button type="button" disabled={busy} onClick={() => deleteCashEntry(entry,s.id)} className="rounded bg-red-700 px-2 py-1 font-semibold text-white">Delete</button>}</span>}</div>)}</td></tr>}</React.Fragment>)}</tbody></table></div></section>
     </div>}

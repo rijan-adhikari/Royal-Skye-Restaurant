@@ -1168,10 +1168,14 @@ def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
                            {"id": payload.shift_id}).mappings().first()
         if not shift:
             raise HTTPException(404, "Selected cash drawer shift was not found")
-        if payment["created_at"] < shift["opened_at"] or (
-            shift["closed_at"] is not None and payment["created_at"] > shift["closed_at"]
+        # An open shift may accept an explicitly assigned historical cash receipt.
+        # Keep the source payment's original timestamp; shift_id controls drawer totals.
+        # Closed shifts remain strict so historical reconciliation cannot be silently rewritten.
+        if shift["status"] == "closed" and (
+            payment["created_at"] < shift["opened_at"] or
+            (shift["closed_at"] is not None and payment["created_at"] > shift["closed_at"])
         ):
-            raise HTTPException(409, "The selected shift does not cover this receipt's original timestamp.")
+            raise HTTPException(409, "The selected closed shift does not cover this receipt's original timestamp.")
     candidates = db.execute(text("""SELECT e.id,e.shift_id FROM cash_drawer_entries e
         WHERE e.entry_type=:entry_type AND e.reference=:reference AND e.amount=:amount
           AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.drawer_entry_id=e.id)
@@ -1225,6 +1229,37 @@ def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
             "assigned_without_shift": payload.shift_id is None,
             "created_historical_entry": not bool(candidates)}
 
+
+
+@router.post("/cash-payments/assign-unassigned-to-open-shift")
+def assign_unassigned_cash_to_open_shift(db: Session = Depends(get_db),
+                                         user=Depends(require_roles(*ADMIN))):
+    """Link all safely identifiable unassigned cash receipts/refunds to the current open drawer."""
+    shift = db.execute(text("""SELECT id FROM cash_drawer_shifts
+        WHERE status='open' ORDER BY opened_at DESC LIMIT 1 FOR UPDATE""")).mappings().first()
+    if not shift:
+        raise HTTPException(409, "There is no open cash drawer shift.")
+    pending = unassigned_cash_payments(db, user)
+    if pending.get("list_truncated"):
+        raise HTTPException(409, "More than 3,000 unmatched cash records exist. Reconcile in batches before bulk assignment.")
+    assigned, skipped = [], []
+    for item in pending.get("payments", []):
+        try:
+            assign_cash_payment(str(item["payment_id"]),
+                CashPaymentAssign(shift_id=str(shift["id"]),
+                    notes="Bulk reconciled to the currently open cash drawer by administrator."),
+                db, user)
+            assigned.append({"payment_id": str(item["payment_id"]), "bill_number": item["bill_number"],
+                             "amount": str(item["amount"]), "source_type": item["source_type"]})
+        except HTTPException as exc:
+            skipped.append({"payment_id": str(item["payment_id"]), "bill_number": item["bill_number"],
+                            "reason": exc.detail})
+    return {"shift_id": str(shift["id"]), "assigned_count": len(assigned),
+            "assigned_total": str(sum((Decimal(x["amount"]) for x in assigned
+                if x["source_type"] != "refund"), Decimal(0))),
+            "refund_total": str(sum((Decimal(x["amount"]) for x in assigned
+                if x["source_type"] == "refund"), Decimal(0))),
+            "skipped_count": len(skipped), "assigned": assigned, "skipped": skipped}
 
 @router.get("/payment-reconciliation")
 def payment_reconciliation(db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
