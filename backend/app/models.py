@@ -270,6 +270,7 @@ class Expense(Base):
     category = Column(String(64), nullable=False)
     description = Column(String(255), nullable=False)
     amount = Column(Numeric(10, 2), nullable=False)
+    payment_method = Column(String(24), nullable=False, default="legacy_unclassified")
     expense_date = Column(DateTime, default=datetime.utcnow, nullable=False)
     created_by = Column(UUID(as_uuid=False), ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
