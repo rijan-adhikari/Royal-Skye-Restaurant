@@ -1230,6 +1230,37 @@ def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
             "created_historical_entry": not bool(candidates)}
 
 
+
+@router.post("/cash-payments/assign-unassigned-to-open-shift")
+def assign_unassigned_cash_to_open_shift(db: Session = Depends(get_db),
+                                         user=Depends(require_roles(*ADMIN))):
+    """Link all safely identifiable unassigned cash receipts/refunds to the current open drawer."""
+    shift = db.execute(text("""SELECT id FROM cash_drawer_shifts
+        WHERE status='open' ORDER BY opened_at DESC LIMIT 1 FOR UPDATE""")).mappings().first()
+    if not shift:
+        raise HTTPException(409, "There is no open cash drawer shift.")
+    pending = unassigned_cash_payments(db, user)
+    if pending.get("list_truncated"):
+        raise HTTPException(409, "More than 3,000 unmatched cash records exist. Reconcile in batches before bulk assignment.")
+    assigned, skipped = [], []
+    for item in pending.get("payments", []):
+        try:
+            assign_cash_payment(str(item["payment_id"]),
+                CashPaymentAssign(shift_id=str(shift["id"]),
+                    notes="Bulk reconciled to the currently open cash drawer by administrator."),
+                db, user)
+            assigned.append({"payment_id": str(item["payment_id"]), "bill_number": item["bill_number"],
+                             "amount": str(item["amount"]), "source_type": item["source_type"]})
+        except HTTPException as exc:
+            skipped.append({"payment_id": str(item["payment_id"]), "bill_number": item["bill_number"],
+                            "reason": exc.detail})
+    return {"shift_id": str(shift["id"]), "assigned_count": len(assigned),
+            "assigned_total": str(sum((Decimal(x["amount"]) for x in assigned
+                if x["source_type"] != "refund"), Decimal(0))),
+            "refund_total": str(sum((Decimal(x["amount"]) for x in assigned
+                if x["source_type"] == "refund"), Decimal(0))),
+            "skipped_count": len(skipped), "assigned": assigned, "skipped": skipped}
+
 @router.get("/payment-reconciliation")
 def payment_reconciliation(db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     _ensure_cash_payment_links(db)
