@@ -518,7 +518,7 @@ def list_cash_shifts(limit: int = Query(50, ge=1, le=200),
         {"limit": limit}).mappings().all()
     result = []
     for row in rows:
-        entries = db.execute(text("""SELECT e.id,e.entry_type,e.amount,e.reference,e.notes,e.created_at,u.full_name created_by_name
+        entries = db.execute(text("""SELECT e.id,e.entry_type,e.amount,e.reference,e.notes,e.expense_id,e.created_at,u.full_name created_by_name
             FROM cash_drawer_entries e JOIN users u ON u.id=e.created_by
             WHERE e.shift_id=:id AND NOT ((e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) OR (e.entry_type='refund' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)))) ORDER BY e.created_at DESC"""), {"id": row["id"]}).mappings().all()
         entry_totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
@@ -548,7 +548,7 @@ def current_cash_shift(db: Session = Depends(get_db), user=Depends(require_roles
         FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT ((e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) OR (e.entry_type='refund' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)))) GROUP BY e.entry_type"""), {"id": row["id"]}).mappings().all()
     totals = {r["entry_type"]: Decimal(str(r["amount"])) for r in entries}
     expected = Decimal(str(row["opening_float"])) + totals.get("sale", Decimal(0)) + totals.get("cash_in", Decimal(0)) - totals.get("refund", Decimal(0)) - totals.get("cash_out", Decimal(0)) - totals.get("payout", Decimal(0))
-    entry_rows = db.execute(text("""SELECT e.id,e.entry_type,e.amount,e.reference,e.notes,e.created_at,u.full_name created_by_name
+    entry_rows = db.execute(text("""SELECT e.id,e.entry_type,e.amount,e.reference,e.notes,e.expense_id,e.created_at,u.full_name created_by_name
         FROM cash_drawer_entries e JOIN users u ON u.id=e.created_by
         WHERE e.shift_id=:id AND NOT ((e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) OR (e.entry_type='refund' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)))) ORDER BY e.created_at DESC"""), {"id": row["id"]}).mappings().all()
     return dict(row) | {"entries": {k: str(v) for k,v in totals.items()},
@@ -613,10 +613,12 @@ def update_cash_entry(shift_id: str, entry_id: str, payload: CashEntryUpdate,
                        {"id": shift_id}).mappings().first()
     if not shift:
         raise HTTPException(409, "Cash shift is not open; closed shift records cannot be changed")
-    existing = db.execute(text("""SELECT id,entry_type,amount FROM cash_drawer_entries
+    existing = db.execute(text("""SELECT id,entry_type,amount,expense_id FROM cash_drawer_entries
         WHERE id=:entry AND shift_id=:shift FOR UPDATE"""), {"entry": entry_id, "shift": shift_id}).mappings().first()
     if not existing:
         raise HTTPException(404, "Cash movement not found in this shift")
+    if existing["expense_id"]:
+        raise HTTPException(403, "Expense-linked cash movements must be corrected from the original expense record.")
     if existing["entry_type"] not in ("cash_in", "cash_out", "payout"):
         raise HTTPException(403, "System-generated sale and refund records must use the admin sale-correction action")
     if payload.entry_type in ("cash_out", "payout"):
@@ -646,10 +648,12 @@ def delete_cash_entry(shift_id: str, entry_id: str,
                        {"id": shift_id}).first()
     if not shift:
         raise HTTPException(409, "Cash shift is not open; closed shift records cannot be deleted")
-    entry = db.execute(text("""SELECT id,entry_type,amount,reference FROM cash_drawer_entries
+    entry = db.execute(text("""SELECT id,entry_type,amount,reference,expense_id FROM cash_drawer_entries
         WHERE id=:entry AND shift_id=:shift FOR UPDATE"""), {"entry": entry_id, "shift": shift_id}).mappings().first()
     if not entry:
         raise HTTPException(404, "Cash movement not found in this shift")
+    if entry["expense_id"]:
+        raise HTTPException(403, "Expense-linked cash movements cannot be deleted separately from the expense.")
     if entry["entry_type"] not in ("cash_in", "cash_out", "payout"):
         raise HTTPException(403, "System-generated sale and refund records cannot be deleted")
     db.execute(text("DELETE FROM cash_drawer_entries WHERE id=:entry"), {"entry": entry_id})
