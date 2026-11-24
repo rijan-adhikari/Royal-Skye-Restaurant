@@ -5,7 +5,7 @@ import io
 import uuid
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -125,6 +125,7 @@ class ExpenseCreate(BaseModel):
     expense_date: datetime | None = None
     department: str = "General"
     payment_status: str = "paid"
+    payment_method: Literal["cash", "qr"] = "cash"
     supplier_id: str | None = None
     receipt_reference: str | None = None
     notes: str | None = None
@@ -457,13 +458,58 @@ def list_detailed_expenses(db: Session = Depends(get_db), user=Depends(require_r
 def create_detailed_expense(payload: ExpenseCreate, db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
     if payload.payment_status not in {"paid", "unpaid", "partial"}:
         raise HTTPException(422, "Invalid payment status")
+
+    # A paid cash expense is a real drawer outflow; a paid QR expense is a bank-account outflow.
+    # Keep the expense and its payment-channel movement in one database transaction.
+    expense_id = str(uuid.uuid4())
+    if payload.payment_status == "paid" and payload.payment_method == "cash":
+        shift = db.execute(text("""SELECT id,opening_float FROM cash_drawer_shifts
+            WHERE status='open' ORDER BY opened_at DESC LIMIT 1 FOR UPDATE""")).mappings().first()
+        if not shift:
+            raise HTTPException(409, "Open a cash drawer session before recording a cash-paid expense.")
+        totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
+            FROM cash_drawer_entries e WHERE e.shift_id=:shift
+            AND NOT ((e.entry_type='sale' AND EXISTS (
+                SELECT 1 FROM bills b WHERE b.bill_number=e.reference
+                AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount)
+                AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount)))
+            OR (e.entry_type='refund' AND EXISTS (
+                SELECT 1 FROM bills b WHERE b.bill_number=e.reference
+                AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount)
+                AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount))))
+            GROUP BY entry_type"""), {"shift": shift["id"]}).mappings().all()
+        values = {r["entry_type"]: Decimal(str(r["amount"])) for r in totals}
+        available = (Decimal(str(shift["opening_float"])) + values.get("sale", Decimal(0))
+            + values.get("cash_in", Decimal(0)) - values.get("refund", Decimal(0))
+            - values.get("cash_out", Decimal(0)) - values.get("payout", Decimal(0)))
+        if payload.amount > available:
+            raise HTTPException(422, f"Cash expense exceeds available drawer cash of NPR {available}.")
+    elif payload.payment_status == "paid" and payload.payment_method == "qr":
+        settings_row = db.execute(text("SELECT opening_balance FROM qr_account_settings WHERE id=1")).mappings().first()
+        opening = Decimal(str(settings_row["opening_balance"])) if settings_row else Decimal("0")
+        receipts = Decimal(str(db.execute(text("SELECT COALESCE(SUM(amount),0) FROM payments WHERE method='qr'")).scalar_one()))
+        refunds = Decimal(str(db.execute(text("SELECT COALESCE(SUM(amount),0) FROM bill_refunds WHERE method='qr'")).scalar_one()))
+        qr_expenses = Decimal(str(db.execute(text("""SELECT COALESCE(SUM(amount),0) FROM expenses
+            WHERE payment_method='qr' AND payment_status='paid'""")).scalar_one()))
+        available = opening + receipts - refunds - qr_expenses
+        if payload.amount > available:
+            raise HTTPException(422, f"QR account expense exceeds available recorded balance of NPR {available}.")
+
     row = db.execute(text("""INSERT INTO expenses(id,category,description,amount,expense_date,created_by,department,
-        payment_status,supplier_id,receipt_reference,notes,created_at)
-        VALUES(:id,:category,:description,:amount,:date,:user,:department,:status,:supplier,:receipt,:notes,NOW()) RETURNING *"""),
-        {"id": uuid.uuid4(), "category": payload.category, "description": payload.description, "amount": payload.amount,
+        payment_status,payment_method,supplier_id,receipt_reference,notes,created_at)
+        VALUES(:id,:category,:description,:amount,:date,:user,:department,:status,:method,:supplier,:receipt,:notes,NOW()) RETURNING *"""),
+        {"id": expense_id, "category": payload.category, "description": payload.description, "amount": payload.amount,
          "date": payload.expense_date or datetime.utcnow(), "user": user.id, "department": payload.department,
-         "status": payload.payment_status, "supplier": payload.supplier_id,
+         "status": payload.payment_status, "method": payload.payment_method, "supplier": payload.supplier_id,
          "receipt": payload.receipt_reference, "notes": payload.notes}).mappings().first()
+
+    if payload.payment_status == "paid" and payload.payment_method == "cash":
+        db.execute(text("""INSERT INTO cash_drawer_entries(shift_id,entry_type,amount,reference,notes,created_by,expense_id)
+            VALUES(:shift,'cash_out',:amount,:reference,:notes,:user,:expense)"""), {
+                "shift": shift["id"], "amount": payload.amount,
+                "reference": payload.receipt_reference or f"Expense: {payload.description[:90]}",
+                "notes": payload.notes or f"Expense record {expense_id}",
+                "user": user.id, "expense": expense_id})
     db.commit()
     return dict(row)
 
