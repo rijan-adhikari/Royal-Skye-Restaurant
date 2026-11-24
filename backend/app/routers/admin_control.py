@@ -972,7 +972,7 @@ def create_refund(payload: RefundCreate, db: Session = Depends(get_db),
     if payload.method == "cash":
         db.execute(text("""CREATE TABLE IF NOT EXISTS cash_refund_links (
             refund_id UUID PRIMARY KEY REFERENCES bill_refunds(id) ON DELETE CASCADE,
-            drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+            drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE RESTRICT,
             linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
         )"""))
         open_shift = db.execute(text("SELECT id FROM cash_drawer_shifts WHERE status='open' ORDER BY opened_at DESC LIMIT 1 FOR UPDATE")).first()
@@ -1094,7 +1094,7 @@ def _ensure_cash_payment_links(db: Session) -> None:
         db.execute(text("ALTER TABLE cash_drawer_entries ALTER COLUMN shift_id DROP NOT NULL"))
     db.execute(text("""CREATE TABLE IF NOT EXISTS cash_payment_links (
         payment_id UUID PRIMARY KEY REFERENCES payments(id) ON DELETE CASCADE,
-        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE RESTRICT,
         linked_by UUID REFERENCES users(id),
         linked_at TIMESTAMP NOT NULL DEFAULT NOW(),
         source VARCHAR(24) NOT NULL DEFAULT 'automatic'
@@ -1185,12 +1185,12 @@ def unassigned_cash_payments(db: Session = Depends(get_db), user=Depends(require
         ADD COLUMN IF NOT EXISTS method VARCHAR(24) NOT NULL DEFAULT 'legacy_unclassified'"""))
     db.execute(text("""CREATE TABLE IF NOT EXISTS cash_repayment_links (
         transaction_id UUID PRIMARY KEY REFERENCES balance_transactions(id) ON DELETE CASCADE,
-        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE RESTRICT,
         linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
     )"""))
     db.execute(text("""CREATE TABLE IF NOT EXISTS cash_refund_links (
         refund_id UUID PRIMARY KEY REFERENCES bill_refunds(id) ON DELETE CASCADE,
-        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE RESTRICT,
         linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
     )"""))
     legacy_linked = _backfill_unambiguous_cash_links(db)
@@ -1265,12 +1265,12 @@ def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
         ADD COLUMN IF NOT EXISTS method VARCHAR(24) NOT NULL DEFAULT 'legacy_unclassified'"""))
     db.execute(text("""CREATE TABLE IF NOT EXISTS cash_repayment_links (
         transaction_id UUID PRIMARY KEY REFERENCES balance_transactions(id) ON DELETE CASCADE,
-        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE RESTRICT,
         linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
     )"""))
     db.execute(text("""CREATE TABLE IF NOT EXISTS cash_refund_links (
         refund_id UUID PRIMARY KEY REFERENCES bill_refunds(id) ON DELETE CASCADE,
-        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE RESTRICT,
         linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
     )"""))
     payment = db.execute(text("""SELECT p.id source_id,p.bill_id,p.method,p.amount,p.created_at,b.bill_number,b.sale_status,
@@ -1416,12 +1416,12 @@ def payment_reconciliation(db: Session = Depends(get_db), user=Depends(require_r
         ADD COLUMN IF NOT EXISTS method VARCHAR(24) NOT NULL DEFAULT 'legacy_unclassified'"""))
     db.execute(text("""CREATE TABLE IF NOT EXISTS cash_repayment_links (
         transaction_id UUID PRIMARY KEY REFERENCES balance_transactions(id) ON DELETE CASCADE,
-        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE RESTRICT,
         linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
     )"""))
     db.execute(text("""CREATE TABLE IF NOT EXISTS cash_refund_links (
         refund_id UUID PRIMARY KEY REFERENCES bill_refunds(id) ON DELETE CASCADE,
-        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE RESTRICT,
         linked_by UUID REFERENCES users(id), linked_at TIMESTAMP NOT NULL DEFAULT NOW()
     )"""))
     linked_legacy = _backfill_unambiguous_cash_links(db)
