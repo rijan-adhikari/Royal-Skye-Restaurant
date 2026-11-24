@@ -756,10 +756,21 @@ def restore_archived_cash_entry(shift_id: str, entry_id: str,
         FROM cash_drawer_shifts WHERE id=:id FOR UPDATE"""), {"id": shift_id}).mappings().first()
     if not shift:
         raise HTTPException(404, "Cash drawer shift not found")
-    entry = db.execute(text("""SELECT id,entry_type,amount,reference,notes,created_at
-        FROM cash_drawer_entries WHERE id=:entry AND shift_id IS NULL FOR UPDATE"""), {"entry": entry_id}).mappings().first()
+    entry = db.execute(text("""SELECT e.id,e.entry_type,e.amount,e.reference,e.notes,e.created_at,
+        COALESCE(p.method::text, bt.method, r.method::text) source_method
+        FROM cash_drawer_entries e
+        LEFT JOIN cash_payment_links cpl ON cpl.drawer_entry_id=e.id
+        LEFT JOIN payments p ON p.id=cpl.payment_id
+        LEFT JOIN cash_repayment_links crl ON crl.drawer_entry_id=e.id
+        LEFT JOIN balance_transactions bt ON bt.id=crl.transaction_id
+        LEFT JOIN cash_refund_links cfl ON cfl.drawer_entry_id=e.id
+        LEFT JOIN bill_refunds r ON r.id=cfl.refund_id
+        WHERE e.id=:entry AND e.shift_id IS NULL FOR UPDATE OF e"""),
+        {"entry": entry_id}).mappings().first()
     if not entry:
         raise HTTPException(404, "Archived cash record not found")
+    if entry["source_method"] is not None and entry["source_method"] != "cash":
+        raise HTTPException(409, "This record is linked to a non-cash tender and cannot be restored to physical cash.")
     if not _shift_covers_receipt(entry["created_at"], shift["opened_at"], shift["closed_at"]):
         raise HTTPException(409, "This shift does not cover the original record timestamp.")
     db.execute(text("""UPDATE cash_drawer_entries SET shift_id=:shift,
@@ -893,16 +904,26 @@ def correct_system_sale_entry(shift_id: str, entry_id: str, payload: CashSaleCor
         {"entry": entry_id, "shift": shift_id}).mappings().first()
     if not entry or entry["entry_type"] != "sale":
         raise HTTPException(404, "Automatic cash sale entry not found")
-    payment = db.execute(text("""SELECT p.id,p.method,p.amount,b.bill_number FROM payments p
-        JOIN bills b ON b.id=p.bill_id WHERE b.bill_number=:reference
-          AND p.method='cash' AND p.amount=:amount FOR UPDATE OF p,b"""),
-        {"reference": entry["reference"], "amount": entry["amount"]}).mappings().all()
+    _ensure_cash_payment_links(db)
+    payment = db.execute(text("""SELECT p.id,p.method,p.amount,b.bill_number
+        FROM cash_payment_links l JOIN payments p ON p.id=l.payment_id
+        JOIN bills b ON b.id=p.bill_id
+        WHERE l.drawer_entry_id=:entry AND p.method='cash'
+        FOR UPDATE OF p,b"""), {"entry": entry_id}).mappings().all()
+    if not payment:
+        payment = db.execute(text("""SELECT p.id,p.method,p.amount,b.bill_number FROM payments p
+            JOIN bills b ON b.id=p.bill_id WHERE b.bill_number=:reference
+              AND p.method='cash' AND p.amount=:amount FOR UPDATE OF p,b"""),
+            {"reference": entry["reference"], "amount": entry["amount"]}).mappings().all()
     if len(payment) != 1:
         raise HTTPException(409, "Could not uniquely match this cash-drawer entry to its bill payment. No changes were made.")
     db.execute(text("UPDATE payments SET method=:method WHERE id=:id"),
                {"method": payload.method, "id": payment[0]["id"]})
     if payload.method != "cash":
-        db.execute(text("DELETE FROM cash_drawer_entries WHERE id=:id"), {"id": entry_id})
+        # Preserve the drawer row and payment link; detach it from physical cash.
+        db.execute(text("""UPDATE cash_drawer_entries
+            SET shift_id=NULL,notes=CONCAT(COALESCE(notes,''),' · tender corrected to ',:method,'; removed from physical drawer')
+            WHERE id=:entry"""), {"method": payload.method, "entry": entry_id})
     if shift["status"] == "closed":
         totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
             FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT ((e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) OR (e.entry_type='refund' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)))) GROUP BY e.entry_type"""),
@@ -916,7 +937,7 @@ def correct_system_sale_entry(shift_id: str, entry_id: str, payload: CashSaleCor
                    {"expected": expected, "difference": difference, "id": shift_id})
     audit(db, user.id, "cash_shift.sale_payment_corrected",
           f"Bill {entry['reference']}: payment method changed from cash to {payload.method}; drawer entry " +
-          ("removed from cash balance" if payload.method != "cash" else "retained as cash"))
+          ("archived from physical cash; source payment and link retained" if payload.method != "cash" else "retained as cash"))
     db.commit()
     return {"ok": True, "payment_method": payload.method, "cash_entry_removed": payload.method != "cash"}
 
