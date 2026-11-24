@@ -102,12 +102,12 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
 
   const assignUnassignedCashToOpenShift = async () => {
     if (!shift) { setError("There is no open cash drawer shift."); return; }
-    if (!window.confirm("Assign every safely identifiable unassigned cash receipt, credit repayment and cash refund to the currently open drawer? Original payment timestamps and bills will remain unchanged.")) return;
+    if (!window.confirm("Rebuild missing cash-drawer links using each original receipt timestamp? Receipts will be assigned only to the shift that was actually open at that time. Records outside a shift will remain unassigned; today's drawer will not absorb old cash.")) return;
     await run(async () => {
       const response = await api.post("/api/admin/cash-payments/assign-unassigned-to-open-shift");
       const result = response.data;
-      setMessage(result.assigned_count + " cash records assigned to the open drawer. Receipts: NPR " + result.assigned_total + "; refunds: NPR " + result.refund_total + "; skipped: " + result.skipped_count + ".");
-    }, "Cash reconciliation completed.");
+      setMessage(result.assigned_count + " cash records restored against their original shift. Receipts: NPR " + result.assigned_total + "; refunds: NPR " + result.refund_total + "; skipped: " + result.skipped_count + ".");
+    }, "Cash history recovery completed.");
   };
 
   const openShift = async () => { await run(() => api.post("/api/admin/cash-shifts/open", { opening_float: Number(openFloat) }), "Cash drawer shift opened."); setCountedCash(""); };
@@ -139,14 +139,14 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     if (!shiftId) return;
     const systemGenerated = ["sale", "refund"].includes(entry.entry_type);
     if (systemGenerated) {
-      const reason = window.prompt(`Reason for deleting this system-generated ${entry.entry_type} entry (NPR ${money(entry.amount)}):`);
+      const reason = window.prompt(`Reason for archiving this system-generated ${entry.entry_type} entry (NPR ${money(entry.amount)}):`);
       if (!reason || reason.trim().length < 3) return;
-      if (!window.confirm(`Delete only this cash-drawer ${entry.entry_type} record? The original bill/refund record will remain unchanged. ${reason.trim()}`)) return;
-      await run(() => api.delete(`/api/admin/cash-shifts/${shiftId}/entries/${entry.id}/system-delete`, { params: { reason: reason.trim() } }), "Cash-drawer entry deleted and reconciliation updated.");
+      if (!window.confirm(`Archive this cash-drawer ${entry.entry_type} record from the shift? The original bill/refund and its link history will be preserved. ${reason.trim()}`)) return;
+      await run(() => api.delete(`/api/admin/cash-shifts/${shiftId}/entries/${entry.id}/system-delete`, { params: { reason: reason.trim() } }), "Cash-drawer entry archived; original history preserved.");
       return;
     }
-    if (!window.confirm(`Delete this ${entry.entry_type.replace("_", " ")} record for ${money(entry.amount)}? This will change the shift expected cash.`)) return;
-    await run(() => api.delete(`/api/admin/cash-shifts/${shiftId}/entries/${entry.id}`), "Cash movement deleted.");
+    if (!window.confirm(`Archive this ${entry.entry_type.replace("_", " ")} record for ${money(entry.amount)} from this shift? The original record will be retained for recovery.`)) return;
+    await run(() => api.delete(`/api/admin/cash-shifts/${shiftId}/entries/${entry.id}`), "Cash movement archived; original record retained.");
   };
   const correctSystemSaleEntry = async (entry: any, shiftId: string) => {
     const method = window.prompt("Correct payment method (cash, qr, card, bank_transfer):", "qr");
@@ -170,8 +170,8 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     await run(() => api.patch(`/api/admin/cash-shifts/${shiftId}/entries/${entry.id}/closed-correction`, { entry_type: entry.entry_type, amount: parsed, reference, notes }), "Closed shift cash movement corrected and reconciliation recalculated.");
   };
   const deleteClosedCashEntry = async (entry: any, shiftId: string) => {
-    if (!window.confirm(`Delete the ${entry.entry_type.replace("_"," ")} record for ${money(entry.amount)} from this closed shift? Reconciliation will be recalculated and the action audited.`)) return;
-    await run(() => api.delete(`/api/admin/cash-shifts/${shiftId}/entries/${entry.id}/closed-correction`), "Closed shift cash movement deleted and reconciliation recalculated.");
+    if (!window.confirm(`Archive the ${entry.entry_type.replace("_"," ")} record for ${money(entry.amount)} from this closed shift? The original record will be retained and reconciliation recalculated.`)) return;
+    await run(() => api.delete(`/api/admin/cash-shifts/${shiftId}/entries/${entry.id}/closed-correction`), "Closed shift movement archived; history preserved and reconciliation recalculated.");
   };
 
   const addSupplierEntry = (e: React.FormEvent) => {
@@ -373,7 +373,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
       </section>
       <section className={panel}>
         {shift && <div className="mb-5">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-lg">Session cash movements</h2><div className="flex flex-wrap items-center gap-2"><span className="text-xs text-neutral-500">{(shift.cash_entries || []).length} record(s)</span>{role === "admin" && <button type="button" disabled={busy} onClick={assignUnassignedCashToOpenShift} className="rounded-lg bg-[#7b2926] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Assign unlinked cash to this open shift</button>}</div></div>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-lg">Session cash movements</h2><div className="flex flex-wrap items-center gap-2"><span className="text-xs text-neutral-500">{(shift.cash_entries || []).length} record(s)</span>{role === "admin" && <button type="button" disabled={busy} onClick={assignUnassignedCashToOpenShift} className="rounded-lg bg-[#7b2926] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Recover unlinked cash history</button>}</div></div>
           <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Time</th><th>Type</th><th>Reference / notes</th><th>Amount</th><th>Actions</th></tr></thead><tbody>
             {(shift.cash_entries || []).map((entry: any) => <React.Fragment key={entry.id}>
               <tr className="border-b align-top"><td className="py-2 whitespace-nowrap">{new Date(entry.created_at).toLocaleString()}</td><td className="capitalize">{entry.entry_type.replace("_", " ")}</td><td>{entry.reference || "—"}{entry.notes ? <p className="text-xs text-neutral-500">{entry.notes}</p> : null}</td><td>{money(entry.amount)}</td><td><div className="flex gap-2">{entry.expense_id ? <span className="text-[10px] font-semibold text-neutral-400">Linked expense</span> : canAdminEditCash && <>{entry.entry_type === "sale" ? <button type="button" disabled={busy} onClick={() => correctSystemSaleEntry(entry, shift.id)} className="rounded-lg border px-2 py-1 text-xs font-semibold">Edit payment</button> : <button type="button" disabled={busy || !["cash_in","cash_out","payout"].includes(entry.entry_type)} onClick={() => editCashEntry(entry)} className="rounded-lg border px-2 py-1 text-xs font-semibold">Edit</button>}<button type="button" disabled={busy || !["cash_in","cash_out","payout","sale","refund"].includes(entry.entry_type)} onClick={() => deleteCashEntry(entry)} className="rounded-lg bg-red-700 px-2 py-1 text-xs font-semibold text-white">Delete</button></>}</div></td></tr>
