@@ -54,6 +54,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     { to: "/operations?tab=expenses", label: t("Expenses"), icon: "expenses", tab: "expenses" },
     { to: "/operations?tab=controls", label: t("Control Center"), icon: "controls", tab: "controls" },
     ...(["admin", "manager"].includes(role || "") ? [{ to: "/admin-controls", label: role === "admin" ? t("Admin Controls") : t("Backup & Restore"), icon: "controls" }] : []),
+    ...(role === "admin" ? [{ to: "/admin-controls?section=system&tab=account", label: t("Royal Skye Account"), icon: "cash", tab: "account" }] : []),
   ] : [];
   const groups = [
     { label: t("Workspace"), items: workspace },
