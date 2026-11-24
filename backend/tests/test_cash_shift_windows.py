@@ -25,8 +25,11 @@ class CashShiftWindowTests(unittest.TestCase):
         self.assertFalse(_shift_covers_receipt(self.closed + timedelta(microseconds=1), self.opened, self.closed))
 
     def test_open_shift_rejects_historical_receipts(self):
-        self.assertFalse(_shift_covers_receipt(self.opened - timedelta(days=1), self.opened, None))
-        self.assertTrue(_shift_covers_receipt(self.opened + timedelta(days=1), self.opened, None))
+        self.assertFalse(_shift_covers_receipt(self.opened - timedelta(days=1), self.opened, None, "open"))
+        self.assertTrue(_shift_covers_receipt(self.opened + timedelta(days=1), self.opened, None, "open"))
+
+    def test_closed_shift_without_close_timestamp_is_invalid(self):
+        self.assertFalse(_shift_covers_receipt(self.opened + timedelta(hours=1), self.opened, None, "closed"))
 
 
 if __name__ == "__main__":
