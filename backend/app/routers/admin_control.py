@@ -250,25 +250,9 @@ def void_sale(bill_id: str, payload: SaleVoid, db: Session = Depends(get_db),
 @router.delete("/sales/{bill_id}")
 def permanently_delete_sale(bill_id: str, db: Session = Depends(get_db),
                              user=Depends(require_roles(*ADMIN))):
-    bill = db.query(models.Bill).filter(models.Bill.id == bill_id).with_for_update().first()
-    if not bill:
-        raise HTTPException(404, "Sale not found")
-    bill_id_value, order_id, bill_number = bill.id, bill.order_id, bill.bill_number
-    # Voided sales already had stock, loyalty and credit effects reversed.
-    if bill.sale_status == "active":
-        _reverse_bill_side_effects(db, bill, user.id)
-    db.execute(text("DELETE FROM bill_cost_snapshots WHERE bill_id=:bill"), {"bill": bill_id_value})
-    db.execute(text("DELETE FROM bill_refunds WHERE bill_id=:bill"), {"bill": bill_id_value})
-    db.execute(text("DELETE FROM loyalty_transactions WHERE bill_id=:bill"), {"bill": bill_id_value})
-    db.query(models.Payment).filter(models.Payment.bill_id == bill_id_value).delete(synchronize_session=False)
-    db.query(models.Bill).filter(models.Bill.id == bill_id_value).delete(synchronize_session=False)
-    db.execute(text("DELETE FROM kot_items WHERE kot_id IN (SELECT id FROM kots WHERE order_id=:order)"), {"order": order_id})
-    db.execute(text("DELETE FROM kots WHERE order_id=:order"), {"order": order_id})
-    db.execute(text("DELETE FROM order_items WHERE order_id=:order"), {"order": order_id})
-    db.execute(text("DELETE FROM orders WHERE id=:order"), {"order": order_id})
-    audit(db, user.id, "bill.permanent_delete", f"Permanently deleted sale {bill_number}")
-    db.commit()
-    return {"ok": True, "status": "deleted"}
+    # Financial source records must remain immutable. Use the audited void workflow
+    # to reverse inventory/loyalty/credit effects without erasing receipts.
+    raise HTTPException(409, "Permanent deletion of sales is disabled to protect financial history. Use the audited void action instead.")
 
 
 def _report_data(start: date, end: date, db: Session):
@@ -729,6 +713,65 @@ def delete_cash_entry(shift_id: str, entry_id: str,
           f"Shift {shift_id}: archived {entry['entry_type']} NPR {entry['amount']} reference {entry['reference'] or ''}; original row retained")
     db.commit()
     return {"ok": True, "deleted_id": entry_id}
+
+
+@router.get("/cash-shifts/archived-entries")
+def list_archived_cash_entries(limit: int = Query(100, ge=1, le=500),
+                               db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
+    rows = db.execute(text("""SELECT e.id,e.entry_type,e.amount,e.reference,e.notes,e.created_at,
+        COALESCE(p.bill_number, b.bill_number, r.bill_number) bill_number,
+        COALESCE(p.payment_method, r.payment_method) source_method
+        FROM cash_drawer_entries e
+        LEFT JOIN cash_payment_links cpl ON cpl.drawer_entry_id=e.id
+        LEFT JOIN payments pmt ON pmt.id=cpl.payment_id
+        LEFT JOIN bills p ON p.id=pmt.bill_id
+        LEFT JOIN cash_repayment_links crl ON crl.drawer_entry_id=e.id
+        LEFT JOIN balance_transactions bt ON bt.id=crl.transaction_id
+        LEFT JOIN customer_balances cb ON cb.id=bt.customer_balance_id
+        LEFT JOIN bills b ON b.id=cb.bill_id
+        LEFT JOIN cash_refund_links cfl ON cfl.drawer_entry_id=e.id
+        LEFT JOIN bill_refunds br ON br.id=cfl.refund_id
+        LEFT JOIN bills r ON r.id=br.bill_id
+        WHERE e.shift_id IS NULL AND e.notes ILIKE '%ARCHIVED%'
+        ORDER BY e.created_at DESC LIMIT :limit"""), {"limit": limit}).mappings().all()
+    return [dict(row) for row in rows]
+
+
+@router.post("/cash-shifts/{shift_id}/entries/{entry_id}/restore")
+def restore_archived_cash_entry(shift_id: str, entry_id: str,
+                                db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
+    shift = db.execute(text("""SELECT id,status,opening_float,counted_cash,opened_at,closed_at
+        FROM cash_drawer_shifts WHERE id=:id FOR UPDATE"""), {"id": shift_id}).mappings().first()
+    if not shift:
+        raise HTTPException(404, "Cash drawer shift not found")
+    entry = db.execute(text("""SELECT id,entry_type,amount,reference,notes,created_at
+        FROM cash_drawer_entries WHERE id=:entry AND shift_id IS NULL
+          AND notes ILIKE '%ARCHIVED%' FOR UPDATE"""), {"entry": entry_id}).mappings().first()
+    if not entry:
+        raise HTTPException(404, "Archived cash record not found")
+    if entry["created_at"] < shift["opened_at"] or (
+        shift["closed_at"] is not None and entry["created_at"] > shift["closed_at"]
+    ):
+        raise HTTPException(409, "This shift does not cover the original record timestamp.")
+    db.execute(text("""UPDATE cash_drawer_entries SET shift_id=:shift,
+        notes=CONCAT(COALESCE(notes,''),' · RESTORED to shift ',:shift)
+        WHERE id=:entry"""), {"shift": shift_id, "entry": entry_id})
+    if shift["status"] == "closed":
+        totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
+            FROM cash_drawer_entries WHERE shift_id=:id GROUP BY entry_type"""),
+            {"id": shift_id}).mappings().all()
+        values = {row["entry_type"]: Decimal(str(row["amount"])) for row in totals}
+        expected = (Decimal(str(shift["opening_float"])) + values.get("sale", Decimal(0))
+            + values.get("cash_in", Decimal(0)) - values.get("refund", Decimal(0))
+            - values.get("cash_out", Decimal(0)) - values.get("payout", Decimal(0)))
+        difference = Decimal(str(shift["counted_cash"] or 0)) - expected
+        db.execute(text("""UPDATE cash_drawer_shifts SET expected_cash=:expected,
+            cash_difference=:difference WHERE id=:id"""),
+            {"expected": expected, "difference": difference, "id": shift_id})
+    audit(db, user.id, "cash_shift.entry_restored",
+          f"Restored archived entry {entry_id} to shift {shift_id}; original timestamp {entry['created_at']}")
+    db.commit()
+    return {"ok": True, "restored_id": entry_id, "shift_id": shift_id}
 
 
 @router.patch("/cash-shifts/{shift_id}/entries/{entry_id}/closed-correction")
