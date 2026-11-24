@@ -20,6 +20,6 @@ export default function AdminControls() {
         {!isManager && <button onClick={() => setParams({section:"staff"})} className={"rounded-xl px-4 py-2.5 text-xs font-bold "+(section==="staff"?"bg-[#7d2523] text-white":"border border-[var(--rs-line)] text-[var(--rs-ink)]")}>Staff Accounts</button>}
       </div>
     </header>
-    {section === "system" ? <AdminControl visibleTabs={isManager ? ["backup"] : ["sales","suppliers","reports","backup","audit","settings","loyalty"]} managerView={isManager} initialTab={isManager ? "backup" : requestedTab} /> : <Admin staffOnly />}
+    {section === "system" ? <AdminControl visibleTabs={isManager ? ["backup"] : ["sales","suppliers","reports","backup","audit","settings","loyalty","account"]} managerView={isManager} initialTab={isManager ? "backup" : requestedTab} /> : <Admin staffOnly />}
   </div>;
 }
