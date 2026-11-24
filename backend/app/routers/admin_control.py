@@ -1125,7 +1125,7 @@ def _backfill_unambiguous_cash_links(db: Session) -> int:
         FROM payments p
         JOIN bills b ON b.id=p.bill_id
         JOIN cash_drawer_entries e
-          ON e.reference=b.bill_number AND e.entry_type='sale' AND e.amount=p.amount
+          ON e.reference=b.bill_number AND e.entry_type='sale' AND e.amount=p.amount AND e.created_at=p.created_at
         WHERE p.method='cash' AND b.sale_status='active'
           AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.payment_id=p.id)
           AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.drawer_entry_id=e.id)
@@ -1323,12 +1323,13 @@ def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
             raise HTTPException(409, "The selected shift does not cover this receipt's original timestamp. Choose the shift that was open when the cash was received, or leave it unassigned.")
     candidates = db.execute(text("""SELECT e.id,e.shift_id FROM cash_drawer_entries e
         WHERE e.entry_type=:entry_type AND e.reference=:reference AND e.amount=:amount
+          AND e.created_at=:created_at
           AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.drawer_entry_id=e.id)
           AND NOT EXISTS (SELECT 1 FROM cash_repayment_links l WHERE l.drawer_entry_id=e.id)
           AND NOT EXISTS (SELECT 1 FROM cash_refund_links l WHERE l.drawer_entry_id=e.id)
         ORDER BY e.created_at"""),
         {"entry_type": payment["drawer_type"], "reference": payment["reference"],
-         "amount": payment["amount"]}).mappings().all()
+         "amount": payment["amount"], "created_at": payment["created_at"]}).mappings().all()
     if len(candidates) > 1:
         raise HTTPException(409, "Multiple matching historical drawer rows exist. Resolve the duplicate manually before linking.")
     if candidates:
