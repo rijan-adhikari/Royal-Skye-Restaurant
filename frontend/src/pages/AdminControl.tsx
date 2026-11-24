@@ -102,7 +102,6 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   };
 
   const assignUnassignedCashToOpenShift = async () => {
-    if (!shift) { setError("There is no open cash drawer shift."); return; }
     if (!window.confirm("Rebuild missing cash-drawer links using each original receipt timestamp? Receipts will be assigned only to the shift that was actually open at that time. Records outside a shift will remain unassigned; today's drawer will not absorb old cash.")) return;
     await run(async () => {
       const response = await api.post("/api/admin/cash-payments/assign-unassigned-to-open-shift");
@@ -383,7 +382,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
       </section>
       <section className={panel}>
         {shift && <div className="mb-5">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-lg">Session cash movements</h2><div className="flex flex-wrap items-center gap-2"><span className="text-xs text-neutral-500">{(shift.cash_entries || []).length} record(s)</span>{role === "admin" && <button type="button" disabled={busy} onClick={assignUnassignedCashToOpenShift} className="rounded-lg bg-[#7b2926] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Recover unlinked cash history</button>}</div></div>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-lg">Session cash movements</h2><div className="flex flex-wrap items-center gap-2"><span className="text-xs text-neutral-500">{(shift.cash_entries || []).length} record(s)</span></div></div>
           <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs text-neutral-500"><th className="py-2">Time</th><th>Type</th><th>Reference / notes</th><th>Amount</th><th>Actions</th></tr></thead><tbody>
             {(shift.cash_entries || []).map((entry: any) => <React.Fragment key={entry.id}>
               <tr className="border-b align-top"><td className="py-2 whitespace-nowrap">{new Date(entry.created_at).toLocaleString()}</td><td className="capitalize">{entry.entry_type.replace("_", " ")}</td><td>{entry.reference || "—"}{entry.notes ? <p className="text-xs text-neutral-500">{entry.notes}</p> : null}</td><td>{money(entry.amount)}</td><td><div className="flex gap-2">{entry.expense_id ? <span className="text-[10px] font-semibold text-neutral-400">Linked expense</span> : canAdminEditCash && <>{entry.entry_type === "sale" ? <button type="button" disabled={busy} onClick={() => correctSystemSaleEntry(entry, shift.id)} className="rounded-lg border px-2 py-1 text-xs font-semibold">Edit payment</button> : <button type="button" disabled={busy || !["cash_in","cash_out","payout"].includes(entry.entry_type)} onClick={() => editCashEntry(entry)} className="rounded-lg border px-2 py-1 text-xs font-semibold">Edit</button>}<button type="button" disabled={busy || !["cash_in","cash_out","payout","sale","refund"].includes(entry.entry_type)} onClick={() => deleteCashEntry(entry)} className="rounded-lg bg-red-700 px-2 py-1 text-xs font-semibold text-white">Archive</button></>}</div></td></tr>
