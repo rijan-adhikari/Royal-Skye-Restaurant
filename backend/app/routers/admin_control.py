@@ -550,6 +550,10 @@ def get_qr_account(db: Session = Depends(get_db), user=Depends(require_roles(*AD
             SELECT e.created_at,'qr_expense'::varchar,
                 'Expense · ' || e.description,e.receipt_reference,e.amount,'out'::varchar
             FROM expenses e WHERE e.payment_method='qr' AND e.payment_status='paid' AND e.created_at>=:since
+            UNION ALL
+            SELECT q.opening_balance_at,'opening_balance'::varchar,'Opening balance'::varchar,
+                NULL::varchar,q.opening_balance,'in'::varchar
+            FROM qr_account_settings q WHERE q.id=1
         ) account_activity
         ORDER BY happened_at DESC LIMIT 500"""), {"since": since}).mappings().all()
     return {key: str(value) for key, value in totals.items()} | {
