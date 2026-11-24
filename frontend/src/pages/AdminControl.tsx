@@ -2,13 +2,13 @@ import React, { useEffect, useState } from "react";
 import { api, apiErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
-type Tab = "cash" | "sales" | "suppliers" | "reports" | "service" | "backup" | "audit" | "settings" | "loyalty";
+type Tab = "cash" | "sales" | "suppliers" | "reports" | "service" | "backup" | "audit" | "settings" | "loyalty" | "account";
 type AdminControlProps = { visibleTabs?: Tab[]; embedded?: boolean; managerView?: boolean; initialTab?: string };
 const tabs: { id: Tab; label: string }[] = [
   { id: "cash", label: "Cash drawer" },
   { id: "sales", label: "Manage sales" }, { id: "suppliers", label: "Supplier ledger" },
   { id: "reports", label: "Reports & exports" }, { id: "service", label: "Service orders" }, { id: "loyalty", label: "Loyalty points" }, { id: "backup", label: "Backup & restore" },
-  { id: "audit", label: "Audit trail" }, { id: "settings", label: "Business settings" },
+  { id: "audit", label: "Audit trail" }, { id: "settings", label: "Business settings" }, { id: "account", label: "Royal Skye Account settings" },
 ];
 const field = "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm";
 const primary = "rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white disabled:opacity-50";
@@ -29,6 +29,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const [restaurant, setRestaurant] = useState<any>({ name: "", email: "", phone: "", address: "", pan: "", vat: "", currency: "NPR", logo_path: "", qr_image_path: "", receipt_footer: "" });
   const [openFloat, setOpenFloat] = useState("0");
   const [countedCash, setCountedCash] = useState("");
+  const [qrOpeningBalance, setQrOpeningBalance] = useState("0");
   const [cashEntry, setCashEntry] = useState({ entry_type: "cash_in", amount: "", reference: "", notes: "" });
   const [editingCashEntry, setEditingCashEntry] = useState<string | null>(null);
   const [cashEntryEdit, setCashEntryEdit] = useState({ entry_type: "cash_in", amount: "", reference: "", notes: "" });
@@ -61,7 +62,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
       ["suppliers", "/api/operations/suppliers"], ["inventory", "/api/operations/inventory"], ["ledger", "/api/admin/suppliers/ledger"], ["supplierBalances", "/api/admin/suppliers/balances"],
       ["serviceOrders", "/api/admin/service-orders"],
       ["loyalty", "/api/admin/loyalty/accounts"], ["loyaltySettings", "/api/admin/loyalty/settings"],
-      ...(!managerView ? ([["audit", "/api/admin/audit"], ["tax", "/api/settings/tax"], ["restaurant", "/api/settings/restaurant"]] as [string, string][]) : []),
+      ...(!managerView ? ([["audit", "/api/admin/audit"], ["tax", "/api/settings/tax"], ["restaurant", "/api/settings/restaurant"], ["qrAccount", "/api/admin/qr-account"]] as [string, string][]) : []),
     ] as const;
     const results = await Promise.allSettled(requests.map(([, url]) => api.get(url)));
     const next: any = {};
@@ -78,6 +79,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     if (next.tax) setTax(next.tax);
     if (next.restaurant) setRestaurant(next.restaurant);
     if (next.loyaltySettings) setLoyaltySettings(next.loyaltySettings);
+    if (next.qrAccount) setQrOpeningBalance(String(next.qrAccount.opening_balance ?? "0"));
   };
 
   const openPeriodSales = async (period: "monthly" | "yearly") => {
@@ -331,7 +333,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     {message && <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p>}
     {error && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     <nav className="grid gap-3 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm md:grid-cols-3">
-      {([{label:"Cash & transactions",ids:["cash","sales","suppliers"]},{label:"Customers & service",ids:["service","loyalty"]},{label:"Reports & administration",ids:["reports","backup","audit","settings"]}] as const).map(group=>{const items=tabs.filter(item=>(group.ids as readonly string[]).includes(item.id)&&availableTabs.includes(item.id));return items.length?<section key={group.label}><p className="mb-2 text-[10px] font-extrabold uppercase tracking-[.15em] text-[#9b8065]">{group.label}</p><div className="flex flex-wrap gap-1.5">{items.map(item=><button key={item.id} type="button" onClick={()=>setTab(item.id)} className={"rounded-lg px-3 py-2 text-xs font-bold transition "+(tab===item.id?"bg-[#7b2926] text-white shadow-sm":"bg-[#f7f3ee] text-[#6d5a4a] hover:bg-[#eee5db]")}>{item.label}</button>)}</div></section>:null})}
+      {([{label:"Cash & transactions",ids:["cash","sales","suppliers"]},{label:"Customers & service",ids:["service","loyalty"]},{label:"Reports & administration",ids:["reports","backup","audit","settings","account"]}] as const).map(group=>{const items=tabs.filter(item=>(group.ids as readonly string[]).includes(item.id)&&availableTabs.includes(item.id));return items.length?<section key={group.label}><p className="mb-2 text-[10px] font-extrabold uppercase tracking-[.15em] text-[#9b8065]">{group.label}</p><div className="flex flex-wrap gap-1.5">{items.map(item=><button key={item.id} type="button" onClick={()=>setTab(item.id)} className={"rounded-lg px-3 py-2 text-xs font-bold transition "+(tab===item.id?"bg-[#7b2926] text-white shadow-sm":"bg-[#f7f3ee] text-[#6d5a4a] hover:bg-[#eee5db]")}>{item.label}</button>)}</div></section>:null})}
     </nav>
 
     {tab === "cash" && <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
