@@ -749,6 +749,18 @@ def list_archived_cash_entries(limit: int = Query(100, ge=1, le=500),
     return [dict(row) for row in rows]
 
 
+@router.get("/cash-shifts/deletion-audit")
+def list_cash_deletion_audit(limit: int = Query(100, ge=1, le=500),
+                             db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
+    """Expose legacy hard-delete audit events so administrators can reconcile past removals."""
+    rows = db.execute(text("""SELECT a.id,a.action,a.details,a.created_at,u.full_name actor_name
+        FROM audit_logs a LEFT JOIN users u ON u.id=a.user_id
+        WHERE a.action IN ('cash_shift.entry_deleted','cash_shift.closed_entry_deleted',
+                           'cash_shift.system_entry_deleted')
+        ORDER BY a.created_at DESC LIMIT :limit"""), {"limit": limit}).mappings().all()
+    return [dict(row) for row in rows]
+
+
 @router.post("/cash-shifts/{shift_id}/entries/{entry_id}/restore")
 def restore_archived_cash_entry(shift_id: str, entry_id: str,
                                 db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
