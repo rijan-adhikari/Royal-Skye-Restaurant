@@ -757,8 +757,10 @@ def correct_closed_cash_entry(shift_id: str, entry_id: str, payload: CashEntryUp
 def delete_closed_cash_entry(shift_id: str, entry_id: str, db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     shift = db.execute(text("SELECT * FROM cash_drawer_shifts WHERE id=:id AND status='closed' FOR UPDATE"), {"id": shift_id}).mappings().first()
     if not shift: raise HTTPException(409, "This correction endpoint is only for closed shifts")
-    entry = db.execute(text("SELECT id,entry_type,amount,reference FROM cash_drawer_entries WHERE id=:entry AND shift_id=:shift FOR UPDATE"), {"entry": entry_id, "shift": shift_id}).mappings().first()
+    entry = db.execute(text("SELECT id,entry_type,amount,reference,expense_id FROM cash_drawer_entries WHERE id=:entry AND shift_id=:shift FOR UPDATE"), {"entry": entry_id, "shift": shift_id}).mappings().first()
     if not entry: raise HTTPException(404, "Cash movement not found in this shift")
+    if entry["expense_id"]:
+        raise HTTPException(403, "Expense-linked cash movements cannot be deleted separately from the expense.")
     if entry["entry_type"] not in ("cash_in", "cash_out", "payout"): raise HTTPException(403, "System-generated sale and refund records cannot be deleted")
     db.execute(text("DELETE FROM cash_drawer_entries WHERE id=:entry"), {"entry": entry_id})
     totals = db.execute(text("SELECT entry_type,COALESCE(SUM(amount),0) amount FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT ((e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) OR (e.entry_type='refund' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)))) GROUP BY e.entry_type"), {"id": shift_id}).mappings().all()
