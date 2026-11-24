@@ -720,9 +720,13 @@ def delete_cash_entry(shift_id: str, entry_id: str,
         raise HTTPException(403, "Expense-linked cash movements cannot be deleted separately from the expense.")
     if entry["entry_type"] not in ("cash_in", "cash_out", "payout"):
         raise HTTPException(403, "System-generated sale and refund records cannot be deleted")
-    db.execute(text("DELETE FROM cash_drawer_entries WHERE id=:entry"), {"entry": entry_id})
-    audit(db, user.id, "cash_shift.entry_deleted",
-          f"Shift {shift_id}: deleted {entry['entry_type']} NPR {entry['amount']} reference {entry['reference'] or ''}")
+    # Archive by detaching from the shift instead of hard-deleting. This preserves
+    # the source row and any payment-link rows for recovery and audit.
+    db.execute(text("""UPDATE cash_drawer_entries
+        SET shift_id=NULL,notes=CONCAT(COALESCE(notes,''),' · ARCHIVED from shift ',:shift)
+        WHERE id=:entry"""), {"shift": shift_id, "entry": entry_id})
+    audit(db, user.id, "cash_shift.entry_archived",
+          f"Shift {shift_id}: archived {entry['entry_type']} NPR {entry['amount']} reference {entry['reference'] or ''}; original row retained")
     db.commit()
     return {"ok": True, "deleted_id": entry_id}
 
@@ -789,7 +793,10 @@ def delete_system_cash_entry(shift_id: str, entry_id: str, reason: str = Query(.
         raise HTTPException(404, "Cash drawer record not found")
     if entry["entry_type"] not in ("sale", "refund"):
         raise HTTPException(403, "This endpoint only deletes system-generated sale or refund records")
-    db.execute(text("DELETE FROM cash_drawer_entries WHERE id=:entry"), {"entry": entry_id})
+    # Keep the drawer row and its unique payment link; only remove it from this shift.
+    db.execute(text("""UPDATE cash_drawer_entries
+        SET shift_id=NULL,notes=CONCAT(COALESCE(notes,''),' · ARCHIVED from shift ',:shift)
+        WHERE id=:entry"""), {"shift": shift_id, "entry": entry_id})
     if shift and shift["status"] == "closed":
         totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
             FROM cash_drawer_entries e WHERE e.shift_id=:id AND NOT ((e.entry_type='sale' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount))) OR (e.entry_type='refund' AND EXISTS (SELECT 1 FROM bills b WHERE b.bill_number=e.reference AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount) AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)))) GROUP BY e.entry_type"""),
@@ -1240,14 +1247,13 @@ def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
                            {"id": payload.shift_id}).mappings().first()
         if not shift:
             raise HTTPException(404, "Selected cash drawer shift was not found")
-        # An open shift may accept an explicitly assigned historical cash receipt.
-        # Keep the source payment's original timestamp; shift_id controls drawer totals.
-        # Closed shifts remain strict so historical reconciliation cannot be silently rewritten.
-        if shift["status"] == "closed" and (
-            payment["created_at"] < shift["opened_at"] or
-            (shift["closed_at"] is not None and payment["created_at"] > shift["closed_at"])
+        # Never assign a receipt to a shift outside its real operating window.
+        # This applies to open and closed shifts; historical receipts must not inflate
+        # the currently open drawer merely because they were reconciled today.
+        if payment["created_at"] < shift["opened_at"] or (
+            shift["closed_at"] is not None and payment["created_at"] > shift["closed_at"]
         ):
-            raise HTTPException(409, "The selected closed shift does not cover this receipt's original timestamp.")
+            raise HTTPException(409, "The selected shift does not cover this receipt's original timestamp. Choose the shift that was open when the cash was received, or leave it unassigned.")
     candidates = db.execute(text("""SELECT e.id,e.shift_id FROM cash_drawer_entries e
         WHERE e.entry_type=:entry_type AND e.reference=:reference AND e.amount=:amount
           AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.drawer_entry_id=e.id)
@@ -1260,8 +1266,13 @@ def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
         raise HTTPException(409, "Multiple matching historical drawer rows exist. Resolve the duplicate manually before linking.")
     if candidates:
         entry_id = candidates[0]["id"]
-        if (str(candidates[0]["shift_id"]) if candidates[0]["shift_id"] else None) != payload.shift_id:
-            raise HTTPException(409, "A matching drawer entry already belongs to a different reconciliation. Select its shift or resolve the existing entry first.")
+        existing_shift_id = str(candidates[0]["shift_id"]) if candidates[0]["shift_id"] else None
+        if existing_shift_id is None and payload.shift_id is not None:
+            db.execute(text("""UPDATE cash_drawer_entries
+                SET shift_id=:shift,notes=CONCAT(COALESCE(notes,''),' · restored to original shift')
+                WHERE id=:entry"""), {"shift": payload.shift_id, "entry": entry_id})
+        elif existing_shift_id != payload.shift_id:
+            raise HTTPException(409, "A matching drawer entry already belongs to a different shift. Resolve it before linking.")
     else:
         entry_id = db.execute(text("""INSERT INTO cash_drawer_entries
             (shift_id,entry_type,amount,reference,notes,created_by,created_at)
@@ -1307,26 +1318,36 @@ def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
 def assign_unassigned_cash_to_open_shift(db: Session = Depends(get_db),
                                          user=Depends(require_roles(*ADMIN))):
     """Link all safely identifiable unassigned cash receipts/refunds to the current open drawer."""
-    shift = db.execute(text("""SELECT id FROM cash_drawer_shifts
-        WHERE status='open' ORDER BY opened_at DESC LIMIT 1 FOR UPDATE""")).mappings().first()
-    if not shift:
-        raise HTTPException(409, "There is no open cash drawer shift.")
+    # Rebuild missing drawer links against the shift that actually covered each
+    # receipt timestamp. Never bulk-attach historical payments to today's open shift.
     pending = unassigned_cash_payments(db, user)
     if pending.get("list_truncated"):
         raise HTTPException(409, "More than 3,000 unmatched cash records exist. Reconcile in batches before bulk assignment.")
     assigned, skipped = [], []
     for item in pending.get("payments", []):
+        windows = db.execute(text("""SELECT id,status FROM cash_drawer_shifts
+            WHERE opened_at <= :created_at
+              AND (closed_at IS NULL OR closed_at >= :created_at)
+            ORDER BY opened_at DESC LIMIT 2"""),
+            {"created_at": item["created_at"]}).mappings().all()
+        if len(windows) > 1:
+            skipped.append({"payment_id": str(item["payment_id"]), "bill_number": item["bill_number"],
+                            "reason": "Multiple shifts overlap this receipt timestamp; manual review required."})
+            continue
+        target_shift = str(windows[0]["id"]) if windows else None
         try:
             assign_cash_payment(str(item["payment_id"]),
-                CashPaymentAssign(shift_id=str(shift["id"]),
-                    notes="Bulk reconciled to the currently open cash drawer by administrator."),
+                CashPaymentAssign(shift_id=target_shift,
+                    notes=("Recovered from original payment history; no drawer shift covered receipt time."
+                           if target_shift is None else "Recovered against the shift open at original receipt time.")),
                 db, user)
             assigned.append({"payment_id": str(item["payment_id"]), "bill_number": item["bill_number"],
-                             "amount": str(item["amount"]), "source_type": item["source_type"]})
+                             "amount": str(item["amount"]), "source_type": item["source_type"],
+                             "shift_id": target_shift})
         except HTTPException as exc:
             skipped.append({"payment_id": str(item["payment_id"]), "bill_number": item["bill_number"],
                             "reason": exc.detail})
-    return {"shift_id": str(shift["id"]), "assigned_count": len(assigned),
+    return {"assigned_count": len(assigned),
             "assigned_total": str(sum((Decimal(x["amount"]) for x in assigned
                 if x["source_type"] != "refund"), Decimal(0))),
             "refund_total": str(sum((Decimal(x["amount"]) for x in assigned
