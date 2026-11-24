@@ -242,14 +242,14 @@ body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 button { color:#e5eeeb;
         <div className={`pointer-events-none absolute -right-2 -top-16 h-64 w-64 rounded-full border ${theme === "dark" ? "border-[#d9b98f]/15" : "border-[#b98263]/20"}`} />
         <div className="relative flex flex-col justify-between gap-7 lg:flex-row lg:items-end">
           <div className="max-w-2xl">
-            <p className={`flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[.24em] ${theme === `}dark" ? "text-[#e2b98d]" : "text-[#925044]"}"><span className={`h-px w-7 ${theme === "dark" ? "bg-[#e2b98d]" : "bg-[#925044]"}`} /> ROYAL SKYE <span className={theme === "dark" ? "text-[#9a7770]" : "text-[#b58c76]"}>/</span> {t("MANAGEMENT OVERVIEW")}</p>
-            <h1 className={`mt-4 text-3xl font-extrabold leading-tight tracking-[-.045em] ${theme === `}dark" ? "text-[#fff8f1]" : "text-[#30251f]"} md:text-[42px]">{t("Good to see you,")} {fullName}</h1>
-            <p className={`mt-3 max-w-xl text-sm leading-6 ${theme === `}dark" ? "text-[#cbbab3]" : "text-[#766257]"}">{t("A clear view of today's restaurant performance and operations.")}</p>
+            <p className={`flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[.24em] ${theme === "dark" ? "text-[#e2b98d]" : "text-[#925044]"}"><span className={`h-px w-7 ${theme === "dark" ? "bg-[#e2b98d]" : "bg-[#925044]"}`} /> ROYAL SKYE <span className={theme === "dark" ? "text-[#9a7770]" : "text-[#b58c76]"}>/</span> {t("MANAGEMENT OVERVIEW")}</p>
+            <h1 className={`mt-4 text-3xl font-extrabold leading-tight tracking-[-.045em] ${theme === "dark" ? "text-[#fff8f1]" : "text-[#30251f]"} md:text-[42px]">{t("Good to see you,")} {fullName}</h1>
+            <p className={`mt-3 max-w-xl text-sm leading-6 ${theme === "dark" ? "text-[#cbbab3]" : "text-[#766257]"}">{t("A clear view of today's restaurant performance and operations.")}</p>
           </div>
           <div className="flex flex-wrap items-end gap-3">
-            <label className={`text-[10px] font-bold uppercase tracking-[.14em] ${theme === `}dark" ? "text-[#cbbab3]" : "text-[#766257]"}">{t("Report date")}<input aria-label={t("Report date")} type="date" className={`mt-2 block rounded-xl border px-3 py-2.5 text-sm font-semibold normal-case tracking-normal ${theme === `}dark" ? "border-white/15 bg-white/10 text-white [color-scheme:dark]" : "border-[#dfcbbb] bg-white/75 text-[#49372f] [color-scheme:light]"}" value={reportDate} onChange={(e) => setReportDate(e.target.value)} /></label>
+            <label className={`text-[10px] font-bold uppercase tracking-[.14em] ${theme === "dark" ? "text-[#cbbab3]" : "text-[#766257]"}">{t("Report date")}<input aria-label={t("Report date")} type="date" className={`mt-2 block rounded-xl border px-3 py-2.5 text-sm font-semibold normal-case tracking-normal ${theme === "dark" ? "border-white/15 bg-white/10 text-white [color-scheme:dark]" : "border-[#dfcbbb] bg-white/75 text-[#49372f] [color-scheme:light]"}" value={reportDate} onChange={(e) => setReportDate(e.target.value)} /></label>
             {role === "admin" && <button type="button" onClick={downloadDashboardPdf} className="rounded-xl border border-[#a96a50]/30 bg-[#9a4b43] px-4 py-[13px] text-xs font-extrabold text-white shadow-lg shadow-black/10 transition hover:bg-[#843d38]">{t("Premium PDF")} <span className="ml-1">↗</span></button>}
-            {role === "admin" && <button type="button" onClick={() => downloadReport(`/api/dashboard/summary.xlsx?report_date=${reportDate}`, `royal-skye-financial-report-${reportDate}.xlsx`, "Could not download Excel report.")} className={`rounded-xl border px-4 py-[13px] text-xs font-extrabold ${theme === `}dark" ? "border-white/20 bg-white/10 text-white hover:bg-white/15" : "border-[#d8c2b0] bg-white/65 text-[#49372f] hover:bg-white"}">Excel workbook ↗</button>}
+            {role === "admin" && <button type="button" onClick={() => downloadReport(`/api/dashboard/summary.xlsx?report_date=${reportDate}`, `royal-skye-financial-report-${reportDate}.xlsx`, "Could not download Excel report.")} className={`rounded-xl border px-4 py-[13px] text-xs font-extrabold ${theme === "dark" ? "border-white/20 bg-white/10 text-white hover:bg-white/15" : "border-[#d8c2b0] bg-white/65 text-[#49372f] hover:bg-white"}">Excel workbook ↗</button>}
 <button type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} className="rounded-xl border border-white/20 bg-white/10 px-4 py-[13px] text-xs font-extrabold text-white hover:bg-white/15">{theme === "dark" ? "☀ White theme" : "☾ Dark theme"}</button>
             {role === "admin" && <div className="relative w-full sm:w-[260px]">
               <label className="sr-only" htmlFor="dashboard-settings-search">Search website settings</label>
@@ -265,9 +265,9 @@ body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 button { color:#e5eeeb;
             </div>}
           </div>
         </div>
-        <div className={`relative mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/10 pt-5 text-[10px] font-semibold uppercase tracking-[.13em] ${theme === `}dark" ? "text-[#c3b1a8]" : "text-[#806d61]"}">
+        <div className={`relative mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/10 pt-5 text-[10px] font-semibold uppercase tracking-[.13em] ${theme === "dark" ? "text-[#c3b1a8]" : "text-[#806d61]"}">
           <span className="inline-flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-[#7eaa83]" /> {t("Operations snapshot")}</span>
-          <span className={`${theme === `}dark" ? "text-[#80655f]" : "text-[#b18c78]"}">•</span><span>{new Date(reportDate + "T12:00:00").toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span>
+          <span className={`${theme === "dark" ? "text-[#80655f]" : "text-[#b18c78]"}">•</span><span>{new Date(reportDate + "T12:00:00").toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span>
           <span className="text-[#6e5b50]">•</span><span className="capitalize">{role}</span>
         </div>
       </section>
