@@ -1168,10 +1168,14 @@ def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
                            {"id": payload.shift_id}).mappings().first()
         if not shift:
             raise HTTPException(404, "Selected cash drawer shift was not found")
-        if payment["created_at"] < shift["opened_at"] or (
-            shift["closed_at"] is not None and payment["created_at"] > shift["closed_at"]
+        # An open shift may accept an explicitly assigned historical cash receipt.
+        # Keep the source payment's original timestamp; shift_id controls drawer totals.
+        # Closed shifts remain strict so historical reconciliation cannot be silently rewritten.
+        if shift["status"] == "closed" and (
+            payment["created_at"] < shift["opened_at"] or
+            (shift["closed_at"] is not None and payment["created_at"] > shift["closed_at"])
         ):
-            raise HTTPException(409, "The selected shift does not cover this receipt's original timestamp.")
+            raise HTTPException(409, "The selected closed shift does not cover this receipt's original timestamp.")
     candidates = db.execute(text("""SELECT e.id,e.shift_id FROM cash_drawer_entries e
         WHERE e.entry_type=:entry_type AND e.reference=:reference AND e.amount=:amount
           AND NOT EXISTS (SELECT 1 FROM cash_payment_links l WHERE l.drawer_entry_id=e.id)
