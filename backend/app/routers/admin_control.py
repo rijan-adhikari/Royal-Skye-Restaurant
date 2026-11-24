@@ -783,7 +783,7 @@ def restore_archived_cash_entry(shift_id: str, entry_id: str,
         raise HTTPException(404, "Archived cash record not found")
     if entry["source_method"] is not None and entry["source_method"] != "cash":
         raise HTTPException(409, "This record is linked to a non-cash tender and cannot be restored to physical cash.")
-    if not _shift_covers_receipt(entry["created_at"], shift["opened_at"], shift["closed_at"]):
+    if not _shift_covers_receipt(entry["created_at"], shift["opened_at"], shift["closed_at"], shift["status"]):
         raise HTTPException(409, "This shift does not cover the original record timestamp.")
     db.execute(text("""UPDATE cash_drawer_entries SET shift_id=:shift,
         notes=CONCAT(COALESCE(notes,''),' · RESTORED to shift ',:shift)
@@ -1299,8 +1299,10 @@ def unassigned_cash_payments(db: Session = Depends(get_db), user=Depends(require
 
 
 def _shift_covers_receipt(receipt_at: datetime, opened_at: datetime,
-                           closed_at: datetime | None) -> bool:
+                           closed_at: datetime | None, status: str | None = None) -> bool:
     """A drawer shift may contain only cash movements from its actual time window."""
+    if status == "closed" and closed_at is None:
+        return False
     return receipt_at >= opened_at and (closed_at is None or receipt_at <= closed_at)
 
 
@@ -1360,7 +1362,7 @@ def assign_cash_payment(payment_id: str, payload: CashPaymentAssign,
         # Never assign a receipt to a shift outside its real operating window.
         # This applies to open and closed shifts; historical receipts must not inflate
         # the currently open drawer merely because they were reconciled today.
-        if not _shift_covers_receipt(payment["created_at"], shift["opened_at"], shift["closed_at"]):
+        if not _shift_covers_receipt(payment["created_at"], shift["opened_at"], shift["closed_at"], shift["status"]):
             raise HTTPException(409, "The selected shift does not cover this receipt's original timestamp. Choose the shift that was open when the cash was received, or leave it unassigned.")
     candidates = db.execute(text("""SELECT e.id,e.shift_id FROM cash_drawer_entries e
         WHERE e.entry_type=:entry_type AND e.reference=:reference AND e.amount=:amount
@@ -1472,7 +1474,7 @@ def assign_unassigned_cash_to_open_shift(db: Session = Depends(get_db),
         shift_row = db.execute(text("""SELECT id,status,opening_float,counted_cash,opened_at,closed_at
             FROM cash_drawer_shifts WHERE id=:id FOR UPDATE"""),
             {"id": savings["shift_id"]}).mappings().first()
-        if not shift_row or not _shift_covers_receipt(savings["created_at"], shift_row["opened_at"], shift_row["closed_at"]):
+        if not shift_row or not _shift_covers_receipt(savings["created_at"], shift_row["opened_at"], shift_row["closed_at"], shift_row["status"]):
             skipped.append({"payment_id": str(savings["id"]), "bill_number": "Daily savings",
                             "reason": "Original shift is missing or does not cover the savings timestamp."})
             continue
