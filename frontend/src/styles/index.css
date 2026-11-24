@@ -2013,3 +2013,91 @@ html[data-theme="light"] .rs-command-result:hover { background:#e8f5f0 !importan
   .rs-command-results { left:0;right:auto;width:min(92vw,460px);max-height:min(65vh,560px); }
   .rs-app-shell main > .sticky { padding-top:env(safe-area-inset-top,0px); }
 }
+
+
+/* Global dark-mode completion: cover every authenticated route and portal surface. */
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --rs-paper: #10191b;
+  --rs-panel: #172426;
+  --rs-ink: #e8f0ed;
+  --rs-muted: #a6b7b1;
+  --rs-line: #304543;
+}
+html[data-theme="dark"] body,
+html[data-theme="dark"] #root { background: #0b1214 !important; color: #e5eeeb !important; }
+html[data-theme="dark"] main { background: transparent !important; color: #e5eeeb !important; }
+html[data-theme="dark"] main :is(p, span, label, small, li, td, th, h1, h2, h3, h4, h5, h6):not([class*="text-white"]):not([class*="text-red-"]):not([class*="text-green-"]):not([class*="text-emerald-"]):not([class*="text-amber-"]):not([class*="text-yellow-"]):not([class*="text-blue-"]) {
+  text-shadow: none;
+}
+html[data-theme="dark"] main [class*="bg-white"],
+html[data-theme="dark"] main [class*="bg-gray-50"],
+html[data-theme="dark"] main [class*="bg-gray-100"],
+html[data-theme="dark"] main [class*="bg-neutral-50"],
+html[data-theme="dark"] main [class*="bg-neutral-100"],
+html[data-theme="dark"] main [class*="bg-stone-50"],
+html[data-theme="dark"] main [class*="bg-stone-100"],
+html[data-theme="dark"] main [class*="bg-[#fff"],
+html[data-theme="dark"] main [class*="bg-[#f"],
+html[data-theme="dark"] main [class*="bg-[#e"] {
+  background-color: #172426 !important;
+  border-color: #304543 !important;
+}
+html[data-theme="dark"] main [class*="text-gray-900"],
+html[data-theme="dark"] main [class*="text-gray-800"],
+html[data-theme="dark"] main [class*="text-neutral-900"],
+html[data-theme="dark"] main [class*="text-neutral-800"],
+html[data-theme="dark"] main [class*="text-stone-900"],
+html[data-theme="dark"] main [class*="text-black"],
+html[data-theme="dark"] main [class*="text-[#1"],
+html[data-theme="dark"] main [class*="text-[#2"],
+html[data-theme="dark"] main [class*="text-[#3"],
+html[data-theme="dark"] main [class*="text-[#4"],
+html[data-theme="dark"] main [class*="text-[#5"] { color: #e2ece8 !important; }
+html[data-theme="dark"] main [class*="text-gray-"],
+html[data-theme="dark"] main [class*="text-neutral-"],
+html[data-theme="dark"] main [class*="text-stone-"],
+html[data-theme="dark"] main [class*="text-[#7"],
+html[data-theme="dark"] main [class*="text-[#8"],
+html[data-theme="dark"] main [class*="text-[#9"] { color: #a9bbb5 !important; }
+html[data-theme="dark"] main [class*="border-gray-"],
+html[data-theme="dark"] main [class*="border-neutral-"],
+html[data-theme="dark"] main [class*="border-stone-"],
+html[data-theme="dark"] main [class*="border-[#"] { border-color: #304543 !important; }
+html[data-theme="dark"] main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+html[data-theme="dark"] main select,
+html[data-theme="dark"] main textarea {
+  color: #e8f0ed !important;
+  background: #101b1d !important;
+  border-color: #3b5551 !important;
+  color-scheme: dark;
+}
+html[data-theme="dark"] main input::placeholder,
+html[data-theme="dark"] main textarea::placeholder { color: #8fa39c !important; opacity: 1; }
+html[data-theme="dark"] main select option { color: #e8f0ed; background: #172426; }
+html[data-theme="dark"] main button:not([class*="bg-"]),
+html[data-theme="dark"] main a:not([class*="bg-"]) { color: inherit; }
+html[data-theme="dark"] main button:hover,
+html[data-theme="dark"] main a:hover { border-color: #55746e; }
+html[data-theme="dark"] main table thead th { background: #1d3031 !important; color: #c8d8d2 !important; }
+html[data-theme="dark"] main table tbody tr:hover { background: #203334 !important; }
+html[data-theme="dark"] main :is(.shadow, .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl) { --tw-shadow-color: rgba(0,0,0,.28); }
+html[data-theme="dark"] :is([role="dialog"], [role="listbox"], [role="menu"], [data-radix-popper-content-wrapper] > *) {
+  color: #e5eeeb;
+  background-color: #142123;
+  border-color: #304543;
+}
+html[data-theme="dark"] body > div [class*="fixed"][class*="inset-0"] > :is(div, section, article),
+html[data-theme="dark"] body > div [role="dialog"] {
+  color: #e5eeeb;
+  background-color: #142123;
+  border-color: #304543;
+}
+html[data-theme="dark"] :is(input, select, textarea, button):focus-visible {
+  outline-color: rgba(208,166,110,.55);
+}
+html[data-theme="dark"] ::selection { background: rgba(208,166,110,.32); color: #fff; }
+html[data-theme="dark"] * { scrollbar-color: #49635e #111b1d; }
+@media (max-width: 640px) {
+  .rs-app-shell main .sticky.top-0 { padding-top: env(safe-area-inset-top, 0px); }
+}
