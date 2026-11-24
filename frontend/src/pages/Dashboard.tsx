@@ -265,9 +265,9 @@ body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 button { color:#e5eeeb;
             </div>}
           </div>
         </div>
-        <div className={`relative mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/10 pt-5 text-[10px] font-semibold uppercase tracking-[.13em] ${theme === "dark" ? "text-[#c3b1a8]" : "text-[#806d61]"}">
+        <div className={`relative mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 border-t pt-5 text-[10px] font-semibold uppercase tracking-[.13em] ${theme === "dark" ? "border-white/10 text-[#c3b1a8]" : "border-[#d8c6b8] text-[#806d61]"}`}>
           <span className="inline-flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-[#7eaa83]" /> {t("Operations snapshot")}</span>
-          <span className={`${theme === "dark" ? "text-[#80655f]" : "text-[#b18c78]"}">•</span><span>{new Date(reportDate + "T12:00:00").toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span>
+          <span className={theme === "dark" ? "text-[#80655f]" : "text-[#b18c78]"}>•</span><span>{new Date(reportDate + "T12:00:00").toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span>
           <span className="text-[#6e5b50]">•</span><span className="capitalize">{role}</span>
         </div>
       </section>
