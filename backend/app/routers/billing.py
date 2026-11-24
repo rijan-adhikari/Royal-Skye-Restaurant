@@ -300,7 +300,7 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
 
 @router.post("/bills/reclassify-credit")
 def reclassify_bill_as_credit(payload: schemas.BillCreditCorrection, db: Session = Depends(get_db),
-                              user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager))):
+                              user=Depends(require_roles(models.RoleName.admin))):
     if not payload.confirm_no_cash_received:
         raise HTTPException(status_code=400, detail="Confirm that no cash was received before correcting this bill")
     bill = db.query(models.Bill).filter(
