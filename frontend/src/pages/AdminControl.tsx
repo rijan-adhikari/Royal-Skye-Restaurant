@@ -101,10 +101,10 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     finally { setBusy(false); }
   };
 
-  const assignUnassignedCashToOpenShift = async () => {
+  const recoverUnlinkedCashHistory = async () => {
     if (!window.confirm("Rebuild missing cash-drawer links using each original receipt timestamp? Receipts will be assigned only to the shift that was actually open at that time. Records outside a shift will remain unassigned; today's drawer will not absorb old cash.")) return;
     await run(async () => {
-      const response = await api.post("/api/admin/cash-payments/assign-unassigned-to-open-shift");
+      const response = await api.post("/api/admin/cash-payments/rebuild-unlinked");
       const result = response.data;
       setMessage(result.assigned_count + " cash records restored against their original shift. Receipts: NPR " + result.assigned_total + "; refunds: NPR " + result.refund_total + "; skipped: " + result.skipped_count + ".");
     }, "Cash history recovery completed.");
