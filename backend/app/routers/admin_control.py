@@ -729,7 +729,8 @@ def list_archived_cash_entries(limit: int = Query(100, ge=1, le=500),
                                db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     rows = db.execute(text("""SELECT e.id,e.entry_type,e.amount,e.reference,e.notes,e.created_at,
         COALESCE(p.bill_number, b.bill_number, r.bill_number) bill_number,
-        COALESCE(pmt.method::text, bt.method, br.method::text) source_method
+        COALESCE(pmt.method::text, bt.method, br.method::text,
+            CASE WHEN ds.id IS NOT NULL THEN 'daily_savings' END) source_method
         FROM cash_drawer_entries e
         LEFT JOIN cash_payment_links cpl ON cpl.drawer_entry_id=e.id
         LEFT JOIN payments pmt ON pmt.id=cpl.payment_id
@@ -741,6 +742,8 @@ def list_archived_cash_entries(limit: int = Query(100, ge=1, le=500),
         LEFT JOIN cash_refund_links cfl ON cfl.drawer_entry_id=e.id
         LEFT JOIN bill_refunds br ON br.id=cfl.refund_id
         LEFT JOIN bills r ON r.id=br.bill_id
+        LEFT JOIN daily_savings_drawer_links dsl ON dsl.drawer_entry_id=e.id
+        LEFT JOIN daily_savings ds ON ds.id=dsl.daily_savings_id
         WHERE e.shift_id IS NULL
         ORDER BY e.created_at DESC LIMIT :limit"""), {"limit": limit}).mappings().all()
     return [dict(row) for row in rows]
@@ -1412,11 +1415,87 @@ def assign_unassigned_cash_to_open_shift(db: Session = Depends(get_db),
         except HTTPException as exc:
             skipped.append({"payment_id": str(item["payment_id"]), "bill_number": item["bill_number"],
                             "reason": exc.detail})
+
+    # Daily savings has its own durable source ledger. Rebuild a missing cash-out
+    # row from that source rather than losing the physical drawer deduction.
+    savings_rows = db.execute(text("""SELECT ds.* FROM daily_savings ds
+        WHERE NOT EXISTS (SELECT 1 FROM daily_savings_drawer_links l
+            WHERE l.daily_savings_id=ds.id)
+        ORDER BY ds.created_at ASC""")).mappings().all()
+    for savings in savings_rows:
+        if not savings["shift_id"]:
+            skipped.append({"payment_id": str(savings["id"]), "bill_number": "Daily savings",
+                            "reason": "Savings record has no original shift; manual review required."})
+            continue
+        shift_row = db.execute(text("""SELECT id,status,opening_float,counted_cash,opened_at,closed_at
+            FROM cash_drawer_shifts WHERE id=:id FOR UPDATE"""),
+            {"id": savings["shift_id"]}).mappings().first()
+        if not shift_row or not _shift_covers_receipt(savings["created_at"], shift_row["opened_at"], shift_row["closed_at"]):
+            skipped.append({"payment_id": str(savings["id"]), "bill_number": "Daily savings",
+                            "reason": "Original shift is missing or does not cover the savings timestamp."})
+            continue
+        candidates = db.execute(text("""SELECT e.id,e.shift_id FROM cash_drawer_entries e
+            WHERE e.entry_type='cash_out' AND e.reference='Daily savings'
+              AND e.amount=:amount AND e.notes IS NOT DISTINCT FROM :notes
+              AND ABS(EXTRACT(EPOCH FROM (e.created_at-:created_at))) <= 5
+              AND (e.shift_id=:shift OR (e.shift_id IS NULL AND e.notes ILIKE '%' || :shift_text || '%'))
+              AND NOT EXISTS (SELECT 1 FROM daily_savings_drawer_links l WHERE l.drawer_entry_id=e.id)
+            ORDER BY e.created_at"""),
+            {"amount": savings["amount"], "notes": savings["notes"], "created_at": savings["created_at"],
+             "shift": savings["shift_id"], "shift_text": str(savings["shift_id"])}).mappings().all()
+        if len(candidates) > 1:
+            skipped.append({"payment_id": str(savings["id"]), "bill_number": "Daily savings",
+                            "reason": "Multiple matching drawer cash-outs exist; manual review required."})
+            continue
+        if candidates:
+            drawer_id = candidates[0]["id"]
+            if candidates[0]["shift_id"] is None:
+                db.execute(text("""UPDATE cash_drawer_entries SET shift_id=:shift,
+                    notes=CONCAT(COALESCE(notes,''),' · restored to original savings shift')
+                    WHERE id=:entry"""), {"shift": savings["shift_id"], "entry": drawer_id})
+        else:
+            drawer_id = db.execute(text("""INSERT INTO cash_drawer_entries
+                (shift_id,entry_type,amount,reference,notes,created_by,created_at)
+                VALUES(:shift,'cash_out',:amount,'Daily savings',:notes,:user,:created_at)
+                RETURNING id"""),
+                {"shift": savings["shift_id"], "amount": savings["amount"], "notes": savings["notes"],
+                 "user": savings["created_by"], "created_at": savings["created_at"]}).scalar_one()
+        db.execute(text("""INSERT INTO daily_savings_drawer_links(daily_savings_id,drawer_entry_id)
+            VALUES(:savings,:drawer)"""), {"savings": savings["id"], "drawer": drawer_id})
+        if shift_row["status"] == "closed":
+            totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
+                FROM cash_drawer_entries e WHERE e.shift_id=:id
+                  AND NOT ((e.entry_type='sale' AND EXISTS (
+                    SELECT 1 FROM bills b WHERE b.bill_number=e.reference
+                      AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount)
+                      AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount)
+                  )) OR (e.entry_type='refund' AND EXISTS (
+                    SELECT 1 FROM bills b WHERE b.bill_number=e.reference
+                      AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount)
+                      AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount)
+                  )))
+                GROUP BY e.entry_type"""), {"id": savings["shift_id"]}).mappings().all()
+            amounts = {row["entry_type"]: Decimal(str(row["amount"])) for row in totals}
+            expected = (Decimal(str(shift_row["opening_float"])) + amounts.get("sale", Decimal(0))
+                + amounts.get("cash_in", Decimal(0)) - amounts.get("refund", Decimal(0))
+                - amounts.get("cash_out", Decimal(0)) - amounts.get("payout", Decimal(0)))
+            difference = Decimal(str(shift_row["counted_cash"] or 0)) - expected
+            db.execute(text("""UPDATE cash_drawer_shifts SET expected_cash=:expected,
+                cash_difference=:difference WHERE id=:id"""),
+                {"expected": expected, "difference": difference, "id": savings["shift_id"]})
+        audit(db, user.id, "daily_savings.drawer_recovered",
+              f"Rebuilt drawer cash-out for daily savings record {savings['id']} NPR {savings['amount']}")
+        assigned.append({"payment_id": str(savings["id"]), "bill_number": "Daily savings",
+                         "amount": str(savings["amount"]), "source_type": "daily_savings",
+                         "shift_id": str(savings["shift_id"])})
+
     return {"assigned_count": len(assigned),
             "assigned_total": str(sum((Decimal(x["amount"]) for x in assigned
-                if x["source_type"] != "refund"), Decimal(0))),
+                if x["source_type"] in ("payment", "repayment")), Decimal(0))),
             "refund_total": str(sum((Decimal(x["amount"]) for x in assigned
                 if x["source_type"] == "refund"), Decimal(0))),
+            "cash_out_total": str(sum((Decimal(x["amount"]) for x in assigned
+                if x["source_type"] == "daily_savings"), Decimal(0))),
             "skipped_count": len(skipped), "assigned": assigned, "skipped": skipped}
 
 @router.get("/payment-reconciliation")
