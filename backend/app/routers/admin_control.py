@@ -720,7 +720,7 @@ def list_archived_cash_entries(limit: int = Query(100, ge=1, le=500),
                                db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     rows = db.execute(text("""SELECT e.id,e.entry_type,e.amount,e.reference,e.notes,e.created_at,
         COALESCE(p.bill_number, b.bill_number, r.bill_number) bill_number,
-        COALESCE(p.payment_method, r.payment_method) source_method
+        COALESCE(pmt.method::text, bt.method, br.method::text) source_method
         FROM cash_drawer_entries e
         LEFT JOIN cash_payment_links cpl ON cpl.drawer_entry_id=e.id
         LEFT JOIN payments pmt ON pmt.id=cpl.payment_id
