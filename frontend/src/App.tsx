@@ -34,6 +34,37 @@ function NavGlyph({ name, active }: { name: string; active: boolean }) {
   return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" className={`h-[18px] w-[18px] shrink-0 transition-colors ${active ? "text-[#f1c98d]" : "text-[#b7aaa1] group-hover:text-white"}`}><path d={iconPaths[name] || iconPaths.overview}/></svg>;
 }
 
+
+function NepalDateClock() {
+  const [now, setNow] = React.useState(() => new Date());
+  const [bsDate, setBsDate] = React.useState("Loading Nepali date…");
+  React.useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30000);
+    let active = true;
+    const loadNepaliDate = async () => {
+      try {
+        const response = await fetch("https://ndt.amitgaru.com.np/date");
+        if (!response.ok) throw new Error("Nepali date service unavailable");
+        const payload = await response.json();
+        const value = String(payload?.data || "").trim();
+        if (active && /^\d{4}-\d{2}-\d{2}$/.test(value)) setBsDate(value);
+        else if (active) setBsDate("Nepali date unavailable");
+      } catch {
+        if (active) setBsDate("Nepali date unavailable");
+      }
+    };
+    void loadNepaliDate();
+    const refresh = window.setInterval(() => void loadNepaliDate(), 21600000);
+    return () => { active = false; window.clearInterval(timer); window.clearInterval(refresh); };
+  }, []);
+  const date = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kathmandu", day: "2-digit", month: "short", year: "numeric" }).format(now);
+  const time = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kathmandu", hour: "2-digit", minute: "2-digit", hour12: true }).format(now);
+  return <div className="hidden rounded-xl border border-[#29413f] bg-[#101b1e]/80 px-3 py-2 text-right sm:block" aria-label="Nepal date and time">
+    <p className="text-[10px] font-bold tracking-wide text-[#e8f2ef]">{date} · {time}</p>
+    <p className="mt-0.5 text-[9px] font-semibold tracking-wide text-[#d0a66e]">BS {bsDate} · NEPAL TIME</p>
+  </div>;
+}
+
 function Shell({ children }: { children: React.ReactNode }) {
   const { fullName, role, logout } = useAuth();
   const { t } = useLanguage();
