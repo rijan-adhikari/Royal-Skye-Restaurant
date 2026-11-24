@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api/client";
 import { useLanguage } from "../context/LanguageContext";
@@ -27,15 +27,28 @@ interface Summary {
 
 
 const dashboardSettingsIndex = [
-  { title: "Restaurant profile", detail: "Name, contact details, address, PAN, VAT number and currency", keywords: "restaurant business profile identity contact phone email address pan vat currency", href: "/admin-controls?section=system&tab=settings" },
-  { title: "Receipt settings", detail: "Receipt footer and restaurant branding", keywords: "receipt footer logo branding print bill", href: "/admin-controls?section=system&tab=settings" },
-  { title: "Payment QR code", detail: "Upload, preview or remove the billing QR image", keywords: "payment qr code billing scan upload image", href: "/admin-controls?section=system&tab=settings" },
-  { title: "VAT / tax", detail: "Enable or change the tax rate", keywords: "vat tax percentage enable disable", href: "/admin-controls?section=system&tab=settings" },
-  { title: "Service charge", detail: "Enable or change the service-charge rate", keywords: "service charge percentage enable disable", href: "/admin-controls?section=system&tab=settings" },
-  { title: "Loyalty points", detail: "Configure customer points and redemption value", keywords: "loyalty rewards points spend value customers", href: "/admin-controls?section=system&tab=loyalty" },
-  { title: "Staff accounts & roles", detail: "Create accounts, change roles, reset passwords and disable access", keywords: "staff employee user account role permission password access", href: "/admin-controls?section=staff" },
-  { title: "Backup & restore", detail: "Create, download or restore a database backup", keywords: "database backup restore export import", href: "/admin-controls?section=system&tab=backup" },
-  { title: "Audit trail", detail: "Review privileged actions and account changes", keywords: "audit history logs security activity", href: "/admin-controls?section=system&tab=audit" },
+  { title: "Restaurant profile", detail: "Restaurant name, contact details, address, PAN, VAT number and currency", keywords: "restaurant business profile identity contact phone email address pan vat currency company", href: "/admin-controls?section=system&tab=settings" },
+  { title: "Receipt & bill branding", detail: "Receipt footer, logo, print layout and billing identity", keywords: "receipt footer logo branding print bill invoice billing", href: "/admin-controls?section=system&tab=settings" },
+  { title: "Payment QR code", detail: "Upload, preview or remove the QR image shown during billing", keywords: "payment qr code billing scan upload image esewa khalti bank", href: "/admin-controls?section=system&tab=settings" },
+  { title: "VAT & tax settings", detail: "Enable tax and configure the VAT percentage", keywords: "vat tax percentage enable disable rate", href: "/admin-controls?section=system&tab=settings" },
+  { title: "Service charge settings", detail: "Enable and configure the service-charge percentage", keywords: "service charge percentage enable disable rate", href: "/admin-controls?section=system&tab=settings" },
+  { title: "Loyalty programme", detail: "Configure customer points, earning rules and redemption value", keywords: "loyalty rewards points spend value customers redemption", href: "/admin-controls?section=system&tab=loyalty" },
+  { title: "Staff accounts & permissions", detail: "Create staff accounts, assign roles, reset passwords and manage access", keywords: "staff employee user account role permission password access manager cashier admin", href: "/admin-controls?section=staff" },
+  { title: "Staff attendance", detail: "Manage staff clock-in, clock-out and attendance records", keywords: "staff attendance clock in clock out team employee", href: "/operations?tab=staff" },
+  { title: "Payroll register", detail: "Record salary periods, partial payments and outstanding balances", keywords: "payroll salary wages staff cashout advance payment", href: "/operations?tab=payroll" },
+  { title: "Menu management", detail: "Manage food and drink items, categories, prices and availability", keywords: "menu food drink item category price product availability", href: "/admin?panel=menu" },
+  { title: "Customer management", detail: "Find customers and manage their profiles and contact details", keywords: "customer client guest phone name profile", href: "/admin?panel=customers" },
+  { title: "Inventory & stock", detail: "Manage stock items, quantities, categories and low-stock alerts", keywords: "inventory stock item quantity category low alert purchase", href: "/operations?tab=inventory" },
+  { title: "Stock recipes", detail: "Link menu items to ingredients and configure stock consumption", keywords: "recipe ingredients menu item stock consumption deduction", href: "/operations?tab=inventory" },
+  { title: "Expenses", detail: "Record purchases and review restaurant operating expenses", keywords: "expense purchases costs supplier spending", href: "/operations?tab=expenses" },
+  { title: "Cash drawer", detail: "Open shifts, cash movements, assigned amounts and reconciliation", keywords: "cash drawer shift open close cash movement reconciliation register", href: "/operations?tab=controls&control=cash" },
+  { title: "Sales register", detail: "Review bills, sales transactions and correct settled payments", keywords: "sales bills transactions payment register cash credit history", href: "/admin-controls?section=system&tab=sales" },
+  { title: "Supplier ledger", detail: "Track supplier balances, payments, credit adjustments and returns", keywords: "supplier vendor ledger balance payment credit return stock", href: "/admin-controls?section=system&tab=suppliers" },
+  { title: "Management reports", detail: "Review sales, profit and loss, exports and business performance", keywords: "reports analytics profit loss sales export excel pdf", href: "/admin-controls?section=system&tab=reports" },
+  { title: "Reservations", detail: "Create and manage future table bookings", keywords: "reservation booking table guest party date time", href: "/operations?tab=reservations" },
+  { title: "Takeaway & delivery", detail: "Track takeaway and delivery orders and fulfilment status", keywords: "takeaway delivery service order fulfilment dispatch", href: "/operations?tab=controls&control=service" },
+  { title: "Backup & restore", detail: "Create, download or restore a complete database backup", keywords: "database backup restore export import dump recovery", href: "/admin-controls?section=system&tab=backup" },
+  { title: "Audit trail", detail: "Review privileged actions, security events and account changes", keywords: "audit history logs security activity admin events", href: "/admin-controls?section=system&tab=audit" },
 ] as const;
 
 const emptySummary: Summary = {
@@ -48,6 +61,7 @@ const emptySummary: Summary = {
 
 export default function Dashboard() {
   const { fullName, role } = useAuth();
+  const navigate = useNavigate();
   const { t } = useLanguage();
   const { theme, setTheme } = useTheme();
   const [reportDate, setReportDate] = useState(() => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`; });
@@ -69,9 +83,25 @@ export default function Dashboard() {
   const [profitPeriod, setProfitPeriod] = useState<"monthly" | "yearly" | null>(null);
   const [settingsQuery, setSettingsQuery] = useState("");
   const [settingsSearchOpen, setSettingsSearchOpen] = useState(false);
-  const settingsMatches = dashboardSettingsIndex.filter((item) =>
-    (item.title + " " + item.detail + " " + item.keywords).toLowerCase().includes(settingsQuery.trim().toLowerCase())
-  ).slice(0, 7);
+  const [settingsActiveIndex, setSettingsActiveIndex] = useState(0);
+  const normalizedSettingsQuery = settingsQuery.toLocaleLowerCase().trim().replace(/[^\\p{L}\\p{N}]+/gu, " ");
+  const settingsTerms = normalizedSettingsQuery.split(/\\s+/).filter(Boolean);
+  const settingsMatches = dashboardSettingsIndex.filter((item) => {
+    const searchable = (item.title + " " + item.detail + " " + item.keywords).toLocaleLowerCase().replace(/[^\\p{L}\\p{N}]+/gu, " ");
+    return settingsTerms.every((term) => searchable.includes(term));
+  }).sort((a, b) => {
+    const aTitle = a.title.toLocaleLowerCase();
+    const bTitle = b.title.toLocaleLowerCase();
+    const aRank = normalizedSettingsQuery && aTitle.startsWith(normalizedSettingsQuery) ? 0 : normalizedSettingsQuery && aTitle.includes(normalizedSettingsQuery) ? 1 : 2;
+    const bRank = normalizedSettingsQuery && bTitle.startsWith(normalizedSettingsQuery) ? 0 : normalizedSettingsQuery && bTitle.includes(normalizedSettingsQuery) ? 1 : 2;
+    return aRank - bRank || a.title.localeCompare(b.title);
+  });
+  const selectSettingsResult = (item: (typeof dashboardSettingsIndex)[number]) => {
+    setSettingsSearchOpen(false);
+    setSettingsQuery("");
+    setSettingsActiveIndex(0);
+    navigate(item.href);
+  };
 
   const load = () => api.get(`/api/dashboard/summary?report_date=${reportDate}`).then((response) => setSummary(response.data));
 
@@ -238,7 +268,7 @@ body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 button { color:#e5eeeb;
 }
 `}</style>
 
-      <section className={`dashboard-hero relative isolate overflow-hidden rounded-[28px] border px-6 py-7 shadow-[0_22px_55px_rgba(45,30,22,.10)] transition-colors duration-200 md:px-9 md:py-9 ${theme === "dark" ? "border-[#57383d] bg-[linear-gradient(118deg,#21191b_0%,#302024_54%,#1b2928_100%)] text-[#fff8f1]" : "border-[#ead8c8] bg-[linear-gradient(118deg,#fffaf3_0%,#f4e8dc_54%,#f8eee8_100%)] text-[#30251f]"}`}>
+      <section className={`dashboard-hero relative isolate rounded-[28px] border px-6 py-7 shadow-[0_22px_55px_rgba(45,30,22,.10)] transition-colors duration-200 md:px-9 md:py-9 ${theme === "dark" ? "border-[#57383d] bg-[linear-gradient(118deg,#21191b_0%,#302024_54%,#1b2928_100%)] text-[#fff8f1]" : "border-[#ead8c8] bg-[linear-gradient(118deg,#fffaf3_0%,#f4e8dc_54%,#f8eee8_100%)] text-[#30251f]"}`}>
         <div className={`pointer-events-none absolute -right-16 -top-28 h-80 w-80 rounded-full border ${theme === "dark" ? "border-[#c28b78]/20" : "border-[#9b4d45]/15"}`} />
         <div className={`pointer-events-none absolute -right-2 -top-16 h-64 w-64 rounded-full border ${theme === "dark" ? "border-[#d9b98f]/15" : "border-[#b98263]/20"}`} />
         <div className="relative flex flex-col justify-between gap-7 lg:flex-row lg:items-end">
@@ -256,12 +286,13 @@ body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 button { color:#e5eeeb;
               <label className="sr-only" htmlFor="dashboard-settings-search">Search website settings</label>
               <div className="rs-command-search flex items-center gap-3 rounded-xl border px-3.5 py-3">
                 <span aria-hidden="true" className="rs-command-search-icon">⌕</span>
-                <input id="dashboard-settings-search" value={settingsQuery} onChange={(event) => { setSettingsQuery(event.target.value); setSettingsSearchOpen(true); }} onFocus={() => setSettingsSearchOpen(true)} onKeyDown={(event) => { if (event.key === "Escape") { setSettingsSearchOpen(false); setSettingsQuery(""); } }} placeholder="Find a control, setting or module…" autoComplete="off" role="combobox" aria-expanded={settingsSearchOpen} aria-controls="dashboard-settings-results" className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-[var(--rs-ink)] outline-none placeholder:text-[var(--rs-muted)]" />
+                <input id="dashboard-settings-search" value={settingsQuery} onChange={(event) => { setSettingsQuery(event.target.value); setSettingsActiveIndex(0); setSettingsSearchOpen(true); }} onFocus={() => setSettingsSearchOpen(true)} onKeyDown={(event) => { if (event.key === "Escape") { setSettingsSearchOpen(false); setSettingsQuery(""); setSettingsActiveIndex(0); } else if (event.key === "ArrowDown" && settingsMatches.length) { event.preventDefault(); setSettingsActiveIndex((index) => (index + 1) % settingsMatches.length); } else if (event.key === "ArrowUp" && settingsMatches.length) { event.preventDefault(); setSettingsActiveIndex((index) => (index - 1 + settingsMatches.length) % settingsMatches.length); } else if (event.key === "Enter" && settingsMatches.length) { event.preventDefault(); selectSettingsResult(settingsMatches[Math.min(settingsActiveIndex, settingsMatches.length - 1)]); } }} placeholder="Search settings, staff, stock, sales…" autoComplete="off" role="combobox" aria-expanded={settingsSearchOpen} aria-controls="dashboard-settings-results" aria-activedescendant={settingsSearchOpen && settingsQuery.trim() && settingsMatches.length ? `settings-result-${settingsActiveIndex}` : undefined} className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-[var(--rs-ink)] outline-none placeholder:text-[var(--rs-muted)]" />
                 {settingsQuery && <button type="button" aria-label="Clear settings search" onClick={() => { setSettingsQuery(""); setSettingsSearchOpen(true); }} className="text-sm text-[#d7b17b]">×</button>}
               </div>
-              {settingsSearchOpen && <div id="dashboard-settings-results" role="listbox" className="rs-command-results absolute right-0 top-full z-40 mt-2 max-h-[420px] w-[min(92vw,390px)] overflow-y-auto rounded-2xl border p-2 text-left">
-                <div className="flex items-center justify-between px-3 py-2"><p className="rs-command-results-kicker text-[10px] font-extrabold uppercase tracking-[.15em]">CONTROL INDEX / SETTINGS</p><button type="button" onClick={() => setSettingsSearchOpen(false)} className="text-xs font-semibold text-[#8d6542]">Close</button></div>
-                {settingsQuery.trim() ? settingsMatches.length ? settingsMatches.map((item) => <Link key={item.title} to={item.href} onClick={() => { setSettingsSearchOpen(false); setSettingsQuery(""); }} role="option" className="rs-command-result block rounded-xl px-3 py-3 transition"><span className="block text-xs font-extrabold text-[#3d3028]">{item.title}</span><span className="mt-1 block text-[10px] leading-4 text-[#8b7c70]">{item.detail}</span></Link>) : <p className="px-3 py-5 text-xs text-[#8b7c70]">No matching settings. Try another keyword.</p> : <div className="px-3 pb-3 pt-1"><p className="text-xs font-semibold text-[#514238]">Find a setting by name or keyword.</p><p className="mt-1 text-[10px] leading-4 text-[#9b8b7f]">Search business details, tax, service charge, QR, loyalty, staff access, backups and audit history.</p></div>}
+              {settingsSearchOpen && <div id="dashboard-settings-results" role="listbox" aria-label="Search results" className="rs-command-results absolute right-0 top-full z-50 mt-2 max-h-[min(65vh,560px)] w-[min(92vw,460px)] overflow-y-auto overscroll-contain rounded-2xl border p-2 text-left">
+                <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2"><div><p className="rs-command-results-kicker text-[10px] font-extrabold uppercase tracking-[.15em]">CONTROL INDEX</p><p className="mt-1 text-[10px] text-[var(--rs-muted)]">{settingsQuery.trim() ? `${settingsMatches.length} matching destinations` : `${dashboardSettingsIndex.length} available destinations`}</p></div><button type="button" onClick={() => setSettingsSearchOpen(false)} className="rounded-lg px-2 py-1 text-xs font-semibold text-[#8d6542] hover:bg-white/10">Close</button></div>
+                {settingsQuery.trim() ? settingsMatches.length ? <div className="space-y-1 py-2">{settingsMatches.map((item, index) => <button id={`settings-result-${index}`} key={item.title} type="button" role="option" aria-selected={index === settingsActiveIndex} onMouseEnter={() => setSettingsActiveIndex(index)} onClick={() => selectSettingsResult(item)} className={`rs-command-result block w-full rounded-xl px-3 py-3 text-left transition ${index === settingsActiveIndex ? "is-active" : ""}`}><span className="block text-xs font-extrabold">{item.title}</span><span className="mt-1 block text-[10px] leading-4">{item.detail}</span></button>)}</div> : <div className="px-3 py-6 text-center"><p className="text-xs font-semibold">No matching destinations</p><p className="mt-1 text-[10px]">Try a shorter term such as “tax”, “cash”, “staff” or “stock”.</p></div> : <div className="px-3 py-4"><p className="text-xs font-semibold">Search every available management destination.</p><p className="mt-1 text-[10px] leading-4">Try restaurant, receipt, QR, tax, loyalty, staff, payroll, menu, customer, inventory, expenses, cash, sales, suppliers, reports, reservations, delivery, backup or audit.</p></div>}
+                <div className="sticky bottom-0 flex items-center justify-between border-t border-white/10 px-3 py-2 text-[9px]"><span>↑ ↓ Navigate</span><span>Enter Open · Esc Close</span></div>
               </div>}
             </div>}
           </div>
