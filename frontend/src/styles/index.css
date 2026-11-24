@@ -2101,3 +2101,113 @@ html[data-theme="dark"] * { scrollbar-color: #49635e #111b1d; }
 @media (max-width: 640px) {
   .rs-app-shell main .sticky.top-0 { padding-top: env(safe-area-inset-top, 0px); }
 }
+
+
+/* Royal Skye unified sci-fi operations system */
+@media screen {
+  html[data-theme="dark"] {
+    color-scheme: dark;
+    --rs-paper: #080e12;
+    --rs-panel: #101a20;
+    --rs-ink: #e7f2f0;
+    --rs-muted: #8fa7a3;
+    --rs-line: #233a40;
+    --rs-accent: #55e2c1;
+    --rs-gold: #f2b86b;
+  }
+  html[data-theme="dark"] body {
+    background:
+      radial-gradient(ellipse at 12% 0%, rgba(30, 117, 105, .13), transparent 38rem),
+      radial-gradient(ellipse at 90% 16%, rgba(53, 91, 120, .12), transparent 34rem),
+      #070b0e !important;
+    color: #e7f2f0 !important;
+  }
+  html[data-theme="dark"] body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: .12;
+    background-image: linear-gradient(rgba(105, 193, 176, .08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(105, 193, 176, .08) 1px, transparent 1px);
+    background-size: 34px 34px;
+    mask-image: linear-gradient(to bottom, black, transparent 78%);
+  }
+  html[data-theme="dark"] main {
+    color: #e7f2f0;
+  }
+  html[data-theme="dark"] main [class*="rounded-2xl"][class*="border"],
+  html[data-theme="dark"] main [class*="rounded-xl"][class*="border"] {
+    border-color: rgba(91, 157, 151, .24) !important;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, .18), inset 0 1px 0 rgba(208, 255, 245, .025);
+  }
+  html[data-theme="dark"] main [class*="bg-white"],
+  html[data-theme="dark"] main [class*="bg-[#fc"],
+  html[data-theme="dark"] main [class*="bg-[#fb"],
+  html[data-theme="dark"] main [class*="bg-[#faf"],
+  html[data-theme="dark"] main [class*="bg-[#f8"],
+  html[data-theme="dark"] main [class*="bg-[#f7"],
+  html[data-theme="dark"] main [class*="bg-[#f5"],
+  html[data-theme="dark"] main [class*="bg-[#f4"],
+  html[data-theme="dark"] main [class*="bg-neutral-50"],
+  html[data-theme="dark"] main [class*="bg-neutral-100"] {
+    background-color: #111d22 !important;
+    color: #dcebe7 !important;
+    border-color: #29434a !important;
+  }
+  html[data-theme="dark"] main [class*="text-neutral-"],
+  html[data-theme="dark"] main [class*="text-[#3"],
+  html[data-theme="dark"] main [class*="text-[#4"],
+  html[data-theme="dark"] main [class*="text-[#5"],
+  html[data-theme="dark"] main [class*="text-[#6"],
+  html[data-theme="dark"] main [class*="text-[#7"],
+  html[data-theme="dark"] main [class*="text-[#8"],
+  html[data-theme="dark"] main [class*="text-[#9"] {
+    color: #a8bfba !important;
+  }
+  html[data-theme="dark"] main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  html[data-theme="dark"] main select,
+  html[data-theme="dark"] main textarea {
+    background: #0b1418 !important;
+    color: #e7f2f0 !important;
+    border-color: #315158 !important;
+    box-shadow: inset 0 1px 5px rgba(0, 0, 0, .22);
+  }
+  html[data-theme="dark"] main input:focus,
+  html[data-theme="dark"] main select:focus,
+  html[data-theme="dark"] main textarea:focus {
+    border-color: #55e2c1 !important;
+    box-shadow: 0 0 0 3px rgba(85, 226, 193, .12);
+    outline: none;
+  }
+  html[data-theme="dark"] main table thead th {
+    background: #17272d !important;
+    color: #a7d8ce !important;
+    border-color: #2b454a !important;
+  }
+  html[data-theme="dark"] main table tbody tr {
+    border-color: rgba(90, 137, 135, .18) !important;
+  }
+  html[data-theme="dark"] main table tbody tr:hover {
+    background: rgba(85, 226, 193, .045) !important;
+  }
+  html[data-theme="dark"] main button[class*="bg-brand"],
+  html[data-theme="dark"] main button[class*="bg-[#7b2926"] {
+    background: linear-gradient(135deg, #0e766b, #155a63) !important;
+    color: #effffb !important;
+    border: 1px solid rgba(104, 238, 207, .24);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .2);
+  }
+  html[data-theme="dark"] main button:disabled {
+    filter: saturate(.45);
+    opacity: .55;
+  }
+  .rs-page-transition {
+    animation: rs-enter .22s ease-out both;
+  }
+  @keyframes rs-enter {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
