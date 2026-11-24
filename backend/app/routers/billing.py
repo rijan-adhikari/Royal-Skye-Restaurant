@@ -142,7 +142,7 @@ def create_bill(payload: schemas.BillCreate, db: Session = Depends(get_db),
     # Create the durable payment-to-drawer link table before recording new cash payments.
     db.execute(text("""CREATE TABLE IF NOT EXISTS cash_payment_links (
         payment_id UUID PRIMARY KEY REFERENCES payments(id) ON DELETE CASCADE,
-        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+        drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE RESTRICT,
         linked_by UUID REFERENCES users(id),
         linked_at TIMESTAMP NOT NULL DEFAULT NOW(),
         source VARCHAR(24) NOT NULL DEFAULT 'automatic'
@@ -392,7 +392,7 @@ def repay_balance(payload: schemas.RepaymentCreate, db: Session = Depends(get_db
     if payload.method == "cash":
         db.execute(text("""CREATE TABLE IF NOT EXISTS cash_repayment_links (
             transaction_id UUID PRIMARY KEY REFERENCES balance_transactions(id) ON DELETE CASCADE,
-            drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE CASCADE,
+            drawer_entry_id UUID NOT NULL UNIQUE REFERENCES cash_drawer_entries(id) ON DELETE RESTRICT,
             linked_by UUID REFERENCES users(id),
             linked_at TIMESTAMP NOT NULL DEFAULT NOW()
         )"""))
