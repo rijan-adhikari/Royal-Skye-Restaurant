@@ -75,8 +75,8 @@ function Shell({ children }: { children: React.ReactNode }) {
   // Keep the first-stage restaurant workflow focused; advanced tools remain available inside their relevant screens.
   const workspace: NavItem[] = [
     ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/dashboard", label: t("Dashboard"), icon: "overview" }] : []),
-    { to: "/tables", label: t("Tables & POS"), icon: "tables" },
-    ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/billing", label: t("Billing & Orders"), icon: "billing" }] : []),
+    { to: "/tables", label: t("Take Orders"), icon: "tables" },
+    ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/billing", label: t("Checkout & Receipts"), icon: "billing" }] : []),
   ];
   const management: NavItem[] = isManager ? [
     { to: "/admin?panel=menu", label: t("Menu Management"), icon: "master", panel: "menu" },
