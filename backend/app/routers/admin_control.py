@@ -53,7 +53,7 @@ def _create_database_backup(destination: Path) -> None:
 
 
 @router.get("/backup")
-def download_database_backup(user=Depends(require_roles(*MANAGERS))):
+def download_database_backup(user=Depends(require_roles(*ADMIN))):
     backup_dir = Path(__file__).resolve().parents[2] / "backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
     filename = "royal-skye-" + datetime.utcnow().strftime("%Y%m%d-%H%M%S") + ".dump"
@@ -65,7 +65,7 @@ def download_database_backup(user=Depends(require_roles(*MANAGERS))):
 @router.post("/restore")
 def restore_database_backup(backup_file: UploadFile = File(...),
                             confirmation: str = Form(...),
-                            db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+                            db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     if confirmation != "RESTORE ROYAL SKYE DATABASE":
         raise HTTPException(400, "Type the exact restore confirmation phrase")
     if not backup_file.filename or not backup_file.filename.lower().endswith(".dump"):

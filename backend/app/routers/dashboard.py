@@ -227,7 +227,7 @@ def dashboard_summary(report_date: date | None = None, db: Session = Depends(get
 
 
 @router.delete("/sales")
-def clear_sales(db: Session = Depends(get_db), user=Depends(require_roles(models.RoleName.admin, models.RoleName.manager))):
+def clear_sales(db: Session = Depends(get_db), user=Depends(require_roles(models.RoleName.admin))):
     # Delete restrictive FK dependants before bills; otherwise PostgreSQL rejects
     # the bulk bill deletion and the whole transaction rolls back.
     db.query(models.BalanceTransaction).delete(synchronize_session=False)
@@ -244,6 +244,7 @@ def clear_sales(db: Session = Depends(get_db), user=Depends(require_roles(models
         {models.Order.status: models.OrderStatus.cancelled}, synchronize_session=False
     )
     db.query(models.DiningTable).update({models.DiningTable.status: models.TableStatus.available}, synchronize_session=False)
+    db.add(models.AuditLog(user_id=user.id, action="sales_clear", details=f"Cleared sales history; deleted {deleted_bills} bills and related payment/credit records."))
     db.commit()
     return {"ok": True, "deleted_bills": deleted_bills}
 
