@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 
 interface OpenOrder { id: string; order_number: string; table_id?: string; table_name: string; subtotal: string; grand_total: string; tax_amount: string; tax_percent: string; service_charge_amount: string; service_charge_percent: string; cabin_fee?: string; service_type?: string; customer_name?: string | null; phone?: string | null; delivery_address?: string | null; delivery_fee?: string; items: Array<{ name: string; quantity: number; unit_price: string; total: string }>; }
@@ -7,6 +8,8 @@ interface Customer { id: string; name: string; phone?: string | null; }
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 export default function Billing() {
+  const [searchParams] = useSearchParams();
+  const requestedOrderId = searchParams.get("order") || "";
   const [orders, setOrders] = useState<OpenOrder[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [orderId, setOrderId] = useState("");
@@ -44,8 +47,18 @@ export default function Billing() {
   };
 
   useEffect(() => {
-    loadData().catch(() => setError("Could not load open orders and customers."));
-  }, []);
+    loadData().then((loadedOrders) => {
+      if (!requestedOrderId) return;
+      const requestedOrder = loadedOrders.find((order) => order.id === requestedOrderId);
+      if (requestedOrder) {
+        setOrderId(requestedOrder.id);
+        setAmount(requestedOrder.grand_total);
+        setError("");
+      } else {
+        setError("That order is no longer open. Refresh the order list before continuing.");
+      }
+    }).catch(() => setError("Could not load open orders and customers."));
+  }, [requestedOrderId]);
   useEffect(() => {
     api.get("/api/settings/payment-qr")
       .then(response => setPaymentQr(response.data.qr_image_path || ""))
