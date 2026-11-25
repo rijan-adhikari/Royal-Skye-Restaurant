@@ -126,19 +126,25 @@ async def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_d
         db.flush()
     elif requested_business_date:
         order.business_date = requested_business_date
-        if service_type == "dine_in":
-            table.status = models.TableStatus.occupied
-        else:
-            db.execute(text("""INSERT INTO order_service_details(order_id,service_type,customer_name,phone,delivery_address,delivery_fee)
-                VALUES(:order,:type,:name,:phone,:address,:fee)"""),
-                {"order": order.id, "type": service_type, "name": payload.customer_name,
-                 "phone": payload.phone, "address": payload.delivery_address,
-                 "fee": payload.delivery_fee if service_type == "delivery" else Decimal("0")})
 
-    # Newly-created dine-in orders must occupy their table as well. Previously
-    # this status was only set when appending items to an existing open order.
+    # Persist takeaway/delivery metadata for newly-created as well as reused orders.
+    # The unique order_id constraint makes this upsert safe against duplicate details.
     if service_type == "dine_in":
         table.status = models.TableStatus.occupied
+    else:
+        db.execute(text("""INSERT INTO order_service_details
+            (order_id,service_type,customer_name,phone,delivery_address,delivery_fee)
+            VALUES(:order,:type,:name,:phone,:address,:fee)
+            ON CONFLICT(order_id) DO UPDATE SET
+              service_type=EXCLUDED.service_type,
+              customer_name=EXCLUDED.customer_name,
+              phone=EXCLUDED.phone,
+              delivery_address=EXCLUDED.delivery_address,
+              delivery_fee=EXCLUDED.delivery_fee,
+              updated_at=NOW()"""),
+            {"order": order.id, "type": service_type, "name": payload.customer_name,
+             "phone": payload.phone, "address": payload.delivery_address,
+             "fee": payload.delivery_fee if service_type == "delivery" else Decimal("0")})
 
     is_cabin_order = service_type == "dine_in" and "cabin" in (table.name or "").lower()
     kitchen_items = []
