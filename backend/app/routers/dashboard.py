@@ -180,6 +180,19 @@ def dashboard_summary(report_date: date | None = None, db: Session = Depends(get
     daily_sales = net_sales(daily_start, daily_end)
     monthly_sales = net_sales(month_start, month_end)
     yearly_sales = net_sales(year_start, year_end)
+
+    # Separate billed value from collected revenue so owners can see credit sales
+    # without confusing them with cash actually received.
+    def billed_sales(start_date: date, end_date: date):
+        return db.query(func.coalesce(func.sum(models.Bill.grand_total), 0)).filter(
+            models.Bill.business_date >= start_date,
+            models.Bill.business_date < end_date,
+            models.Bill.sale_status == "active",
+        ).scalar() or 0
+
+    daily_billed_sales = billed_sales(target, target + timedelta(days=1))
+    monthly_billed_sales = billed_sales(month_date_start, month_date_end)
+    yearly_billed_sales = billed_sales(year_date_start, year_date_end)
     daily_cogs = estimated_cogs(daily_start, daily_end)
     monthly_cogs = estimated_cogs(month_start, month_end)
     yearly_cogs = estimated_cogs(year_start, year_end)
@@ -212,6 +225,9 @@ def dashboard_summary(report_date: date | None = None, db: Session = Depends(get
     return {
         "report_date": target.isoformat(),
         "daily_sales": str(daily_sales), "monthly_sales": str(monthly_sales), "yearly_sales": str(yearly_sales),
+        "daily_billed_sales": str(daily_billed_sales),
+        "monthly_billed_sales": str(monthly_billed_sales),
+        "yearly_billed_sales": str(yearly_billed_sales),
         "daily_expenses": str(daily_expenses), "monthly_expenses": str(monthly_expenses), "yearly_expenses": str(yearly_expenses),
         "total_expenses": str(total_expenses),
         "daily_profit": str(daily_sales - daily_cogs - daily_expenses),
