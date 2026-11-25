@@ -49,6 +49,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const [saleDateDraft, setSaleDateDraft] = useState("");
   const [selectedSaleDates, setSelectedSaleDates] = useState<string[]>([]);
   const [backupFile, setBackupFile] = useState<File | null>(null);
+  const [restorePreview, setRestorePreview] = useState<any>(null);
   const [restoreConfirmation, setRestoreConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -259,10 +260,28 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     } finally { setBusy(false); }
   };
 
+  const inspectRestoreBackup = async () => {
+    if (!backupFile) {
+      setError("Choose a .dump backup file first.");
+      return;
+    }
+    setBusy(true); setError(""); setMessage(""); setRestorePreview(null); setRestoreConfirmation("");
+    try {
+      const body = new FormData();
+      body.append("backup_file", backupFile);
+      const response = await api.post("/api/admin/restore/preview", body);
+      setRestorePreview(response.data);
+      setMessage("Backup inspected successfully. Review the archive contents before restoring.");
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Could not inspect this backup. No database records were changed.");
+    } finally { setBusy(false); }
+  };
+
   const restoreBackup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!backupFile || restoreConfirmation !== "RESTORE ROYAL SKYE DATABASE") {
-      setError("Choose a .dump file and enter the exact confirmation phrase.");
+    const previewMatchesFile = !!restorePreview && restorePreview.filename === backupFile?.name && restorePreview.size_bytes === backupFile?.size;
+    if (!backupFile || !previewMatchesFile || restoreConfirmation !== "RESTORE ROYAL SKYE DATABASE") {
+      setError("Inspect the selected backup, review its contents, and enter the exact confirmation phrase.");
       return;
     }
     setBusy(true); setError(""); setMessage("");
@@ -272,7 +291,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
       body.append("confirmation", restoreConfirmation);
       const response = await api.post("/api/admin/restore", body);
       setMessage(`${response.data.message} Safety backup: ${response.data.safety_backup}`);
-      setBackupFile(null); setRestoreConfirmation("");
+      setBackupFile(null); setRestorePreview(null); setRestoreConfirmation("");
     } catch (e: any) {
       setError(e?.response?.data?.detail || "Database restore failed. The pre-restore safety backup is retained.");
     } finally { setBusy(false); }
@@ -474,10 +493,18 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
 
     {tab === "backup" && <div className="grid gap-4 lg:grid-cols-2">
       <section className={panel}><h2 className="font-semibold text-lg">Create / download full backup</h2><p className="mt-2 text-sm text-neutral-500">Download a complete PostgreSQL database backup. It includes sales and bills, expenses, inventory, customers, staff and payroll, cash drawer records, settings and other restaurant data. Keep your own secure copy; server-local temporary files are not guaranteed to persist across deployments.</p><button className={primary + " mt-4"} disabled={busy} onClick={downloadBackup}>Create & download backup</button></section>
-      <section className={panel}><h2 className="font-semibold text-lg">Restore from backup</h2><p className="mt-2 text-sm text-red-700">Restore replaces the current database. The system first creates a safety backup and blocks restore while orders or cash drawer shifts are open.</p><form onSubmit={restoreBackup} className="mt-4 space-y-3">
-        <label className="block text-xs">Upload backup file (.dump) — sales, expenses and all database records<input required type="file" accept=".dump,application/octet-stream" className={field + " mt-1"} onChange={e => setBackupFile(e.target.files?.[0] || null)} /></label>
+      <section className={panel}><h2 className="font-semibold text-lg">Restore from backup</h2><p className="mt-2 text-sm text-red-700">Restore replaces the current database. Inspect the backup first; the server validates the archive and core tables, then creates a safety backup. Restore is blocked while orders or cash drawer shifts are open.</p><form onSubmit={restoreBackup} className="mt-4 space-y-3">
+        <label className="block text-xs">Upload backup file (.dump)<input required type="file" accept=".dump,application/octet-stream" className={field + " mt-1"} onChange={e => { setBackupFile(e.target.files?.[0] || null); setRestorePreview(null); setRestoreConfirmation(""); }} /></label>
+        <button type="button" className={primary} disabled={busy || !backupFile} onClick={inspectRestoreBackup}>{busy ? "Inspecting…" : "Inspect backup"}</button>
+        {restorePreview && backupFile && restorePreview.filename === backupFile.name && restorePreview.size_bytes === backupFile.size && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-950">
+          <p className="font-bold">Backup archive validated</p>
+          <p className="mt-1">{restorePreview.filename} · {(restorePreview.size_bytes / (1024 * 1024)).toFixed(2)} MB</p>
+          <p className="mt-1">{restorePreview.entry_count} archive entries · {restorePreview.table_count} tables detected</p>
+          <p className="mt-2 break-words">{(restorePreview.tables || []).join(", ")}</p>
+          <p className="mt-2 font-semibold">Inspection only — no database records have been changed.</p>
+        </div>}
         <label className="block text-xs">Type RESTORE ROYAL SKYE DATABASE to confirm<input required className={field + " mt-1"} value={restoreConfirmation} onChange={e => setRestoreConfirmation(e.target.value)} /></label>
-        <button className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={busy || !backupFile || restoreConfirmation !== "RESTORE ROYAL SKYE DATABASE"}>Restore database</button>
+        <button className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={busy || !backupFile || !restorePreview || restorePreview.filename !== backupFile.name || restorePreview.size_bytes !== backupFile.size || restoreConfirmation !== "RESTORE ROYAL SKYE DATABASE"}>Restore database</button>
       </form></section>
     </div>}
 
