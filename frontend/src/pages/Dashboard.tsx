@@ -333,7 +333,7 @@ body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 button { color:#e5eeeb;
             <p className="mt-4 text-[25px] font-extrabold tracking-[-.045em] text-[#a43d3d]">{money(summary.daily_expenses)}</p><p className="mt-2 text-[10px] font-semibold text-[#a18d7c]">{t("Expenses recorded on the selected date")}</p>
           </Link>
           <div className="rounded-2xl border border-[#e9dfd5] bg-white p-5 shadow-[0_5px_18px_rgba(45,30,22,.035)]">
-            <div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">{t("Estimated profit / loss")}</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#f1eee8] text-[#80664c]">◒</span></div>
+            <div className="flex items-center justify-between"><span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">{t("Estimated cash-based result")}</span><span className="grid h-8 w-8 place-items-center rounded-xl bg-[#f1eee8] text-[#80664c]">◒</span></div>
             <p className={`mt-4 text-[25px] font-extrabold tracking-[-.045em] ${Number(summary.daily_profit) < 0 ? "text-[#a43d3d]" : "text-[#477453]"}`}>{money(summary.daily_profit)}</p><p className="mt-2 text-[10px] font-semibold text-[#a18d7c]">{t("Estimated for selected date")}</p>
           </div>
           <Link to="/operations?tab=expenses" className="group rounded-2xl border border-[#e9dfd5] bg-white p-5 shadow-sm transition hover:border-[#c6a77f]">
@@ -342,11 +342,11 @@ body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 button { color:#e5eeeb;
             <p className="mt-2 text-[10px] text-[#a18d7c]">All recorded expenses and payroll</p>
           </Link>
           {role === "admin" && <button type="button" onClick={() => setProfitPeriod("monthly")} className="rounded-2xl border border-[#e9dfd5] bg-white p-5 text-left shadow-sm hover:border-[#c6a77f]">
-            <span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">Monthly profit / loss</span>
+            <span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">Monthly cash-based result</span>
             <p className="mt-4 text-[25px] font-extrabold text-[#477453]">{money(summary.monthly_profit || "0")}</p><p className="mt-2 text-[10px] text-[#9a7652]">View monthly breakdown →</p>
           </button>}
           {role === "admin" && <button type="button" onClick={() => setProfitPeriod("yearly")} className="rounded-2xl border border-[#e9dfd5] bg-white p-5 text-left shadow-sm hover:border-[#c6a77f]">
-            <span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">Yearly profit / loss</span>
+            <span className="text-[10px] font-extrabold uppercase tracking-[.13em] text-[#958477]">Yearly cash-based result</span>
             <p className="mt-4 text-[25px] font-extrabold text-[#477453]">{money(summary.yearly_profit || "0")}</p><p className="mt-2 text-[10px] text-[#9a7652]">View yearly breakdown →</p>
           </button>}
           <Link to="/tables" className="group rounded-2xl border border-[#e9dfd5] bg-white p-5 shadow-[0_5px_18px_rgba(45,30,22,.035)] transition hover:-translate-y-1 hover:border-[#c6a77f] hover:shadow-[0_14px_28px_rgba(45,30,22,.08)]">
@@ -362,7 +362,7 @@ body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 button { color:#e5eeeb;
 
       <section className="dashboard-financial-layout grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,.85fr)]">
         <div className="dashboard-financial-card min-w-0 rounded-[24px] border border-[#e9dfd5] bg-white p-4 shadow-[0_8px_28px_rgba(45,30,22,.04)] sm:p-5 md:p-6">
-          <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="text-[10px] font-extrabold uppercase tracking-[.19em] text-[#a18d7c]">{t("Financial overview")}</p><h2 className="mt-1 text-lg font-extrabold tracking-tight text-[#30251f]">{t("Sales, costs & estimated result")}</h2></div><span className="rounded-full bg-[#f7f2ec] px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-[#92775e]">{t("Selected date range")}</span></div>
+          <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="text-[10px] font-extrabold uppercase tracking-[.19em] text-[#a18d7c]">{t("Financial overview")}</p><h2 className="mt-1 text-lg font-extrabold tracking-tight text-[#30251f]">{t("Net collections, costs & cash-based result")}</h2></div><span className="rounded-full bg-[#f7f2ec] px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-[#92775e]">{t("Selected date range")}</span></div>
           <div className="mt-4 space-y-3 sm:mt-5 sm:space-y-0">
             <div className="hidden grid-cols-[minmax(76px,.8fr)_repeat(3,minmax(0,1fr))] border-b border-[#eee7df] pb-3 text-[9px] font-extrabold uppercase tracking-[.12em] text-[#a18d7c] sm:grid"><span>{t("Period")}</span><span>{t("Net collections")}</span><span>{t("Expenses")}</span><span>{t("Profit / loss")}</span></div>
             {periods.map((period) => <div key={period.label} className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-xl border border-[#f1ece6] bg-[#fdfbf8] p-3 sm:grid-cols-[minmax(76px,.8fr)_repeat(3,minmax(0,1fr))] sm:items-center sm:gap-2 sm:rounded-none sm:border-0 sm:border-b sm:bg-transparent sm:px-0 sm:py-4">
@@ -372,6 +372,7 @@ body:has(.dashboard-page[data-theme="dark"]) .fixed.z-50 button { color:#e5eeeb;
               <span className="min-w-0"><small className="block text-[9px] font-bold uppercase tracking-wide text-[#a18d7c] sm:hidden">{t("Profit / loss")}</small><b className={`block break-words text-xs font-extrabold tabular-nums ${Number(period.profit) < 0 ? "text-[#a43d3d]" : "text-[#477453]"}`}>{money(period.profit)}</b></span>
             </div>)}
           </div>
+          <p className="mt-4 text-[10px] leading-5 text-[#9b8b7f]">Billed sales include active bills, including unpaid credit. Net collected revenue reflects money received after tax and service-charge adjustments and refunds. The cash-based result subtracts estimated recipe costs, recorded expenses and payroll from net collections.</p>
           <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-[10px] font-semibold text-[#9b8b7f]"><span className="inline-flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#64856c]"/> {t("Net collections")}</span><span className="inline-flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#b96b64]"/> {t("Expenses")}</span><span className="inline-flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[#b78a54]"/> {t("Estimated result")}</span></div>
         </div>
         <div className="dashboard-quick-access min-w-0 rounded-[24px] border border-[#e9dfd5] bg-[#f8f4ef] p-4 sm:p-5 md:p-6">
