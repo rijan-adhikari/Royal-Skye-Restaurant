@@ -38,6 +38,7 @@ export default function Operations() {
   const [recipeDraft, setRecipeDraft] = useState({ menu_item_id: "", yield_quantity: "1", instructions: "" });
   const [recipeLines, setRecipeLines] = useState<any[]>([{ item_id: "", quantity: "1", case_pack_size: "" }]);
   const [expense, setExpense] = useState({ description: "", amount: "", payment_method: "cash", expense_date: today() });
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [reservation, setReservation] = useState({ customer_name: "", phone: "", party_size: "2", reserved_for: "", table_id: "", notes: "" });
   const [movement, setMovement] = useState({ item_id: "", movement_type: "waste", quantity: "", unit_cost: "0", expiry_date: "", notes: "" });
   const [payrollForm, setPayrollForm] = useState({ user_id: "", period_start: today().slice(0, 8) + "01", period_end: today(), gross_pay: "", deductions: "0", notes: "" });
@@ -83,6 +84,22 @@ export default function Operations() {
   const deletePayroll = async (p: any) => {
     if (!window.confirm("Delete payroll record for " + p.full_name + " (" + money(Number(p.gross_pay)-Number(p.deductions)) + ")? This cannot be undone.")) return;
     await run(() => api.delete("/api/operations/staff/payroll/" + p.id), "Payroll record deleted.");
+  };
+  const startEditingExpense = (item: any) => {
+    setEditingExpenseId(item.id);
+    setExpense({
+      description: item.description || item.category || "",
+      amount: String(item.amount ?? ""),
+      payment_method: item.payment_method === "qr" ? "qr" : "cash",
+      expense_date: String(item.expense_date || today()).slice(0, 10),
+    });
+    setError("");
+    setMessage("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const cancelExpenseEdit = () => {
+    setEditingExpenseId(null);
+    setExpense({ description: "", amount: "", payment_method: "cash", expense_date: today() });
   };
   const lowStock = data.inventory.filter((x: any) => x.low_stock);
   const input = (label: string, value: string, change: (v: string) => void, type = "text", required = true) => <label className="block text-xs font-medium text-neutral-600">{t(label)}<input className={field + " mt-1"} type={type} required={required} value={value} onChange={(e) => change(e.target.value)} /></label>;
@@ -173,15 +190,23 @@ export default function Operations() {
     </>}
 
     {tab === "expenses" && <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
-      <section className={panel}>{heading("Add expense", "Choose where the money was paid from. Paid cash expenses reduce the open drawer; QR expenses reduce the restaurant QR account.")}<form className="space-y-3" onSubmit={(e) => { e.preventDefault(); run(async () => { await api.post("/api/operations/expenses", { category: "General", description: expense.description.trim(), amount: Number(expense.amount), expense_date: expense.expense_date + "T12:00:00", department: "General", payment_status: "paid", payment_method: expense.payment_method, supplier_id: null, receipt_reference: null, notes: null }); setExpense({ description: "", amount: "", payment_method: "cash", expense_date: today() }); }, "Expense recorded."); }}>
+      <section className={panel}>{heading(editingExpenseId ? "Edit expense" : "Add expense", "Choose where the money was paid from. Paid cash expenses reduce the open drawer; QR expenses reduce the restaurant QR account.")}<form className="space-y-3" onSubmit={(e) => { e.preventDefault(); run(async () => {
+        const payload = { description: expense.description.trim(), amount: Number(expense.amount), expense_date: expense.expense_date + "T12:00:00" };
+        if (editingExpenseId) {
+          await api.patch("/api/operations/expenses/" + editingExpenseId, payload);
+        } else {
+          await api.post("/api/operations/expenses", { category: "General", ...payload, department: "General", payment_status: "paid", payment_method: expense.payment_method, supplier_id: null, receipt_reference: null, notes: null });
+        }
+        cancelExpenseEdit();
+      }, editingExpenseId ? "Expense updated." : "Expense recorded."); }}>
         {input("Item name", expense.description, (v) => setExpense({ ...expense, description: v }))}
         {input("Price (NPR)", expense.amount, (v) => setExpense({ ...expense, amount: v }), "number")}
-        <label className="block text-xs font-medium text-neutral-600">Payment source<select className={field + " mt-1"} value={expense.payment_method} onChange={(e) => setExpense({ ...expense, payment_method: e.target.value })}><option value="cash">Cash drawer</option><option value="qr">Restaurant QR account</option></select><span className="mt-1 block text-[10px] text-neutral-500">{expense.payment_method === "cash" ? "Automatically records a cash-out in the currently open drawer session." : "Automatically records a QR account outflow and updates the account balance."}</span></label>
+        <label className="block text-xs font-medium text-neutral-600">Payment source<select className={field + " mt-1"} disabled={Boolean(editingExpenseId)} value={expense.payment_method} onChange={(e) => setExpense({ ...expense, payment_method: e.target.value })}><option value="cash">Cash drawer</option><option value="qr">Restaurant QR account</option></select><span className="mt-1 block text-[10px] text-neutral-500">{editingExpenseId ? "Payment source is locked to preserve the original financial ledger." : expense.payment_method === "cash" ? "Automatically records a cash-out in the currently open drawer session." : "Automatically records a QR account outflow and updates the account balance."}</span></label>
         {input("Expense date", expense.expense_date, (v) => setExpense({ ...expense, expense_date: v }), "date")}
-        <button className={button} disabled={busy || !expense.description.trim() || !expense.amount || Number(expense.amount) <= 0}>{t("Add expense")}</button>
+        <div className="flex flex-wrap gap-2"><button className={button} disabled={busy || !expense.description.trim() || !expense.amount || Number(expense.amount) <= 0}>{t(editingExpenseId ? "Save changes" : "Add expense")}</button>{editingExpenseId && <button type="button" className="rounded-lg border px-4 py-2 text-sm font-semibold" disabled={busy} onClick={cancelExpenseEdit}>{t("Cancel")}</button>}</div>
       </form></section>
       <section className={panel}>{heading("Expenses dashboard", "Daily expense timeline with payment source and clear transaction totals.")}<div className="mb-3 grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-neutral-100 bg-neutral-50 p-4"><p className="text-xs text-neutral-500">{t("Total recorded expenses")}</p><p className="mt-1 text-2xl font-bold text-red-700">{money(data.expenses.reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0))}</p></div><div className="rounded-xl border border-neutral-100 bg-neutral-50 p-4"><p className="text-xs text-neutral-500">Paid from cash</p><p className="mt-1 text-xl font-bold">{money(data.expenses.filter((item: any) => item.payment_status === "paid" && item.payment_method === "cash").reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0))}</p></div><div className="rounded-xl border border-neutral-100 bg-neutral-50 p-4"><p className="text-xs text-neutral-500">Paid from QR</p><p className="mt-1 text-xl font-bold">{money(data.expenses.filter((item: any) => item.payment_status === "paid" && item.payment_method === "qr").reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0))}</p></div></div>
-        {data.expenses.length === 0 ? <p className="py-6 text-center text-sm text-neutral-500">{t("No expenses recorded yet.")}</p> : <div className="space-y-4">{expenseGroups.map(([day, items]: any) => <section key={day} className="overflow-hidden rounded-xl border border-[#e8dfd6]"><div className="flex flex-wrap items-center justify-between gap-2 bg-[#f8f4ef] px-4 py-3"><div><p className="text-[10px] font-extrabold uppercase tracking-[.16em] text-[#9a7655]">Expense date</p><h3 className="mt-0.5 text-sm font-extrabold text-[#3c3029]">{day}</h3></div><span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-[#745a45]">{items.length} transaction{items.length === 1 ? "" : "s"}</span></div><div className="divide-y divide-[#f0e9e1]">{items.map((item: any) => <article key={item.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"><div className="min-w-0 flex-1"><p className="break-words text-sm font-bold text-[#342923]">{item.description || item.category}</p><div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-neutral-500"><span>{item.category || "General"}</span><span>·</span><span className={"rounded-full px-2 py-0.5 font-bold " + (item.payment_method === "qr" ? "bg-violet-50 text-violet-700" : item.payment_method === "cash" ? "bg-emerald-50 text-emerald-700" : "bg-neutral-100 text-neutral-600")}>{item.payment_method === "qr" ? "QR account" : item.payment_method === "cash" ? "Cash drawer" : "Unclassified"}</span><span>{item.payment_status || "paid"}</span></div></div><strong className="shrink-0 text-sm font-extrabold text-red-700">− {money(item.amount)}</strong></article>)}</div><div className="flex justify-end border-t border-[#eee4d9] bg-[#fcfaf7] px-4 py-2 text-xs font-bold text-[#6f5140]">Day total · {money(items.reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0))}</div></section>)}</div>}
+        {data.expenses.length === 0 ? <p className="py-6 text-center text-sm text-neutral-500">{t("No expenses recorded yet.")}</p> : <div className="space-y-4">{expenseGroups.map(([day, items]: any) => <section key={day} className="overflow-hidden rounded-xl border border-[#e8dfd6]"><div className="flex flex-wrap items-center justify-between gap-2 bg-[#f8f4ef] px-4 py-3"><div><p className="text-[10px] font-extrabold uppercase tracking-[.16em] text-[#9a7655]">Expense date</p><h3 className="mt-0.5 text-sm font-extrabold text-[#3c3029]">{day}</h3></div><span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-[#745a45]">{items.length} transaction{items.length === 1 ? "" : "s"}</span></div><div className="divide-y divide-[#f0e9e1]">{items.map((item: any) => <article key={item.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"><div className="min-w-0 flex-1"><p className="break-words text-sm font-bold text-[#342923]">{item.description || item.category}</p><div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-neutral-500"><span>{item.category || "General"}</span><span>·</span><span className={"rounded-full px-2 py-0.5 font-bold " + (item.payment_method === "qr" ? "bg-violet-50 text-violet-700" : item.payment_method === "cash" ? "bg-emerald-50 text-emerald-700" : "bg-neutral-100 text-neutral-600")}>{item.payment_method === "qr" ? "QR account" : item.payment_method === "cash" ? "Cash drawer" : "Unclassified"}</span><span>{item.payment_status || "paid"}</span></div></div><div className="flex shrink-0 items-center gap-3"><strong className="text-sm font-extrabold text-red-700">− {money(item.amount)}</strong>{role === "admin" && <button type="button" className="rounded-lg border border-[#e8dfd6] px-3 py-1.5 text-xs font-bold text-[#6f5140] hover:bg-[#f8f4ef]" onClick={() => startEditingExpense(item)}>{t("Edit")}</button>}</div></article>)}</div><div className="flex justify-end border-t border-[#eee4d9] bg-[#fcfaf7] px-4 py-2 text-xs font-bold text-[#6f5140]">Day total · {money(items.reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0))}</div></section>)}</div>}
       </section>
     </div>}
 
