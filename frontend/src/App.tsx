@@ -95,6 +95,10 @@ function Shell({ children }: { children: React.ReactNode }) {
       { to: "/payroll", label: t("Payroll"), icon: "payroll" },
       { to: "/sales", label: t("Sales Register"), icon: "billing" },
       { to: "/reports", label: t("Reports"), icon: "reports" },
+      { to: "/suppliers", label: t("Supplier Ledger"), icon: "master" },
+      { to: "/audit", label: t("Audit Trail"), icon: "reports" },
+      { to: "/loyalty", label: t("Loyalty"), icon: "staff" },
+      { to: "/account", label: t("Account"), icon: "cash" },
       { to: "/backup", label: t("Backup & Restore"), icon: "controls" },
       { to: "/settings", label: t("Settings"), icon: "controls" },
     ] : role === "manager" ? [
@@ -227,7 +231,7 @@ export default function App() {
       <Route path="/admin-controls" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Shell><AdminControls /></Shell></ProtectedRoute>} />
       {["/inventory", "/expenses", "/cash-drawer", "/reservations", "/payroll", "/attendance"].map((path) => <Route key={path} path={path} element={<ProtectedRoute allowedRoles={path === "/payroll" ? ["admin"] : ["admin", "manager"]}><Shell><Operations /></Shell></ProtectedRoute>} />)}
       <Route path="/operations" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Shell><Operations /></Shell></ProtectedRoute>} />
-      {["/sales", "/reports", "/backup", "/settings"].map((path) => <Route key={path} path={path} element={<ProtectedRoute allowedRoles={path === "/backup" ? ["admin", "manager"] : ["admin"]}><Shell><AdminControls /></Shell></ProtectedRoute>} />)}
+      {["/sales", "/reports", "/backup", "/settings", "/suppliers", "/audit", "/loyalty", "/account"].map((path) => <Route key={path} path={path} element={<ProtectedRoute allowedRoles={path === "/backup" ? ["admin", "manager"] : ["admin"]}><Shell><AdminControls /></Shell></ProtectedRoute>} />)}
       <Route path="*" element={<Navigate to={token ? "/dashboard" : "/login"} />} />
     </Routes></Suspense>
   );
