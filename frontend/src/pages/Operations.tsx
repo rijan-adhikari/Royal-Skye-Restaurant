@@ -102,7 +102,7 @@ export default function Operations() {
     {!directTab && <nav className="space-y-3 rounded-2xl border border-[#e8dfd6] bg-white p-4 shadow-sm">
       <div><p className="mb-2 text-[10px] font-extrabold uppercase tracking-[.16em] text-[#a18d7c]">Daily restaurant operations</p><div className="flex flex-wrap gap-2">{visibleTabs.filter((name) => ["expenses", "inventory", "controls"].includes(name)).map((tabName) => <button key={tabName} onClick={() => setTab(tabName)} className={"rounded-xl px-4 py-2.5 text-xs font-bold transition " + (tab === tabName ? "bg-[#7d2523] text-white shadow-sm" : "border border-[#e8dfd6] bg-[#fbfaf8] text-[#6f6258] hover:bg-[#f4eee7]")}>{t(tabName === "expenses" ? "Expenses" : tabName === "inventory" ? "Inventory" : "Control Center")}</button>)}</div></div>
       {role === "admin" && <div className="border-t border-[#eee7df] pt-3"><p className="mb-2 text-[10px] font-extrabold uppercase tracking-[.16em] text-[#a18d7c]">Team operations</p><div className="flex flex-wrap gap-2">{visibleTabs.filter((name) => !["expenses", "inventory", "controls"].includes(name)).map((tabName) => <button key={tabName} onClick={() => setTab(tabName)} className={"rounded-xl px-3 py-2 text-xs font-semibold capitalize transition " + (tab === tabName ? "bg-[#7d2523] text-white" : "border border-[#e8dfd6] bg-white text-[#6f6258] hover:bg-[#faf7f3]")}>{t(tabName === "staff" ? "Staff attendance" : tabName)}</button>)}</div></div>}
-    </nav>
+    </nav>}
 
     {tab === "inventory" && <>
       <section className={panel}>
