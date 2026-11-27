@@ -36,7 +36,7 @@ export default function Admin({ embedded = false, staffOnly = false }: { embedde
   const [searchParams, setSearchParams] = useSearchParams();
   const routePanels: Record<string, string> = { "/menu": "menu", "/customers": "customers", "/staff": "staff" };
   const requestedPanel = staffOnly ? "staff" : (routePanels[location.pathname] || searchParams.get("panel") || "menu");
-  const panel = requestedPanel === "staff" && (!staffOnly && role === "admin" || role !== "admin") ? "menu" : requestedPanel;
+  const panel = requestedPanel === "staff" && role !== "admin" ? "menu" : requestedPanel;
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [menuEditingId, setMenuEditingId] = useState<string | null>(null);
