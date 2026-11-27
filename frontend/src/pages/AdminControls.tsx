@@ -21,7 +21,7 @@ export default function AdminControls() {
       {!standalone && <div className="mt-4 flex flex-wrap gap-2">
         <button onClick={() => setParams({section:"system"})} className={"rounded-xl px-4 py-2.5 text-xs font-bold "+(section==="system"?"bg-[#7d2523] text-white":"border border-[var(--rs-line)] text-[var(--rs-ink)]")}>System & security</button>
         {!isManager && <button onClick={() => setParams({section:"staff"})} className={"rounded-xl px-4 py-2.5 text-xs font-bold "+(section==="staff"?"bg-[#7d2523] text-white":"border border-[var(--rs-line)] text-[var(--rs-ink)]")}>Staff Accounts</button>}
-      </div>
+      </div>}
     </header>
     {section === "system" ? <AdminControl visibleTabs={isManager ? ["backup"] : ["sales","suppliers","reports","backup","audit","settings","loyalty","account"]} managerView={isManager} initialTab={isManager ? "backup" : requestedTab} hideNavigation={standalone} /> : <Admin staffOnly />}
   </div>;
