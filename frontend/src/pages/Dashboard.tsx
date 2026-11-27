@@ -49,7 +49,7 @@ const dashboardSettingsIndex = [
   { title: "Supplier ledger", detail: "Track supplier balances, payments, credit adjustments and returns", keywords: "supplier vendor ledger balance payment credit return stock", href: "/suppliers" },
   { title: "Management reports", detail: "Review sales, profit and loss, exports and business performance", keywords: "reports analytics profit loss sales export excel pdf", href: "/reports" },
   { title: "Reservations", detail: "Create and manage future table bookings", keywords: "reservation booking table guest party date time", href: "/reservations" },
-  { title: "Takeaway & delivery", detail: "Track takeaway and delivery orders and fulfilment status", keywords: "takeaway delivery service order fulfilment dispatch", href: "/operations?tab=controls&control=service" },
+  { title: "Takeaway & delivery", detail: "Track takeaway and delivery orders and fulfilment status", keywords: "takeaway delivery service order fulfilment dispatch", href: "/service-orders" },
   { title: "Backup & restore", detail: "Create, download or restore a complete database backup", keywords: "database backup restore export import dump recovery", href: "/backup" },
   { title: "Audit trail", detail: "Review privileged actions, security events and account changes", keywords: "audit history logs security activity admin events", href: "/audit" },
 ] as const;
