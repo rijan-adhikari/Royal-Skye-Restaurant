@@ -3,7 +3,7 @@ import { api, apiErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
 type Tab = "cash" | "sales" | "suppliers" | "reports" | "service" | "backup" | "audit" | "settings" | "loyalty" | "account";
-type AdminControlProps = { visibleTabs?: Tab[]; embedded?: boolean; managerView?: boolean; initialTab?: string };
+type AdminControlProps = { visibleTabs?: Tab[]; embedded?: boolean; managerView?: boolean; initialTab?: string; hideNavigation?: boolean };
 const tabs: { id: Tab; label: string }[] = [
   { id: "cash", label: "Cash drawer" },
   { id: "sales", label: "Manage sales" }, { id: "suppliers", label: "Supplier ledger" },
@@ -15,7 +15,7 @@ const primary = "rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white 
 const panel = "rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm";
 const money = (v: any) => "Rs. " + Number(v || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function AdminControl({ visibleTabs, embedded = false, managerView = false, initialTab }: AdminControlProps) {
+export default function AdminControl({ visibleTabs, embedded = false, managerView = false, initialTab, hideNavigation = false }: AdminControlProps) {
   const { role } = useAuth();
   const canAdminEditCash = role === "admin";
   // Managers can use day-to-day operations and loyalty controls, but destructive backup/restore and audit access remain admin-only.
@@ -352,7 +352,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     </header>
     {message && <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p>}
     {error && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-    <nav className="grid gap-3 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm md:grid-cols-3">
+    {!hideNavigation && <nav className="grid gap-3 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm md:grid-cols-3">
       {([{label:"Cash & transactions",ids:["cash","sales","suppliers"]},{label:"Customers & service",ids:["service","loyalty"]},{label:"Reports & administration",ids:["reports","backup","audit","settings","account"]}] as const).map(group=>{const items=tabs.filter(item=>(group.ids as readonly string[]).includes(item.id)&&availableTabs.includes(item.id));return items.length?<section key={group.label}><p className="mb-2 text-[10px] font-extrabold uppercase tracking-[.15em] text-[#9b8065]">{group.label}</p><div className="flex flex-wrap gap-1.5">{items.map(item=><button key={item.id} type="button" onClick={()=>setTab(item.id)} className={"rounded-lg px-3 py-2 text-xs font-bold transition "+(tab===item.id?"bg-[#7b2926] text-white shadow-sm":"bg-[#f7f3ee] text-[#6d5a4a] hover:bg-[#eee5db]")}>{item.label}</button>)}</div></section>:null})}
     </nav>
 
