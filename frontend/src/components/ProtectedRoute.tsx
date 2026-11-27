@@ -11,9 +11,9 @@ export default function ProtectedRoute({
 }) {
   const { token, role } = useAuth();
 
-  if (!token) return <Navigate to="/login" replace />;
-  if (allowedRoles && (!role || !allowedRoles.includes(role))) {
-    return <Navigate to={!role ? "/login" : ["admin", "manager", "cashier"].includes(role) ? "/dashboard" : "/tables"} replace />;
+  if (!token || !role) return <Navigate to="/login" replace />;
+  if (allowedRoles && !allowedRoles.includes(role)) {
+    return <Navigate to={["admin", "manager", "cashier"].includes(role) ? "/dashboard" : "/tables"} replace />;
   }
   return <>{children}</>;
 }
