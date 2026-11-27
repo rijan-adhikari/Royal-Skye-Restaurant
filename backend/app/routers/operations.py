@@ -135,6 +135,7 @@ class ExpenseUpdate(BaseModel):
     description: str = Field(min_length=1, max_length=255)
     amount: Decimal = Field(gt=0)
     expense_date: datetime
+    payment_method: Literal["cash", "qr"] | None = None
 
 
 class AttendanceCreate(BaseModel):
@@ -525,6 +526,32 @@ def create_detailed_expense(payload: ExpenseCreate, db: Session = Depends(get_db
     return dict(row)
 
 
+def _refresh_cash_shift_totals(db: Session, shift_id: str) -> None:
+    shift = db.execute(text("""SELECT id,opening_float,status,counted_cash
+        FROM cash_drawer_shifts WHERE id=:id FOR UPDATE"""), {"id": shift_id}).mappings().first()
+    if not shift:
+        return
+    rows = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
+        FROM cash_drawer_entries e WHERE e.shift_id=:id
+        AND NOT ((e.entry_type='sale' AND EXISTS (
+            SELECT 1 FROM bills b WHERE b.bill_number=e.reference
+            AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount)
+            AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount)))
+        OR (e.entry_type='refund' AND EXISTS (
+            SELECT 1 FROM bills b WHERE b.bill_number=e.reference
+            AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount)
+            AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount))))
+        GROUP BY entry_type"""), {"id": shift_id}).mappings().all()
+    totals = {row["entry_type"]: Decimal(str(row["amount"])) for row in rows}
+    expected = (Decimal(str(shift["opening_float"])) + totals.get("sale", Decimal(0))
+        + totals.get("cash_in", Decimal(0)) - totals.get("refund", Decimal(0))
+        - totals.get("cash_out", Decimal(0)) - totals.get("payout", Decimal(0)))
+    difference = Decimal(str(shift["counted_cash"])) - expected if shift["counted_cash"] is not None else None
+    db.execute(text("""UPDATE cash_drawer_shifts SET expected_cash=:expected,
+        cash_difference=:difference WHERE id=:id"""),
+        {"expected": expected, "difference": difference, "id": shift_id})
+
+
 @router.patch("/expenses/{expense_id}")
 def update_detailed_expense(expense_id: str, payload: ExpenseUpdate, db: Session = Depends(get_db),
                             user=Depends(require_roles(*ADMIN))):
@@ -538,67 +565,121 @@ def update_detailed_expense(expense_id: str, payload: ExpenseUpdate, db: Session
         raise HTTPException(404, "Expense not found")
 
     old_amount = Decimal(str(expense["amount"]))
-    amount_changed = payload.amount != old_amount
+    new_amount = Decimal(str(payload.amount))
+    old_method = expense["payment_method"] or "legacy_unclassified"
+    new_method = payload.payment_method or old_method
+    amount_changed = new_amount != old_amount
+    method_changed = new_method != old_method
+    paid = expense["payment_status"] == "paid"
 
-    # Keep the cash drawer ledger and QR account balance aligned with the edited expense.
-    if amount_changed and expense["payment_status"] == "paid" and expense["payment_method"] == "cash":
-        entry = db.execute(text("""SELECT id,shift_id,amount FROM cash_drawer_entries
+    cash_entry = None
+    cash_shift = None
+    if paid and old_method == "cash":
+        cash_entry = db.execute(text("""SELECT id,shift_id,amount FROM cash_drawer_entries
             WHERE expense_id=:id AND entry_type='cash_out' FOR UPDATE"""),
             {"id": expense_id}).mappings().first()
-        if not entry:
-            raise HTTPException(409, "The original cash drawer entry is missing; this expense amount cannot be changed safely.")
-        shift = db.execute(text("""SELECT id,opening_float,status FROM cash_drawer_shifts
-            WHERE id=:id FOR UPDATE"""), {"id": entry["shift_id"]}).mappings().first()
-        if not shift or shift["status"] != "open":
-            raise HTTPException(409, "This cash expense belongs to a closed drawer shift. Its amount cannot be edited after checkout.")
-        totals = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
+        if not cash_entry and (amount_changed or method_changed):
+            raise HTTPException(409, "The original cash drawer entry is missing; this expense cannot be corrected safely.")
+        if cash_entry:
+            cash_shift = db.execute(text("""SELECT id,opening_float,status,counted_cash
+                FROM cash_drawer_shifts WHERE id=:id FOR UPDATE"""),
+                {"id": cash_entry["shift_id"]}).mappings().first()
+            if not cash_shift:
+                raise HTTPException(409, "The original cash drawer shift is missing.")
+
+    # Validate the destination ledger before changing either side of the transaction.
+    if paid and new_method == "qr" and (method_changed or amount_changed):
+        settings_row = db.execute(text("""SELECT opening_balance,opening_balance_at
+            FROM qr_account_settings WHERE id=1 FOR UPDATE""")).mappings().first()
+        opening = Decimal(str(settings_row["opening_balance"])) if settings_row else Decimal("0")
+        since = settings_row["opening_balance_at"] if settings_row else datetime.min
+        receipts = Decimal(str(db.execute(text("""SELECT COALESCE(SUM(amount),0)
+            FROM payments WHERE method='qr' AND created_at>=:since"""),
+            {"since": since}).scalar_one()))
+        refunds = Decimal(str(db.execute(text("""SELECT COALESCE(SUM(amount),0)
+            FROM bill_refunds WHERE method='qr' AND created_at>=:since"""),
+            {"since": since}).scalar_one()))
+        other_qr_expenses = Decimal(str(db.execute(text("""SELECT COALESCE(SUM(amount),0)
+            FROM expenses WHERE id<>:id AND payment_method='qr'
+            AND payment_status='paid' AND created_at>=:since"""),
+            {"id": expense_id, "since": since}).scalar_one()))
+        available_qr = opening + receipts - refunds - other_qr_expenses
+        if new_amount > available_qr:
+            raise HTTPException(422, f"QR account expense exceeds available recorded balance of NPR {available_qr}.")
+
+    destination_shift = None
+    if paid and new_method == "cash" and (method_changed or amount_changed):
+        if old_method == "cash" and cash_entry:
+            destination_shift = cash_shift
+            # Existing cash expense edits are restricted to open shifts; changing the
+            # source away from cash is still allowed as an audited historical correction.
+            if not method_changed and destination_shift["status"] != "open":
+                raise HTTPException(409, "This cash expense belongs to a closed drawer shift. Its amount cannot be edited after checkout.")
+        else:
+            # Put a newly cash-funded expense into the shift that was active when it
+            # was originally recorded. Never silently attach a historical expense to today's drawer.
+            destination_shift = db.execute(text("""SELECT id,opening_float,status,counted_cash
+                FROM cash_drawer_shifts
+                WHERE opened_at<=:created AND (closed_at IS NULL OR closed_at>=:created)
+                ORDER BY opened_at DESC LIMIT 1 FOR UPDATE"""),
+                {"created": expense["created_at"]}).mappings().first()
+            if not destination_shift:
+                raise HTTPException(409, "No cash drawer shift covers when this expense was recorded. Keep QR as the source or reconcile the correct shift first.")
+
+        exclude_entry = cash_entry["id"] if old_method == "cash" and cash_entry else None
+        cash_rows = db.execute(text("""SELECT entry_type,COALESCE(SUM(amount),0) amount
             FROM cash_drawer_entries e WHERE e.shift_id=:shift
-            AND NOT ((e.entry_type='sale' AND EXISTS (
+              AND (:exclude IS NULL OR e.id<>:exclude)
+              AND NOT ((e.entry_type='sale' AND EXISTS (
                 SELECT 1 FROM bills b WHERE b.bill_number=e.reference
                 AND EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='qr' AND p.amount=e.amount)
                 AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.bill_id=b.id AND p.method='cash' AND p.amount=e.amount)))
-            OR (e.entry_type='refund' AND EXISTS (
+              OR (e.entry_type='refund' AND EXISTS (
                 SELECT 1 FROM bills b WHERE b.bill_number=e.reference
                 AND EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='qr' AND r.amount=e.amount)
                 AND NOT EXISTS (SELECT 1 FROM bill_refunds r WHERE r.bill_id=b.id AND r.method='cash' AND r.amount=e.amount))))
-            GROUP BY entry_type"""), {"shift": shift["id"]}).mappings().all()
-        values = {r["entry_type"]: Decimal(str(r["amount"])) for r in totals}
-        available_before_expense = (Decimal(str(shift["opening_float"])) + values.get("sale", Decimal(0))
-            + values.get("cash_in", Decimal(0)) - values.get("refund", Decimal(0))
-            - values.get("cash_out", Decimal(0)) - values.get("payout", Decimal(0))
-            + Decimal(str(entry["amount"])))
-        if payload.amount > available_before_expense:
-            raise HTTPException(422, f"Edited expense exceeds available drawer cash of NPR {available_before_expense}.")
-        db.execute(text("UPDATE cash_drawer_entries SET amount=:amount WHERE id=:id"),
-                   {"amount": payload.amount, "id": entry["id"]})
+            GROUP BY entry_type"""),
+            {"shift": destination_shift["id"], "exclude": exclude_entry}).mappings().all()
+        cash_totals = {row["entry_type"]: Decimal(str(row["amount"])) for row in cash_rows}
+        available_cash = (Decimal(str(destination_shift["opening_float"])) + cash_totals.get("sale", Decimal(0))
+            + cash_totals.get("cash_in", Decimal(0)) - cash_totals.get("refund", Decimal(0))
+            - cash_totals.get("cash_out", Decimal(0)) - cash_totals.get("payout", Decimal(0)))
+        if new_amount > available_cash:
+            raise HTTPException(422, f"Cash expense exceeds available drawer cash of NPR {available_cash}.")
 
-    elif amount_changed and expense["payment_status"] == "paid" and expense["payment_method"] == "qr":
-        settings_row = db.execute(text("SELECT opening_balance,opening_balance_at FROM qr_account_settings WHERE id=1 FOR UPDATE")).mappings().first()
-        opening = Decimal(str(settings_row["opening_balance"])) if settings_row else Decimal("0")
-        since = settings_row["opening_balance_at"] if settings_row else datetime.min
-        receipts = Decimal(str(db.execute(text("SELECT COALESCE(SUM(amount),0) FROM payments WHERE method='qr' AND created_at>=:since"),
-            {"since": since}).scalar_one()))
-        refunds = Decimal(str(db.execute(text("SELECT COALESCE(SUM(amount),0) FROM bill_refunds WHERE method='qr' AND created_at>=:since"),
-            {"since": since}).scalar_one()))
-        other_qr_expenses = Decimal(str(db.execute(text("""SELECT COALESCE(SUM(amount),0) FROM expenses
-            WHERE id<>:id AND payment_method='qr' AND payment_status='paid' AND created_at>=:since"""),
-            {"id": expense_id, "since": since}).scalar_one()))
-        available_before_expense = opening + receipts - refunds - other_qr_expenses
-        if payload.amount > available_before_expense:
-            raise HTTPException(422, f"Edited expense exceeds available QR account balance of NPR {available_before_expense}.")
+    # Move the linked cash-out row only after destination validation has succeeded.
+    if paid and method_changed:
+        if old_method == "cash" and cash_entry:
+            db.execute(text("DELETE FROM cash_drawer_entries WHERE id=:id"),
+                       {"id": cash_entry["id"]})
+            _refresh_cash_shift_totals(db, str(cash_entry["shift_id"]))
+        if new_method == "cash":
+            db.execute(text("""INSERT INTO cash_drawer_entries
+                (shift_id,entry_type,amount,reference,notes,created_by,expense_id,created_at)
+                VALUES(:shift,'cash_out',:amount,:reference,:notes,:user,:expense,:created)"""), {
+                    "shift": destination_shift["id"], "amount": new_amount,
+                    "reference": expense["receipt_reference"] or f"Expense: {description[:90]}",
+                    "notes": expense["notes"] or f"Expense record {expense_id}",
+                    "user": user.id, "expense": expense_id, "created": expense["created_at"]})
+            _refresh_cash_shift_totals(db, str(destination_shift["id"]))
+    elif paid and amount_changed and new_method == "cash" and cash_entry:
+        db.execute(text("UPDATE cash_drawer_entries SET amount=:amount WHERE id=:id"),
+                   {"amount": new_amount, "id": cash_entry["id"]})
+        _refresh_cash_shift_totals(db, str(cash_entry["shift_id"]))
 
     updated = db.execute(text("""UPDATE expenses
-        SET description=:description,amount=:amount,expense_date=:expense_date
+        SET description=:description,amount=:amount,expense_date=:expense_date,payment_method=:method
         WHERE id=:id RETURNING *"""), {
-            "description": description, "amount": payload.amount,
-            "expense_date": payload.expense_date, "id": expense_id
+            "description": description, "amount": new_amount,
+            "expense_date": payload.expense_date, "method": new_method, "id": expense_id
         }).mappings().first()
 
     db.execute(text("""INSERT INTO audit_logs(id,user_id,action,details)
         VALUES(:id,:user,'expense.updated',:details)"""), {
             "id": str(uuid.uuid4()), "user": user.id,
-            "details": (f"Updated expense {expense['description']} (NPR {old_amount}) to "
-                        f"{description} (NPR {payload.amount}); date {expense['expense_date']} -> {payload.expense_date}")
+            "details": (f"Updated expense {expense['description']} (NPR {old_amount}, {old_method}) to "
+                        f"{description} (NPR {new_amount}, {new_method}); date "
+                        f"{expense['expense_date']} -> {payload.expense_date}")
         })
     db.commit()
     return dict(updated)
