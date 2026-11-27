@@ -12,7 +12,7 @@ export default function ProtectedRoute({
   const { token, role } = useAuth();
 
   if (!token) return <Navigate to="/login" replace />;
-  if (allowedRoles && role && !allowedRoles.includes(role)) {
+  if (allowedRoles && (!role || !allowedRoles.includes(role))) {
     return <Navigate to={["admin", "manager", "cashier"].includes(role) ? "/dashboard" : "/tables"} replace />;
   }
   return <>{children}</>;
