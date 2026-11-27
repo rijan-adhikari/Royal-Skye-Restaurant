@@ -119,8 +119,8 @@ function Shell({ children }: { children: React.ReactNode }) {
           <button onClick={() => setMobileOpen(false)} className="ml-auto rounded-lg p-2 text-[#b7aaa1] hover:bg-white/10 lg:hidden" aria-label="Close menu">✕</button>
         </div>
         <div className="mb-5 rounded-xl border border-white/[.07] bg-white/[.045] px-3 py-3">
-          <p className="text-[9px] font-bold uppercase tracking-[.18em] text-[#a99b91]">Operations workspace</p>
-          <p className="mt-1 text-xs font-semibold text-[#f0e6dc]">Management console</p>
+          <p className="text-[9px] font-bold uppercase tracking-[.18em] text-[#a99b91]">Royal Skye workspace</p>
+          <p className="mt-1 text-xs font-semibold text-[#f0e6dc]">{role === "admin" ? "Administrator workspace" : role === "manager" ? "Manager workspace" : role === "cashier" ? "Cashier workspace" : "Service workspace"}</p>
         </div>
         <nav className="flex-1 space-y-6">
           {groups.map(group => <section key={group.label}>
