@@ -3,7 +3,7 @@ import { api, apiErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
 type Tab = "cash" | "sales" | "suppliers" | "reports" | "service" | "backup" | "audit" | "settings" | "loyalty" | "account";
-type AdminControlProps = { visibleTabs?: Tab[]; embedded?: boolean; managerView?: boolean; initialTab?: string };
+type AdminControlProps = { visibleTabs?: Tab[]; embedded?: boolean; managerView?: boolean; initialTab?: string; hideNavigation?: boolean };
 const tabs: { id: Tab; label: string }[] = [
   { id: "cash", label: "Cash drawer" },
   { id: "sales", label: "Manage sales" }, { id: "suppliers", label: "Supplier ledger" },
@@ -15,7 +15,7 @@ const primary = "rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white 
 const panel = "rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm";
 const money = (v: any) => "Rs. " + Number(v || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function AdminControl({ visibleTabs, embedded = false, managerView = false, initialTab }: AdminControlProps) {
+export default function AdminControl({ visibleTabs, embedded = false, managerView = false, initialTab, hideNavigation = false }: AdminControlProps) {
   const { role } = useAuth();
   const canAdminEditCash = role === "admin";
   // Managers can use day-to-day operations and loyalty controls, but destructive backup/restore and audit access remain admin-only.
@@ -49,6 +49,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
   const [saleDateDraft, setSaleDateDraft] = useState("");
   const [selectedSaleDates, setSelectedSaleDates] = useState<string[]>([]);
   const [backupFile, setBackupFile] = useState<File | null>(null);
+  const [restorePreview, setRestorePreview] = useState<any>(null);
   const [restoreConfirmation, setRestoreConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -259,10 +260,28 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
     } finally { setBusy(false); }
   };
 
+  const inspectRestoreBackup = async () => {
+    if (!backupFile) {
+      setError("Choose a .dump backup file first.");
+      return;
+    }
+    setBusy(true); setError(""); setMessage(""); setRestorePreview(null); setRestoreConfirmation("");
+    try {
+      const body = new FormData();
+      body.append("backup_file", backupFile);
+      const response = await api.post("/api/admin/restore/preview", body);
+      setRestorePreview(response.data);
+      setMessage("Backup inspected successfully. Review the archive contents before restoring.");
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || "Could not inspect this backup. No database records were changed.");
+    } finally { setBusy(false); }
+  };
+
   const restoreBackup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!backupFile || restoreConfirmation !== "RESTORE ROYAL SKYE DATABASE") {
-      setError("Choose a .dump file and enter the exact confirmation phrase.");
+    const previewMatchesFile = !!restorePreview && restorePreview.filename === backupFile?.name && restorePreview.size_bytes === backupFile?.size;
+    if (!backupFile || !previewMatchesFile || restoreConfirmation !== "RESTORE ROYAL SKYE DATABASE") {
+      setError("Inspect the selected backup, review its contents, and enter the exact confirmation phrase.");
       return;
     }
     setBusy(true); setError(""); setMessage("");
@@ -272,7 +291,7 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
       body.append("confirmation", restoreConfirmation);
       const response = await api.post("/api/admin/restore", body);
       setMessage(`${response.data.message} Safety backup: ${response.data.safety_backup}`);
-      setBackupFile(null); setRestoreConfirmation("");
+      setBackupFile(null); setRestorePreview(null); setRestoreConfirmation("");
     } catch (e: any) {
       setError(e?.response?.data?.detail || "Database restore failed. The pre-restore safety backup is retained.");
     } finally { setBusy(false); }
@@ -328,14 +347,14 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
 
   return <div className="mx-auto max-w-7xl space-y-5">
     <header className="flex flex-wrap items-end justify-between gap-3">
-      <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Royal Skye · {embedded ? "Restaurant Operations" : "Administration"}</p><h1 className="mt-1 text-3xl font-bold">{embedded ? (tab === "cash" ? "Cash drawer" : "Restaurant operations") : "Admin controls"}</h1><p className="text-sm text-neutral-500">{embedded ? "Cash handling, order fulfilment and customer loyalty." : "Sales oversight, suppliers, reports, business configuration and security."}</p></div>
+      <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Royal Skye · {embedded ? "Restaurant Operations" : "Administration"}</p><h1 className="mt-1 text-3xl font-bold">{embedded ? (tab === "cash" ? "Cash drawer" : tab === "service" ? "Service orders" : "Restaurant operations") : ({ sales: "Sales register", reports: "Management reports", backup: "Backup & restore", settings: "Business settings", suppliers: "Supplier ledger", audit: "Audit trail", loyalty: "Loyalty programme", account: "Royal Skye account", cash: "Cash drawer", service: "Service orders" } as Record<Tab, string>)[tab]}</h1><p className="text-sm text-neutral-500">{embedded ? "Cash handling, order fulfilment and customer loyalty." : "Sales oversight, suppliers, reports, business configuration and security."}</p></div>
       <button className={primary} disabled={busy} onClick={() => load()}>{busy ? "Working…" : "Refresh"}</button>
     </header>
     {message && <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p>}
     {error && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-    <nav className="grid gap-3 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm md:grid-cols-3">
+    {!hideNavigation && <nav className="grid gap-3 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm md:grid-cols-3">
       {([{label:"Cash & transactions",ids:["cash","sales","suppliers"]},{label:"Customers & service",ids:["service","loyalty"]},{label:"Reports & administration",ids:["reports","backup","audit","settings","account"]}] as const).map(group=>{const items=tabs.filter(item=>(group.ids as readonly string[]).includes(item.id)&&availableTabs.includes(item.id));return items.length?<section key={group.label}><p className="mb-2 text-[10px] font-extrabold uppercase tracking-[.15em] text-[#9b8065]">{group.label}</p><div className="flex flex-wrap gap-1.5">{items.map(item=><button key={item.id} type="button" onClick={()=>setTab(item.id)} className={"rounded-lg px-3 py-2 text-xs font-bold transition "+(tab===item.id?"bg-[#7b2926] text-white shadow-sm":"bg-[#f7f3ee] text-[#6d5a4a] hover:bg-[#eee5db]")}>{item.label}</button>)}</div></section>:null})}
-    </nav>
+    </nav>}
 
 
     {tab === "account" && role === "admin" && <div className="space-y-4">
@@ -474,10 +493,18 @@ export default function AdminControl({ visibleTabs, embedded = false, managerVie
 
     {tab === "backup" && <div className="grid gap-4 lg:grid-cols-2">
       <section className={panel}><h2 className="font-semibold text-lg">Create / download full backup</h2><p className="mt-2 text-sm text-neutral-500">Download a complete PostgreSQL database backup. It includes sales and bills, expenses, inventory, customers, staff and payroll, cash drawer records, settings and other restaurant data. Keep your own secure copy; server-local temporary files are not guaranteed to persist across deployments.</p><button className={primary + " mt-4"} disabled={busy} onClick={downloadBackup}>Create & download backup</button></section>
-      <section className={panel}><h2 className="font-semibold text-lg">Restore from backup</h2><p className="mt-2 text-sm text-red-700">Restore replaces the current database. The system first creates a safety backup and blocks restore while orders or cash drawer shifts are open.</p><form onSubmit={restoreBackup} className="mt-4 space-y-3">
-        <label className="block text-xs">Upload backup file (.dump) — sales, expenses and all database records<input required type="file" accept=".dump,application/octet-stream" className={field + " mt-1"} onChange={e => setBackupFile(e.target.files?.[0] || null)} /></label>
+      <section className={panel}><h2 className="font-semibold text-lg">Restore from backup</h2><p className="mt-2 text-sm text-red-700">Restore replaces the current database. Inspect the backup first; the server validates the archive and core tables, then creates a safety backup. Restore is blocked while orders or cash drawer shifts are open.</p><form onSubmit={restoreBackup} className="mt-4 space-y-3">
+        <label className="block text-xs">Upload backup file (.dump)<input required type="file" accept=".dump,application/octet-stream" className={field + " mt-1"} onChange={e => { setBackupFile(e.target.files?.[0] || null); setRestorePreview(null); setRestoreConfirmation(""); }} /></label>
+        <button type="button" className={primary} disabled={busy || !backupFile} onClick={inspectRestoreBackup}>{busy ? "Inspecting…" : "Inspect backup"}</button>
+        {restorePreview && backupFile && restorePreview.filename === backupFile.name && restorePreview.size_bytes === backupFile.size && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-950">
+          <p className="font-bold">Backup archive validated</p>
+          <p className="mt-1">{restorePreview.filename} · {(restorePreview.size_bytes / (1024 * 1024)).toFixed(2)} MB</p>
+          <p className="mt-1">{restorePreview.entry_count} archive entries · {restorePreview.table_count} tables detected</p>
+          <p className="mt-2 break-words">{(restorePreview.tables || []).join(", ")}</p>
+          <p className="mt-2 font-semibold">Inspection only — no database records have been changed.</p>
+        </div>}
         <label className="block text-xs">Type RESTORE ROYAL SKYE DATABASE to confirm<input required className={field + " mt-1"} value={restoreConfirmation} onChange={e => setRestoreConfirmation(e.target.value)} /></label>
-        <button className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={busy || !backupFile || restoreConfirmation !== "RESTORE ROYAL SKYE DATABASE"}>Restore database</button>
+        <button className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={busy || !backupFile || !restorePreview || restorePreview.filename !== backupFile.name || restorePreview.size_bytes !== backupFile.size || restoreConfirmation !== "RESTORE ROYAL SKYE DATABASE"}>Restore database</button>
       </form></section>
     </div>}
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 
 interface OpenOrder { id: string; order_number: string; table_id?: string; table_name: string; subtotal: string; grand_total: string; tax_amount: string; tax_percent: string; service_charge_amount: string; service_charge_percent: string; cabin_fee?: string; service_type?: string; customer_name?: string | null; phone?: string | null; delivery_address?: string | null; delivery_fee?: string; items: Array<{ name: string; quantity: number; unit_price: string; total: string }>; }
@@ -7,6 +8,8 @@ interface Customer { id: string; name: string; phone?: string | null; }
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 export default function Billing() {
+  const [searchParams] = useSearchParams();
+  const requestedOrderId = searchParams.get("order") || "";
   const [orders, setOrders] = useState<OpenOrder[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [orderId, setOrderId] = useState("");
@@ -44,8 +47,18 @@ export default function Billing() {
   };
 
   useEffect(() => {
-    loadData().catch(() => setError("Could not load open orders and customers."));
-  }, []);
+    loadData().then((loadedOrders) => {
+      if (!requestedOrderId) return;
+      const requestedOrder = loadedOrders.find((order) => order.id === requestedOrderId);
+      if (requestedOrder) {
+        setOrderId(requestedOrder.id);
+        setAmount(requestedOrder.grand_total);
+        setError("");
+      } else {
+        setError("That order is no longer open. Refresh the order list before continuing.");
+      }
+    }).catch(() => setError("Could not load open orders and customers."));
+  }, [requestedOrderId]);
   useEffect(() => {
     api.get("/api/settings/payment-qr")
       .then(response => setPaymentQr(response.data.qr_image_path || ""))
@@ -233,7 +246,7 @@ export default function Billing() {
   return (
     <div className="billing-page mx-auto max-w-6xl space-y-5 pb-8">
       <header className="flex flex-wrap items-end justify-between gap-3">
-        <div><p className="text-[10px] font-extrabold uppercase tracking-[.2em] text-[#9b7957]">Front of house / Checkout</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight">Billing</h1><p className="mt-1 text-sm text-neutral-500">Select an order, take payment and issue a clean receipt.</p></div>
+        <div><p className="text-[10px] font-extrabold uppercase tracking-[.2em] text-[#9b7957]">Front of house / Checkout</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight">Checkout</h1><p className="mt-1 text-sm text-neutral-500">Select an order, take payment and issue a clean receipt.</p></div>
         <span className="rounded-full border border-[#e7ded4] bg-white px-3 py-2 text-xs font-bold text-[#75665a]">{orders.length} open orders</span>
       </header>
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,.85fr)]">
@@ -247,20 +260,28 @@ export default function Billing() {
           <section className="rounded-2xl border border-[#e9dfd5] bg-white p-5 shadow-sm">
             <div className="mb-4"><p className="text-[10px] font-bold uppercase tracking-widest text-[#9b7957]">02 / Payment</p><h2 className="mt-1 text-base font-extrabold">Payment details</h2></div>
             <div className="grid gap-3 sm:grid-cols-2"><label className="block text-xs font-bold text-neutral-600">Payment method<select className="mt-1.5 w-full rounded-xl border px-3 py-3 text-sm" value={method} onChange={e=>{setMethod(e.target.value);setPreview(null);const selected=orders.find(o=>o.id===orderId);setAmount(e.target.value==="credit"?"0":(selected?.grand_total||""));}}><option value="cash">Cash</option><option value="qr">QR payment</option><option value="card">Card</option><option value="bank_transfer">Bank transfer</option><option value="credit">Customer credit</option></select></label><label className="block text-xs font-bold text-neutral-600">Amount received (NPR)<input type="number" min="0" step="0.01" disabled={method==="credit"} className="mt-1.5 w-full rounded-xl border px-3 py-3 text-sm disabled:opacity-50" value={amount} onChange={e=>{setAmount(e.target.value);setPreview(null);}}/></label></div>
-            <p className="mt-2 text-[11px] text-neutral-500">{method==="cash"?"Cash overpayment is returned as change.":method==="credit"?"This bill is recorded against the customer's credit balance.":"Non-cash payment cannot exceed the bill total."}</p>
+            <p className="mt-2 text-[11px] text-neutral-500">{method==="cash"?"Cash overpayment is returned as change.":method==="credit"?"This bill is recorded against the customer's credit balance.":"For QR, card or bank transfer, enter only the amount you have verified was received."}</p>
+            {method === "qr" && (
             <div className="mt-3 rounded-xl border border-[#e8ded2] bg-[#faf7f3] p-3">
               <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold text-[#594638]">Restaurant payment QR</p><p className="mt-1 text-[11px] text-neutral-500">{paymentQr ? "Show the saved restaurant QR for customers to scan." : "No QR uploaded yet. An admin can add it in Admin Controls → Business Settings."}</p></div>
                 <button type="button" onClick={() => setShowPaymentQr(v => !v)} className="shrink-0 rounded-lg bg-[#342923] px-4 py-2.5 text-xs font-bold text-white">{showPaymentQr ? "Hide QR" : "Show QR"}</button>
               </div>
-              {showPaymentQr && (paymentQr ? <div className="mt-3 rounded-lg border border-[#eee7df] bg-white p-3 text-center"><img src={paymentQr} alt="Royal Skye payment QR code" className="mx-auto max-h-64 max-w-full object-contain" /><p className="mt-2 text-[10px] text-neutral-500">Customer can scan using a supported banking or wallet app. Verify payment in your merchant account before completing the bill.</p></div> : <p className="mt-3 rounded-lg bg-white p-3 text-xs text-[#8a5941]">QR image not configured. Upload the restaurant QR in Admin Controls → Business Settings, then save the settings.</p>)}
+              {showPaymentQr && (paymentQr ? <div className="mt-3 rounded-lg border border-[#eee7df] bg-white p-3 text-center"><img src={paymentQr} alt="Royal Skye payment QR code" className="mx-auto max-h-64 max-w-full object-contain" /><p className="mt-2 text-[10px] text-neutral-500">Customer can scan using a supported banking or wallet app. Confirm the credit in the bank or wallet account before continuing. A payment screenshot alone is not verification.</p></div> : <p className="mt-3 rounded-lg bg-white p-3 text-xs text-[#8a5941]">QR image not configured. Upload the restaurant QR in Admin Controls → Business Settings, then save the settings.</p>)}
             </div>
-            <div className="mt-4 border-t border-[#eee7df] pt-4"><label className="block text-xs font-bold text-neutral-600">Customer for credit / partial payment<input className="mt-1.5 w-full rounded-xl border px-3 py-3 text-sm" placeholder="Search customer by name or phone" value={customerSearch} onChange={e=>updateCustomerSearch(e.target.value)}/></label>
+            )}
+            <details className="mt-4 border-t border-[#eee7df] pt-4" open={method === "credit" || (!!orderId && Number(amount || 0) < Number(orders.find(o => o.id === orderId)?.grand_total || 0))}>
+              <summary className="cursor-pointer text-xs font-bold text-[#6c5544]">Customer account (needed for credit or partial payment)</summary>
+              <div className="mt-3"><label className="block text-xs font-bold text-neutral-600">Customer for credit / partial payment<input className="mt-1.5 w-full rounded-xl border px-3 py-3 text-sm" placeholder="Search customer by name or phone" value={customerSearch} onChange={e=>updateCustomerSearch(e.target.value)}/></label>
               {customerSearch&&<div className="mt-2 max-h-32 overflow-y-auto rounded-xl border">{matchingCustomers.map(customer=><button type="button" key={customer.id} onClick={()=>{setCustomerId(customer.id);setCustomerSearch(customer.name);setPreview(null);}} className={"block w-full border-b px-3 py-2 text-left text-xs "+(customer.id===customerId?"bg-[#f4eee5] font-bold":"hover:bg-[#faf7f3]")}>{customer.name}{customer.phone?" · "+customer.phone:""}</button>)}{matchingCustomers.length===0&&<p className="p-3 text-xs text-neutral-500">No customer found.</p>}</div>}
               {selectedCustomer&&<p className="mt-2 text-xs font-semibold text-[#55735a]">Selected: {selectedCustomer.name}</p>}
               <details className="mt-3 rounded-xl border border-[#eee7df] px-3 py-3"><summary className="cursor-pointer text-xs font-bold text-[#6c5544]">Add new customer</summary><div className="mt-3 grid gap-2 sm:grid-cols-2"><input className="rounded-lg border px-3 py-2 text-sm" placeholder="Customer name" value={newCustomerName} onChange={e=>setNewCustomerName(e.target.value)}/><input className="rounded-lg border px-3 py-2 text-sm" placeholder="Phone" value={newCustomerPhone} onChange={e=>setNewCustomerPhone(e.target.value)}/></div><button type="button" onClick={addCustomer} className="mt-2 rounded-lg border border-[#b99a78] px-3 py-2 text-xs font-bold text-[#76583d]">Save customer</button></details>
-            </div>
+              </div>
+            </details>
           </section>
-          <section className="rounded-2xl border border-[#e9dfd5] bg-white p-5 shadow-sm"><div className="mb-3"><p className="text-[10px] font-bold uppercase tracking-widest text-[#9b7957]">03 / Optional</p><h2 className="mt-1 text-base font-extrabold">Discounts & loyalty</h2></div><div className="grid gap-3 sm:grid-cols-2"><label className="block text-xs font-bold text-neutral-600">Discount (%)<input type="number" min="0" max="100" step="0.01" className="mt-1.5 w-full rounded-xl border px-3 py-3 text-sm" value={discountPercent} onChange={e=>{setDiscountPercent(e.target.value);setPreview(null);}}/></label><label className="block text-xs font-bold text-neutral-600">Fixed discount (NPR)<input type="number" min="0" step="0.01" className="mt-1.5 w-full rounded-xl border px-3 py-3 text-sm" value={discountAmount} onChange={e=>{setDiscountAmount(e.target.value);setPreview(null);}}/></label></div><details className="mt-3 rounded-xl border border-[#eee7df] px-3 py-3"><summary className="cursor-pointer text-xs font-bold text-[#6c5544]">Redeem loyalty points</summary><input type="number" min="0" step="1" disabled={!customerId||!loyaltyEnabled} className="mt-3 w-full rounded-xl border px-3 py-2.5 text-sm" value={loyaltyPoints} onChange={e=>{setLoyaltyPoints(e.target.value);setPreview(null);}}/><p className="mt-1 text-xs text-neutral-500">{!customerId?"Select a customer first.":loyaltyEnabled?"Available: "+loyaltyBalance+" points · NPR "+pointValue+" per point":"Loyalty is disabled."}</p></details></section>
+          <details className="rounded-2xl border border-[#e9dfd5] bg-white p-5 shadow-sm" open={Number(discountPercent) > 0 || Number(discountAmount) > 0 || Number(loyaltyPoints) > 0}>
+  <summary className="cursor-pointer text-sm font-extrabold text-[#514238]">Optional discounts & loyalty</summary>
+  <div className="mt-3"><div className="grid gap-3 sm:grid-cols-2"><label className="block text-xs font-bold text-neutral-600">Discount (%)<input type="number" min="0" max="100" step="0.01" className="mt-1.5 w-full rounded-xl border px-3 py-3 text-sm" value={discountPercent} onChange={e=>{setDiscountPercent(e.target.value);setPreview(null);}}/></label><label className="block text-xs font-bold text-neutral-600">Fixed discount (NPR)<input type="number" min="0" step="0.01" className="mt-1.5 w-full rounded-xl border px-3 py-3 text-sm" value={discountAmount} onChange={e=>{setDiscountAmount(e.target.value);setPreview(null);}}/></label></div><details className="mt-3 rounded-xl border border-[#eee7df] px-3 py-3"><summary className="cursor-pointer text-xs font-bold text-[#6c5544]">Redeem loyalty points</summary><input type="number" min="0" step="1" disabled={!customerId||!loyaltyEnabled} className="mt-3 w-full rounded-xl border px-3 py-2.5 text-sm" value={loyaltyPoints} onChange={e=>{setLoyaltyPoints(e.target.value);setPreview(null);}}/><p className="mt-1 text-xs text-neutral-500">{!customerId?"Select a customer first.":loyaltyEnabled?"Available: "+loyaltyBalance+" points · NPR "+pointValue+" per point":"Loyalty is disabled."}</p></details></div>
+</details>
         </div>
         <aside className="space-y-4 xl:sticky xl:top-24"><section className="rounded-2xl border border-[#e2d6c9] bg-[#f9f6f1] p-5 shadow-sm"><p className="text-[10px] font-extrabold uppercase tracking-[.18em] text-[#9b7957]">Checkout summary</p><h2 className="mt-1 text-lg font-extrabold text-[#332821]">Bill total</h2>{orderId&&orders.find(o=>o.id===orderId)?<div className="mt-4 flex justify-between text-sm"><span className="text-[#77685c]">Current order total</span><b>NPR {orders.find(o=>o.id===orderId)?.grand_total}</b></div>:<p className="mt-4 rounded-xl border border-dashed p-4 text-center text-xs text-neutral-500">Select an order to begin.</p>}<button type="button" onClick={previewBill} disabled={!orderId} className="mt-5 w-full rounded-xl bg-[#7b2926] px-4 py-3 text-sm font-extrabold text-white disabled:opacity-40">Preview final bill</button>
           {preview&&<div className="mt-4 rounded-xl border border-[#e7dbce] bg-white p-4"><div className="border-b border-dashed pb-3 text-center"><p className="text-[10px] font-bold uppercase tracking-widest text-[#9b7957]">Bill preview</p><p className="mt-1 text-sm font-extrabold">{preview.order.order_number}</p><p className="text-[10px] text-neutral-500">Not yet recorded as a sale</p></div><div className="space-y-2 py-3 text-xs">{preview.order.items.map((item,i)=><div key={i} className="flex justify-between gap-2"><span>{item.quantity} × {item.name}</span><b>NPR {item.total}</b></div>)}</div><div className="space-y-2 border-t pt-3 text-xs"><p className="flex justify-between"><span>Subtotal</span><span>NPR {preview.order.subtotal}</span></p>{Number(preview.totalDiscountAmount)>0&&<p className="flex justify-between text-[#a0443e]"><span>Discount</span><span>− NPR {preview.totalDiscountAmount}</span></p>}{Number(preview.taxAmount)>0&&<p className="flex justify-between"><span>Tax</span><span>NPR {preview.taxAmount}</span></p>}{Number(preview.serviceAmount)>0&&<p className="flex justify-between"><span>Service charge</span><span>NPR {preview.serviceAmount}</span></p>}<p className="flex justify-between border-t pt-3 text-base font-extrabold"><span>Total due</span><span>NPR {preview.grandTotal}</span></p><p className="flex justify-between"><span>Amount received</span><b>NPR {preview.amountReceived}</b></p>{Number(preview.changeDue)>0&&<p className="flex justify-between font-bold text-[#477453]"><span>Change</span><span>NPR {preview.changeDue}</span></p>}{Number(preview.remainingCredit)>0&&<p className="flex justify-between font-bold text-[#a36c32]"><span>Credit balance</span><span>NPR {preview.remainingCredit}</span></p>}</div><button type="button" onClick={submit} className="mt-4 w-full rounded-xl bg-[#342923] px-4 py-3 text-sm font-extrabold text-white">Confirm payment & generate bill</button></div>}

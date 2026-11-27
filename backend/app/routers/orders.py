@@ -1,6 +1,7 @@
 import random
 import string
 from datetime import datetime, date
+from zoneinfo import ZoneInfo
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
@@ -16,6 +17,7 @@ from app.billing_math import calculate_bill
 router = APIRouter(prefix="/api", tags=["orders-kot"])
 CABIN_SURCHARGE_RATE = Decimal("0.05")
 CABIN_FEE = Decimal("500.00")
+BUSINESS_TIMEZONE = ZoneInfo("Asia/Kathmandu")
 
 
 def _next_number(prefix: str) -> str:
@@ -103,6 +105,12 @@ async def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_d
             db.add(table)
             db.flush()
 
+    # Cashiers and waiters cannot backdate sales through a crafted API request.
+    # Only administrators and managers may select a reporting/business date.
+    can_override_business_date = user.role in (models.RoleName.admin, models.RoleName.manager)
+    requested_business_date = payload.business_date if can_override_business_date else None
+    current_business_date = datetime.now(BUSINESS_TIMEZONE).date()
+
     # Dine-in orders reuse a table session; takeaway and delivery always create separate tickets.
     order = None
     if service_type == "dine_in":
@@ -113,24 +121,30 @@ async def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_d
     if not order:
         order = models.Order(order_number=_next_number("ORD"), table_id=table.id,
                               waiter_id=user.id, status=models.OrderStatus.open,
-                              business_date=payload.business_date or date.today())
+                              business_date=requested_business_date or current_business_date)
         db.add(order)
         db.flush()
-    else:
-        order.business_date = payload.business_date or order.business_date
-        if service_type == "dine_in":
-            table.status = models.TableStatus.occupied
-        else:
-            db.execute(text("""INSERT INTO order_service_details(order_id,service_type,customer_name,phone,delivery_address,delivery_fee)
-                VALUES(:order,:type,:name,:phone,:address,:fee)"""),
-                {"order": order.id, "type": service_type, "name": payload.customer_name,
-                 "phone": payload.phone, "address": payload.delivery_address,
-                 "fee": payload.delivery_fee if service_type == "delivery" else Decimal("0")})
+    elif requested_business_date:
+        order.business_date = requested_business_date
 
-    # Newly-created dine-in orders must occupy their table as well. Previously
-    # this status was only set when appending items to an existing open order.
+    # Persist takeaway/delivery metadata for newly-created as well as reused orders.
+    # The unique order_id constraint makes this upsert safe against duplicate details.
     if service_type == "dine_in":
         table.status = models.TableStatus.occupied
+    else:
+        db.execute(text("""INSERT INTO order_service_details
+            (order_id,service_type,customer_name,phone,delivery_address,delivery_fee)
+            VALUES(:order,:type,:name,:phone,:address,:fee)
+            ON CONFLICT(order_id) DO UPDATE SET
+              service_type=EXCLUDED.service_type,
+              customer_name=EXCLUDED.customer_name,
+              phone=EXCLUDED.phone,
+              delivery_address=EXCLUDED.delivery_address,
+              delivery_fee=EXCLUDED.delivery_fee,
+              updated_at=NOW()"""),
+            {"order": order.id, "type": service_type, "name": payload.customer_name,
+             "phone": payload.phone, "address": payload.delivery_address,
+             "fee": payload.delivery_fee if service_type == "delivery" else Decimal("0")})
 
     is_cabin_order = service_type == "dine_in" and "cabin" in (table.name or "").lower()
     kitchen_items = []

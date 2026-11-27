@@ -52,8 +52,69 @@ def _create_database_backup(destination: Path) -> None:
         raise HTTPException(500, "Database backup failed. Check database connectivity and server logs.")
 
 
+def _save_backup_upload(backup_file: UploadFile, backup_dir: Path) -> tuple[Path, int]:
+    if not backup_file.filename or not backup_file.filename.lower().endswith(".dump"):
+        raise HTTPException(415, "Upload a PostgreSQL custom-format .dump backup")
+    upload_path = backup_dir / ("restore-upload-" + uuid.uuid4().hex + ".dump")
+    total = 0
+    try:
+        with upload_path.open("wb") as output:
+            while chunk := backup_file.file.read(1024 * 1024):
+                total += len(chunk)
+                if total > 500 * 1024 * 1024:
+                    raise HTTPException(413, "Backup file exceeds the 500 MB upload limit")
+                output.write(chunk)
+        if total == 0:
+            raise HTTPException(400, "The selected backup file is empty")
+        return upload_path, total
+    except Exception:
+        upload_path.unlink(missing_ok=True)
+        raise
+
+
+def _inspect_database_backup(backup_path: Path) -> dict:
+    try:
+        result = subprocess.run(
+            ["pg_restore", "--list", str(backup_path)],
+            capture_output=True, text=True, check=True, timeout=120,
+        )
+    except subprocess.CalledProcessError:
+        raise HTTPException(415, "The uploaded file is not a valid PostgreSQL backup")
+    except (subprocess.TimeoutExpired, OSError):
+        raise HTTPException(500, "Could not inspect the uploaded backup on the server")
+
+    manifest = result.stdout or ""
+    if "Format: CUSTOM" not in manifest:
+        raise HTTPException(415, "Only PostgreSQL custom-format backups created by pg_dump are supported")
+
+    entries = [line for line in manifest.splitlines() if line.strip() and not line.lstrip().startswith(";")]
+    table_names = set()
+    for line in entries:
+        parts = line.split()
+        try:
+            table_index = parts.index("TABLE")
+        except ValueError:
+            continue
+        if table_index + 2 < len(parts) and parts[table_index + 1] != "DATA":
+            table_names.add(parts[table_index + 1] + "." + parts[table_index + 2])
+
+    required_tables = {"public.users", "public.orders", "public.bills", "public.payments"}
+    missing_tables = sorted(required_tables - table_names)
+    if missing_tables:
+        raise HTTPException(
+            422,
+            "This backup does not contain the required Royal Skye tables: " + ", ".join(missing_tables),
+        )
+    return {
+        "archive_format": "PostgreSQL custom",
+        "entry_count": len(entries),
+        "table_count": len(table_names),
+        "tables": sorted(table_names)[:60],
+    }
+
+
 @router.get("/backup")
-def download_database_backup(user=Depends(require_roles(*MANAGERS))):
+def download_database_backup(user=Depends(require_roles(*ADMIN))):
     backup_dir = Path(__file__).resolve().parents[2] / "backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
     filename = "royal-skye-" + datetime.utcnow().strftime("%Y%m%d-%H%M%S") + ".dump"
@@ -62,48 +123,70 @@ def download_database_backup(user=Depends(require_roles(*MANAGERS))):
     return FileResponse(destination, filename=filename, media_type="application/octet-stream")
 
 
+@router.post("/restore/preview")
+def preview_database_backup(backup_file: UploadFile = File(...),
+                            user=Depends(require_roles(*ADMIN))):
+    backup_dir = Path(__file__).resolve().parents[2] / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    upload_path, total = _save_backup_upload(backup_file, backup_dir)
+    try:
+        manifest = _inspect_database_backup(upload_path)
+        return {
+            "ok": True,
+            "filename": backup_file.filename,
+            "size_bytes": total,
+            **manifest,
+            "message": "Backup inspected successfully. No database records were changed.",
+        }
+    finally:
+        upload_path.unlink(missing_ok=True)
+
+
 @router.post("/restore")
 def restore_database_backup(backup_file: UploadFile = File(...),
                             confirmation: str = Form(...),
-                            db: Session = Depends(get_db), user=Depends(require_roles(*MANAGERS))):
+                            db: Session = Depends(get_db), user=Depends(require_roles(*ADMIN))):
     if confirmation != "RESTORE ROYAL SKYE DATABASE":
         raise HTTPException(400, "Type the exact restore confirmation phrase")
-    if not backup_file.filename or not backup_file.filename.lower().endswith(".dump"):
-        raise HTTPException(415, "Upload a PostgreSQL custom-format .dump backup")
     open_orders = db.execute(text("SELECT COUNT(*) FROM orders WHERE status='open'")).scalar_one()
     open_shifts = db.execute(text("SELECT COUNT(*) FROM cash_drawer_shifts WHERE status='open'")).scalar_one()
     if open_orders or open_shifts:
         raise HTTPException(409, "Close all open orders and cash drawer shifts before restoring a database")
     db.commit()
     db.close()
+
     backup_dir = Path(__file__).resolve().parents[2] / "backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
-    upload_path = backup_dir / ("restore-upload-" + uuid.uuid4().hex + ".dump")
-    with upload_path.open("wb") as output:
-        total = 0
-        while chunk := backup_file.file.read(1024 * 1024):
-            total += len(chunk)
-            if total > 500 * 1024 * 1024:
-                upload_path.unlink(missing_ok=True)
-                raise HTTPException(413, "Backup file exceeds the 500 MB upload limit")
-            output.write(chunk)
-    args, env = _pg_args()
-    process_env = {**__import__("os").environ, **env}
-    safety_backup = backup_dir / ("pre-restore-" + datetime.utcnow().strftime("%Y%m%d-%H%M%S") + ".dump")
-    _create_database_backup(safety_backup)
+    upload_path, _ = _save_backup_upload(backup_file, backup_dir)
+    safety_backup = backup_dir / (
+        "pre-restore-" + datetime.utcnow().strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8] + ".dump"
+    )
     try:
-        subprocess.run(["pg_restore", "--list", str(upload_path)], capture_output=True,
-                       env=process_env, check=True, timeout=120)
-        subprocess.run(["pg_restore", *args, "--clean", "--if-exists", "--no-owner",
-                        "--no-acl", "--single-transaction", "--exit-on-error", str(upload_path)],
-                       capture_output=True, env=process_env, check=True, timeout=1800)
+        # Validate the archive and required Royal Skye tables before creating a safety copy
+        # or issuing any destructive pg_restore command.
+        _inspect_database_backup(upload_path)
+        _create_database_backup(safety_backup)
+        args, env = _pg_args()
+        process_env = {**__import__("os").environ, **env}
+        subprocess.run(
+            ["pg_restore", *args, "--clean", "--if-exists", "--no-owner",
+             "--no-acl", "--single-transaction", "--exit-on-error", str(upload_path)],
+            capture_output=True, env=process_env, check=True, timeout=1800,
+        )
+    except HTTPException:
+        raise
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
-        raise HTTPException(500, f"Restore failed. A safety backup was retained as {safety_backup.name}.")
+        retained = safety_backup.name if safety_backup.exists() else "not created"
+        raise HTTPException(500, f"Restore failed. Safety backup: {retained}. No partial restore was committed.")
     finally:
         upload_path.unlink(missing_ok=True)
+
     engine.dispose()
-    return {"ok": True, "message": "Database restored. Sign in again using an account from the restored backup.",
-            "safety_backup": safety_backup.name}
+    return {
+        "ok": True,
+        "message": "Database restored. Sign in again using an account from the restored backup.",
+        "safety_backup": safety_backup.name,
+    }
 
 
 def audit(db: Session, user_id: str, action: str, details: str = "") -> None:

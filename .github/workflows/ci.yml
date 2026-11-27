@@ -4,11 +4,13 @@ on:
   push:
     branches:
       - main
-      - "feature/**"
-      - "staging/pos-rebuild"
+      - experimental
+      - rebuild/operator-first-production
   pull_request:
     branches:
       - main
+      - experimental
+      - rebuild/operator-first-production
 
 concurrency:
   group: royal-skye-pos-${{ github.workflow }}-${{ github.ref }}

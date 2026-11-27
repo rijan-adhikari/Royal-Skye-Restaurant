@@ -73,24 +73,40 @@ function Shell({ children }: { children: React.ReactNode }) {
   const currentTab = new URLSearchParams(location.search).get("tab") || "";
   const isManager = role === "admin" || role === "manager";
   // Keep the first-stage restaurant workflow focused; advanced tools remain available inside their relevant screens.
-  const workspace: NavItem[] = [
-    ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/dashboard", label: t("Dashboard"), icon: "overview" }] : []),
-    { to: "/tables", label: t("Tables & POS"), icon: "tables" },
-    ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/billing", label: t("Billing & Orders"), icon: "billing" }] : []),
+  // Flat, role-specific navigation: each destination opens its own workspace rather than a tab inside another panel.
+  const navigation: NavItem[] = [
+    ...(["admin", "manager", "cashier"].includes(role || "") ? [{ to: "/dashboard", label: t("Overview"), icon: "overview" }] : []),
+    { to: "/tables", label: t("Tables & Orders"), icon: "tables" },
+    ...(["admin", "manager", "cashier"].includes(role || "") ? [
+      { to: "/billing", label: t("Checkout"), icon: "billing" },
+      { to: "/credit", label: t("Customer Credit"), icon: "credit" },
+    ] : []),
+    ...(isManager ? [
+      { to: "/menu", label: t("Menu"), icon: "master" },
+      { to: "/customers", label: t("Customers"), icon: "staff" },
+      { to: "/inventory", label: t("Inventory"), icon: "inventory" },
+      { to: "/expenses", label: t("Expenses"), icon: "expenses" },
+      { to: "/cash-drawer", label: t("Cash Drawer"), icon: "cash" },
+      { to: "/service-orders", label: t("Service Orders"), icon: "reservations" },
+      { to: "/reservations", label: t("Reservations"), icon: "reservations" },
+    ] : []),
+    ...(role === "admin" ? [
+      { to: "/staff", label: t("Staff Accounts"), icon: "staff" },
+      { to: "/attendance", label: t("Staff & Attendance"), icon: "staff" },
+      { to: "/payroll", label: t("Payroll"), icon: "payroll" },
+      { to: "/sales", label: t("Sales Register"), icon: "billing" },
+      { to: "/reports", label: t("Reports"), icon: "reports" },
+      { to: "/suppliers", label: t("Supplier Ledger"), icon: "master" },
+      { to: "/audit", label: t("Audit Trail"), icon: "reports" },
+      { to: "/loyalty", label: t("Loyalty"), icon: "staff" },
+      { to: "/account", label: t("Account"), icon: "cash" },
+      { to: "/backup", label: t("Backup & Restore"), icon: "controls" },
+      { to: "/settings", label: t("Settings"), icon: "controls" },
+    ] : role === "manager" ? [
+      { to: "/backup", label: t("Backup & Restore"), icon: "controls" },
+    ] : []),
   ];
-  const management: NavItem[] = isManager ? [
-    { to: "/admin?panel=menu", label: t("Menu Management"), icon: "master", panel: "menu" },
-    { to: "/admin?panel=customers", label: t("Customer Management"), icon: "master", panel: "customers" },
-    { to: "/operations?tab=inventory", label: t("Inventory"), icon: "inventory", tab: "inventory" },
-    { to: "/operations?tab=expenses", label: t("Expenses"), icon: "expenses", tab: "expenses" },
-    { to: "/operations?tab=controls", label: t("Control Center"), icon: "controls", tab: "controls" },
-    ...(["admin", "manager"].includes(role || "") ? [{ to: "/admin-controls", label: role === "admin" ? t("Admin Controls") : t("Backup & Restore"), icon: "controls" }] : []),
-    ...(role === "admin" ? [{ to: "/admin-controls?section=system&tab=account", label: t("Royal Skye Account"), icon: "cash", tab: "account" }] : []),
-  ] : [];
-  const groups = [
-    { label: t("Workspace"), items: workspace },
-    ...(management.length ? [{ label: t("Restaurant management"), items: management }] : []),
-  ];
+  const groups = [{ label: t("My workspace"), items: navigation }];
   const activeItem = groups.flatMap(group => group.items).find(item =>
     item.to.split("?")[0] === location.pathname &&
     (item.panel ? item.panel === (new URLSearchParams(location.search).get("panel") || "menu") : item.tab ? item.tab === currentTab : !currentTab)
@@ -108,8 +124,8 @@ function Shell({ children }: { children: React.ReactNode }) {
           <button onClick={() => setMobileOpen(false)} className="ml-auto rounded-lg p-2 text-[#b7aaa1] hover:bg-white/10 lg:hidden" aria-label="Close menu">✕</button>
         </div>
         <div className="mb-5 rounded-xl border border-white/[.07] bg-white/[.045] px-3 py-3">
-          <p className="text-[9px] font-bold uppercase tracking-[.18em] text-[#a99b91]">Operations workspace</p>
-          <p className="mt-1 text-xs font-semibold text-[#f0e6dc]">Management console</p>
+          <p className="text-[9px] font-bold uppercase tracking-[.18em] text-[#a99b91]">Royal Skye workspace</p>
+          <p className="mt-1 text-xs font-semibold text-[#f0e6dc]">{role === "admin" ? "Administrator workspace" : role === "manager" ? "Manager workspace" : role === "cashier" ? "Cashier workspace" : "Service workspace"}</p>
         </div>
         <nav className="flex-1 space-y-6">
           {groups.map(group => <section key={group.label}>
@@ -210,27 +226,13 @@ export default function App() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/admin"
-        element={
-          <ProtectedRoute allowedRoles={["admin", "manager"]}>
-            <Shell><Admin /></Shell>
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/admin-controls"
-        element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Shell><AdminControls /></Shell></ProtectedRoute>}
-      />
-      <Route
-        path="/operations"
-        element={
-          <ProtectedRoute allowedRoles={["admin", "manager"]}>
-            <Shell><Operations /></Shell>
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/admin" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Shell><Admin /></Shell></ProtectedRoute>} />
+      {["/menu", "/customers"].map((path) => <Route key={path} path={path} element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Shell><Admin /></Shell></ProtectedRoute>} />)}
+      <Route path="/staff" element={<ProtectedRoute allowedRoles={["admin"]}><Shell><Admin /></Shell></ProtectedRoute>} />
+      <Route path="/admin-controls" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Shell><AdminControls /></Shell></ProtectedRoute>} />
+      {["/inventory", "/expenses", "/cash-drawer", "/service-orders", "/reservations", "/payroll", "/attendance"].map((path) => <Route key={path} path={path} element={<ProtectedRoute allowedRoles={path === "/payroll" ? ["admin"] : ["admin", "manager"]}><Shell><Operations /></Shell></ProtectedRoute>} />)}
+      <Route path="/operations" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Shell><Operations /></Shell></ProtectedRoute>} />
+      {["/sales", "/reports", "/backup", "/settings", "/suppliers", "/audit", "/loyalty", "/account"].map((path) => <Route key={path} path={path} element={<ProtectedRoute allowedRoles={path === "/backup" ? ["admin", "manager"] : ["admin"]}><Shell><AdminControls /></Shell></ProtectedRoute>} />)}
       <Route path="*" element={<Navigate to={token ? "/dashboard" : "/login"} />} />
     </Routes></Suspense>
   );

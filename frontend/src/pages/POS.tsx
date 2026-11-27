@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, apiErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
@@ -12,7 +12,9 @@ interface TableRow { id: string; floor_id: string; name: string; status: string;
 export default function POS() {
   const { role } = useAuth();
   const canRemoveSentItems = role === "admin";
+  const canEditBusinessDate = role === "admin" || role === "manager";
   const [params] = useSearchParams();
+  const navigate = useNavigate();
   const tableId = params.get("table") || "";
   const serviceType = params.get("service") || "dine_in";
   const isServiceOrder = serviceType !== "dine_in";
@@ -31,7 +33,7 @@ export default function POS() {
   const [servicePhone, setServicePhone] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryFee, setDeliveryFee] = useState("0");
-  const [businessDate, setBusinessDate] = useState(new Date().toLocaleDateString("en-CA"));
+  const [businessDate, setBusinessDate] = useState(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kathmandu" }).format(new Date()));
 
   const selectedTable = tables.find((t) => t.id === tableId);
   const isCabinOrder = Boolean(selectedTable && /cabin/i.test(selectedTable.name));
@@ -55,7 +57,7 @@ export default function POS() {
       const openOrder = (res.data || []).find((order: any) => order.table_id === tableId);
       if (openOrder) {
         setActiveOrderId(openOrder.id);
-        setBusinessDate(openOrder.business_date || new Date().toLocaleDateString("en-CA"));
+        setBusinessDate(openOrder.business_date || new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kathmandu" }).format(new Date()));
         setSentOrderItems(openOrder.items || []);
       } else {
         setActiveOrderId(null);
@@ -111,7 +113,7 @@ export default function POS() {
         phone: servicePhone || null,
         delivery_address: serviceType === "delivery" ? deliveryAddress : null,
         delivery_fee: effectiveDeliveryFee,
-        business_date: businessDate,
+        business_date: canEditBusinessDate ? businessDate : undefined,
         items: cart.map((l) => ({ menu_item_id: l.menu_item_id, quantity: l.quantity, notes: l.notes })),
       });
       setActiveOrderId(response.data.id);
@@ -121,7 +123,7 @@ export default function POS() {
         const openOrder = (refreshed.data || []).find((order: any) => order.id === response.data.id);
         setSentOrderItems(openOrder?.items || []);
       }
-      setMessage("KOT sent to kitchen/bar.");
+      setMessage("Order sent to kitchen/bar. Open Checkout when the customer is ready to pay.");
     } catch (error: any) {
       setMessage(apiErrorMessage(error, "Failed to send KOT."));
     } finally {
@@ -166,7 +168,14 @@ export default function POS() {
     <div className="pos-page mx-auto grid max-w-7xl grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
       <div className="min-w-0">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-brand">Royal Skye · Point of Sale</p><h1 className="mt-1 text-2xl font-bold">Take an order</h1><p className="text-sm text-neutral-500">{selectedTable ? "Table " + selectedTable.name + " · " + selectedTable.capacity + " seats" : isServiceOrder ? serviceType === "delivery" ? "Delivery order" : "Takeaway order" : "Select a table before opening the POS"}</p></div>{isCabinOrder && <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">Cabin pricing applies</span>}</div>
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-neutral-200 bg-white p-3 shadow-sm"><label className="text-xs font-medium text-neutral-600">Business / Sales date<input type="date" className="mt-1 block rounded-lg border px-3 py-2 text-sm" value={businessDate} onChange={e => setBusinessDate(e.target.value)} /></label><p className="text-xs text-neutral-500">This date controls sales reporting. The actual order timestamp remains unchanged.</p></div>
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-[#e9dfd5] bg-[#fbf8f4] px-4 py-3 text-xs font-semibold text-[#6f5a49]">
+          <span className="rounded-full bg-[#7b2926] px-2 py-1 text-[10px] font-extrabold text-white">1</span><span>Choose a table and add items</span>
+          <span className="px-1 text-[#b49b83]">→</span>
+          <span className="rounded-full bg-[#7b2926] px-2 py-1 text-[10px] font-extrabold text-white">2</span><span>Send the order to the kitchen</span>
+          <span className="px-1 text-[#b49b83]">→</span>
+          <span className="rounded-full bg-[#7b2926] px-2 py-1 text-[10px] font-extrabold text-white">3</span><span>Open Checkout when the customer is ready</span>
+        </div>
+        {canEditBusinessDate && <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-neutral-200 bg-white p-3 shadow-sm"><label className="text-xs font-medium text-neutral-600">Business / Sales date<input type="date" className="mt-1 block rounded-lg border px-3 py-2 text-sm" value={businessDate} onChange={e => setBusinessDate(e.target.value)} /></label><p className="text-xs text-neutral-500">This date controls sales reporting. The actual order timestamp remains unchanged.</p></div>}
         {isServiceOrder && <div className="mb-4 grid gap-3 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm sm:grid-cols-2">
           <label className="block text-xs font-medium text-neutral-600">Customer name<input className="mt-1 w-full rounded-lg border px-3 py-2 text-sm" value={serviceCustomerName} onChange={e => setServiceCustomerName(e.target.value)} placeholder="Customer name" /></label>
           <label className="block text-xs font-medium text-neutral-600">Phone<input className="mt-1 w-full rounded-lg border px-3 py-2 text-sm" value={servicePhone} onChange={e => setServicePhone(e.target.value)} placeholder="Contact number" /></label>
@@ -262,8 +271,9 @@ export default function POS() {
           onClick={sendKOT}
           className="w-full bg-brand hover:bg-brand-light disabled:opacity-50 text-white rounded-lg py-2 font-medium"
         >
-          Send KOT
+          Send order to kitchen
         </button>
+        {activeOrderId && <button type="button" onClick={() => navigate(`/billing?order=${activeOrderId}`)} className="mt-2 w-full rounded-lg border border-[#b99a78] bg-white py-2.5 text-sm font-semibold text-[#76583d] hover:bg-[#faf7f3]">Open checkout for this order →</button>}
         {activeOrderId && (
           <button onClick={cancelOrder} className="w-full border border-red-300 text-red-700 rounded-lg py-2 font-medium mt-2">
             Cancel open order
