@@ -195,7 +195,7 @@ export default function Operations() {
 
     {tab === "expenses" && <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
       <section className={panel}>{heading(editingExpenseId ? "Edit expense" : "Add expense", "Choose where the money was paid from. Paid cash expenses reduce the open drawer; QR expenses reduce the restaurant QR account.")}<form className="space-y-3" onSubmit={(e) => { e.preventDefault(); run(async () => {
-        const payload = { description: expense.description.trim(), amount: Number(expense.amount), expense_date: expense.expense_date + "T12:00:00" };
+        const payload = { description: expense.description.trim(), amount: Number(expense.amount), expense_date: expense.expense_date + "T12:00:00", payment_method: expense.payment_method };
         if (editingExpenseId) {
           await api.patch("/api/operations/expenses/" + editingExpenseId, payload);
         } else {
@@ -205,7 +205,7 @@ export default function Operations() {
       }, editingExpenseId ? "Expense updated." : "Expense recorded."); }}>
         {input("Item name", expense.description, (v) => setExpense({ ...expense, description: v }))}
         {input("Price (NPR)", expense.amount, (v) => setExpense({ ...expense, amount: v }), "number")}
-        <label className="block text-xs font-medium text-neutral-600">Payment source<select className={field + " mt-1"} disabled={Boolean(editingExpenseId)} value={expense.payment_method} onChange={(e) => setExpense({ ...expense, payment_method: e.target.value })}><option value="cash">Cash drawer</option><option value="qr">Restaurant QR account</option></select><span className="mt-1 block text-[10px] text-neutral-500">{editingExpenseId ? "Payment source is locked to preserve the original financial ledger." : expense.payment_method === "cash" ? "Automatically records a cash-out in the currently open drawer session." : "Automatically records a QR account outflow and updates the account balance."}</span></label>
+        <label className="block text-xs font-medium text-neutral-600">Payment source<select className={field + " mt-1"} value={expense.payment_method} onChange={(e) => setExpense({ ...expense, payment_method: e.target.value })}><option value="cash">Cash drawer</option><option value="qr">Restaurant QR account</option></select><span className="mt-1 block text-[10px] text-neutral-500">{editingExpenseId ? "Changing this moves the expense between the cash drawer and QR account ledgers. Admin correction is recorded in the audit trail." : expense.payment_method === "cash" ? "Automatically records a cash-out in the currently open drawer session." : "Automatically records a QR account outflow and updates the account balance."}</span></label>
         {input("Expense date", expense.expense_date, (v) => setExpense({ ...expense, expense_date: v }), "date")}
         <div className="flex flex-wrap gap-2"><button className={button} disabled={busy || !expense.description.trim() || !expense.amount || Number(expense.amount) <= 0}>{t(editingExpenseId ? "Save changes" : "Add expense")}</button>{editingExpenseId && <button type="button" className="rounded-lg border px-4 py-2 text-sm font-semibold" disabled={busy} onClick={cancelExpenseEdit}>{t("Cancel")}</button>}</div>
       </form></section>
