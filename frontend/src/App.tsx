@@ -87,6 +87,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       { to: "/inventory", label: t("Inventory"), icon: "inventory" },
       { to: "/expenses", label: t("Expenses"), icon: "expenses" },
       { to: "/cash-drawer", label: t("Cash Drawer"), icon: "cash" },
+      { to: "/service-orders", label: t("Service Orders"), icon: "reservations" },
       { to: "/reservations", label: t("Reservations"), icon: "reservations" },
     ] : []),
     ...(role === "admin" ? [
@@ -229,7 +230,7 @@ export default function App() {
       {["/menu", "/customers"].map((path) => <Route key={path} path={path} element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Shell><Admin /></Shell></ProtectedRoute>} />)}
       <Route path="/staff" element={<ProtectedRoute allowedRoles={["admin"]}><Shell><Admin /></Shell></ProtectedRoute>} />
       <Route path="/admin-controls" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Shell><AdminControls /></Shell></ProtectedRoute>} />
-      {["/inventory", "/expenses", "/cash-drawer", "/reservations", "/payroll", "/attendance"].map((path) => <Route key={path} path={path} element={<ProtectedRoute allowedRoles={path === "/payroll" ? ["admin"] : ["admin", "manager"]}><Shell><Operations /></Shell></ProtectedRoute>} />)}
+      {["/inventory", "/expenses", "/cash-drawer", "/service-orders", "/reservations", "/payroll", "/attendance"].map((path) => <Route key={path} path={path} element={<ProtectedRoute allowedRoles={path === "/payroll" ? ["admin"] : ["admin", "manager"]}><Shell><Operations /></Shell></ProtectedRoute>} />)}
       <Route path="/operations" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Shell><Operations /></Shell></ProtectedRoute>} />
       {["/sales", "/reports", "/backup", "/settings", "/suppliers", "/audit", "/loyalty", "/account"].map((path) => <Route key={path} path={path} element={<ProtectedRoute allowedRoles={path === "/backup" ? ["admin", "manager"] : ["admin"]}><Shell><AdminControls /></Shell></ProtectedRoute>} />)}
       <Route path="*" element={<Navigate to={token ? "/dashboard" : "/login"} />} />
