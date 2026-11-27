@@ -9,7 +9,7 @@ export default function AdminControls() {
   const location = useLocation();
   const { role } = useAuth();
   const isManager = role === "manager";
-  const directTabs: Record<string, string> = { "/sales": "sales", "/reports": "reports", "/backup": "backup", "/settings": "settings" };
+  const directTabs: Record<string, string> = { "/sales": "sales", "/suppliers": "suppliers", "/reports": "reports", "/backup": "backup", "/settings": "settings", "/audit": "audit", "/loyalty": "loyalty", "/account": "account" };
   const standalone = Boolean(directTabs[location.pathname]);
   const section = !isManager && params.get("section") === "staff" ? "staff" : "system";
   const requestedTab = directTabs[location.pathname] || params.get("tab") || undefined;
