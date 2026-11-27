@@ -84,6 +84,7 @@ function Shell({ children }: { children: React.ReactNode }) {
     ...(isManager ? [
       { to: "/menu", label: t("Menu"), icon: "master" },
       { to: "/customers", label: t("Customers"), icon: "staff" },
+      { to: "/staff", label: t("Staff Accounts"), icon: "staff" },
       { to: "/inventory", label: t("Inventory"), icon: "inventory" },
       { to: "/expenses", label: t("Expenses"), icon: "expenses" },
       { to: "/cash-drawer", label: t("Cash Drawer"), icon: "cash" },
@@ -222,9 +223,9 @@ export default function App() {
       />
       <Route path="/admin" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Shell><Admin /></Shell></ProtectedRoute>} />
       {["/menu", "/customers"].map((path) => <Route key={path} path={path} element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Shell><Admin /></Shell></ProtectedRoute>} />)}
-      <Route path="/attendance" element={<ProtectedRoute allowedRoles={["admin"]}><Shell><Admin staffOnly /></Shell></ProtectedRoute>} />
+      <Route path="/staff" element={<ProtectedRoute allowedRoles={["admin"]}><Shell><Admin /></Shell></ProtectedRoute>} />
       <Route path="/admin-controls" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Shell><AdminControls /></Shell></ProtectedRoute>} />
-      {["/inventory", "/expenses", "/cash-drawer", "/reservations", "/payroll"].map((path) => <Route key={path} path={path} element={<ProtectedRoute allowedRoles={path === "/payroll" ? ["admin"] : ["admin", "manager"]}><Shell><Operations /></Shell></ProtectedRoute>} />)}
+      {["/inventory", "/expenses", "/cash-drawer", "/reservations", "/payroll", "/attendance"].map((path) => <Route key={path} path={path} element={<ProtectedRoute allowedRoles={path === "/payroll" ? ["admin"] : ["admin", "manager"]}><Shell><Operations /></Shell></ProtectedRoute>} />)}
       <Route path="/operations" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Shell><Operations /></Shell></ProtectedRoute>} />
       {["/sales", "/reports", "/backup", "/settings"].map((path) => <Route key={path} path={path} element={<ProtectedRoute allowedRoles={path === "/backup" ? ["admin", "manager"] : ["admin"]}><Shell><AdminControls /></Shell></ProtectedRoute>} />)}
       <Route path="*" element={<Navigate to={token ? "/dashboard" : "/login"} />} />
