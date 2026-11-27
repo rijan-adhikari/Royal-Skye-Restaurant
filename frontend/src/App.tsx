@@ -84,13 +84,13 @@ function Shell({ children }: { children: React.ReactNode }) {
     ...(isManager ? [
       { to: "/menu", label: t("Menu"), icon: "master" },
       { to: "/customers", label: t("Customers"), icon: "staff" },
-      { to: "/staff", label: t("Staff Accounts"), icon: "staff" },
       { to: "/inventory", label: t("Inventory"), icon: "inventory" },
       { to: "/expenses", label: t("Expenses"), icon: "expenses" },
       { to: "/cash-drawer", label: t("Cash Drawer"), icon: "cash" },
       { to: "/reservations", label: t("Reservations"), icon: "reservations" },
     ] : []),
     ...(role === "admin" ? [
+      { to: "/staff", label: t("Staff Accounts"), icon: "staff" },
       { to: "/attendance", label: t("Staff & Attendance"), icon: "staff" },
       { to: "/payroll", label: t("Payroll"), icon: "payroll" },
       { to: "/sales", label: t("Sales Register"), icon: "billing" },
