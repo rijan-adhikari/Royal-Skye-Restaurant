@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useLocation } from "react-router-dom";
 import { api, apiErrorMessage } from "../api/client";
 import { useLanguage } from "../context/LanguageContext";
 import { useAuth } from "../context/AuthContext";
@@ -16,14 +16,18 @@ const today = () => new Date().toISOString().slice(0, 10);
 export default function Operations() {
   const { t } = useLanguage();
   const { role } = useAuth();
-  // Keep the manager workspace focused on the three daily controls; advanced administration stays with the admin role.
-  const visibleTabs = role === "admin" ? tabs : tabs.filter((item) => ["expenses", "inventory", "controls"].includes(item));
-  const [tab, setTab] = useState<Tab>("expenses");
+  const location = useLocation();
   const [searchParams] = useSearchParams();
+  const routeTabs: Record<string, Tab> = { "/inventory": "inventory", "/expenses": "expenses", "/cash-drawer": "controls", "/reservations": "reservations", "/payroll": "payroll", "/attendance": "staff", "/reports": "reports" };
+  const directTab = routeTabs[location.pathname];
+  // Managers get the daily operating tools; privileged staff administration and financial reporting stay admin-only.
+  const visibleTabs = role === "admin" ? tabs : tabs.filter((item) => ["expenses", "inventory", "controls", "reservations"].includes(item));
+  const [tab, setTab] = useState<Tab>(() => directTab || "expenses");
   useEffect(() => {
+    if (directTab && visibleTabs.includes(directTab)) { setTab(directTab); return; }
     const requested = searchParams.get("tab") as Tab | null;
     if (requested && visibleTabs.includes(requested)) setTab(requested);
-  }, [searchParams, role]);
+  }, [searchParams, role, location.pathname]);
   const [data, setData] = useState<any>({ inventory: [], categories: [], menuItems: [], recipes: [], expenses: [], staff: [], attendance: [], payroll: [], payrollStaff: [], reservations: [], tables: [] });
   const [report, setReport] = useState<any>(null);
   const [start, setStart] = useState(today().slice(0, 7) + "-01");
@@ -95,7 +99,7 @@ export default function Operations() {
     {message && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</div>}
     {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{[["Expenses recorded", data.expenses.length], ["Total expenses", money(data.expenses.reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0))], ["Stock items", data.inventory.length], ["Low stock", lowStock.length]].map((x) => <div className={panel} key={x[0]}><p className="text-xs text-neutral-500">{t(x[0])}</p><p className="mt-1 text-2xl font-bold">{x[1]}</p></div>)}</div>
-    <nav className="space-y-3 rounded-2xl border border-[#e8dfd6] bg-white p-4 shadow-sm">
+    {!directTab && <nav className="space-y-3 rounded-2xl border border-[#e8dfd6] bg-white p-4 shadow-sm">
       <div><p className="mb-2 text-[10px] font-extrabold uppercase tracking-[.16em] text-[#a18d7c]">Daily restaurant operations</p><div className="flex flex-wrap gap-2">{visibleTabs.filter((name) => ["expenses", "inventory", "controls"].includes(name)).map((tabName) => <button key={tabName} onClick={() => setTab(tabName)} className={"rounded-xl px-4 py-2.5 text-xs font-bold transition " + (tab === tabName ? "bg-[#7d2523] text-white shadow-sm" : "border border-[#e8dfd6] bg-[#fbfaf8] text-[#6f6258] hover:bg-[#f4eee7]")}>{t(tabName === "expenses" ? "Expenses" : tabName === "inventory" ? "Inventory" : "Control Center")}</button>)}</div></div>
       {role === "admin" && <div className="border-t border-[#eee7df] pt-3"><p className="mb-2 text-[10px] font-extrabold uppercase tracking-[.16em] text-[#a18d7c]">Team operations</p><div className="flex flex-wrap gap-2">{visibleTabs.filter((name) => !["expenses", "inventory", "controls"].includes(name)).map((tabName) => <button key={tabName} onClick={() => setTab(tabName)} className={"rounded-xl px-3 py-2 text-xs font-semibold capitalize transition " + (tab === tabName ? "bg-[#7d2523] text-white" : "border border-[#e8dfd6] bg-white text-[#6f6258] hover:bg-[#faf7f3]")}>{t(tabName === "staff" ? "Staff attendance" : tabName)}</button>)}</div></div>}
     </nav>
